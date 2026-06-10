@@ -477,16 +477,32 @@ async function loadMatches() {
 async function loadStandings() {
   const data = await proxyFetch('standings');
   standingsMap = {};
+  let fallbackIdx = 0;
+  const fallbackLetters = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+
   (data.standings || []).forEach(group => {
-    const letter = group.group ? group.group.replace('GROUP_','') : '?';
+    // Skip HOME/AWAY splits if present — only want TOTAL
+    if (group.type && group.type !== 'TOTAL') return;
+
+    // Try to extract the group letter from several possible formats:
+    // "GROUP_A", "Group A", "A", or nested in stage
+    const raw = String(group.group || group.name || group.stage || '');
+    let letter = null;
+    let m = raw.match(/GROUP[_\s]*([A-L])\b/i) || raw.match(/^([A-L])$/i) || raw.match(/\b([A-L])\s*$/i);
+    if (m) letter = m[1].toUpperCase();
+    if (!letter) letter = fallbackLetters[fallbackIdx] || '?';
+    fallbackIdx++;
+
+    if (!group.table || !group.table.length) return;
+
     standingsMap[letter] = group.table.map(row => ({
-      team: row.team.name,
-      mp:   row.playedGames,
-      w:    row.won, d: row.draw, l: row.lost,
-      gf:   row.goalsFor, ga: row.goalsAgainst,
-      gd:   row.goalDifference,
-      pts:  row.points,
-      pos:  row.position
+      team: row.team?.name || row.team?.shortName || 'TBD',
+      mp:   row.playedGames ?? 0,
+      w:    row.won ?? 0, d: row.draw ?? 0, l: row.lost ?? 0,
+      gf:   row.goalsFor ?? 0, ga: row.goalsAgainst ?? 0,
+      gd:   row.goalDifference ?? 0,
+      pts:  row.points ?? 0,
+      pos:  row.position ?? 0
     }));
   });
 }
@@ -548,9 +564,10 @@ function matchStatus(m) {
 }
 
 function groupOfMatch(m) {
-  // API returns stage like "GROUP_STAGE" and group like "GROUP_A"
-  if (m.group) return m.group.replace('GROUP_','');
-  return null;
+  // Handles "GROUP_A", "Group A", or "A"
+  const raw = String(m.group || '');
+  const match = raw.match(/GROUP[_\s]*([A-L])\b/i) || raw.match(/^([A-L])$/i) || raw.match(/\b([A-L])\s*$/i);
+  return match ? match[1].toUpperCase() : null;
 }
 
 // ─── RENDER SCHEDULE ─────────────────────────────────────────────────────────
@@ -689,18 +706,60 @@ function renderMatchCard(m, status) {
 function setFilter(f) { activeFilter = f; renderSchedule(); }
 
 // ─── RENDER GROUPS ────────────────────────────────────────────────────────────
+function computeStandingsFromMatches() {
+  // Fallback: build group tables directly from match results
+  const map = {};
+  allMatches.filter(m => m.stage === 'GROUP_STAGE').forEach(m => {
+    const letter = groupOfMatch(m);
+    if (!letter) return;
+    if (!map[letter]) map[letter] = {};
+    const hn = m.homeTeam?.name || 'TBD';
+    const an = m.awayTeam?.name || 'TBD';
+    [hn, an].forEach(t => {
+      if (!map[letter][t]) map[letter][t] = {team:t,mp:0,w:0,d:0,l:0,gf:0,ga:0,gd:0,pts:0};
+    });
+    if (m.status === 'FINISHED' || m.status === 'IN_PLAY' || m.status === 'PAUSED') {
+      const hs = m.score?.fullTime?.home ?? m.score?.halfTime?.home;
+      const as_ = m.score?.fullTime?.away ?? m.score?.halfTime?.away;
+      if (hs == null || as_ == null) return;
+      // Only count finished matches toward the table
+      if (m.status !== 'FINISHED') return;
+      const H = map[letter][hn], A = map[letter][an];
+      H.mp++; A.mp++;
+      H.gf += hs; H.ga += as_; A.gf += as_; A.ga += hs;
+      H.gd = H.gf - H.ga; A.gd = A.gf - A.ga;
+      if (hs > as_)      { H.w++; H.pts += 3; A.l++; }
+      else if (as_ > hs) { A.w++; A.pts += 3; H.l++; }
+      else               { H.d++; A.d++; H.pts++; A.pts++; }
+    }
+  });
+  const out = {};
+  Object.keys(map).forEach(letter => {
+    out[letter] = Object.values(map[letter])
+      .sort((a,b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
+  });
+  return out;
+}
+
 function renderGroups() {
   const container = document.getElementById('groups-grid');
   const letters = ['A','B','C','D','E','F','G','H','I','J','K','L'];
 
-  if (Object.keys(standingsMap).length === 0) {
+  // Use API standings if available; otherwise compute from match results
+  let source = standingsMap;
+  if (Object.keys(source).length === 0 && allMatches.length > 0) {
+    source = computeStandingsFromMatches();
+  }
+
+  if (Object.keys(source).length === 0) {
     container.innerHTML = '<div class="loading-spinner">Loading standings…</div>';
     return;
   }
 
   let html = '';
   letters.forEach(letter => {
-    const rows = standingsMap[letter] || [];
+    const rows = source[letter] || [];
+    if (!rows.length) return; // skip groups with no data
     const preview = rows.slice(0,2).map(r=>r.team).join(' · ');
 
     html += `
