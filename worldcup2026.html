@@ -380,6 +380,87 @@
     h1 { font-size: 22px; }
     .score-display { font-size: 22px; }
   }
+
+  /* ── TEAM DETAIL MODAL ── */
+  .team-name, .team-row-name { cursor: pointer; }
+  .team-name:active, .team-row-name:active { opacity: 0.6; }
+
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(10,20,12,0.6);
+    z-index: 200;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+
+  .team-modal {
+    background: var(--off-white);
+    width: 100%; max-width: 700px;
+    max-height: 85vh;
+    border-radius: 16px 16px 0 0;
+    overflow-y: auto;
+    animation: slideUp 0.25s ease-out;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(40px); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+  }
+
+  .team-modal-header {
+    background: var(--pitch);
+    padding: 16px;
+    display: flex; align-items: center; gap: 12px;
+    position: sticky; top: 0; z-index: 5;
+    border-bottom: 3px solid var(--gold);
+  }
+
+  .team-modal-flag { font-size: 34px; line-height: 1; }
+
+  .team-modal-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 24px; font-weight: 800; color: var(--white);
+    flex: 1; line-height: 1;
+  }
+
+  .team-modal-group {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px; font-weight: 700; letter-spacing: 1px;
+    color: var(--gold); text-transform: uppercase;
+  }
+
+  .modal-close {
+    background: rgba(255,255,255,0.15);
+    border: none; color: var(--white);
+    width: 32px; height: 32px; border-radius: 50%;
+    font-size: 18px; cursor: pointer; line-height: 1;
+  }
+
+  .team-modal-body { padding: 14px 16px 30px; }
+
+  .team-record-bar {
+    display: flex; gap: 8px; margin-bottom: 16px;
+  }
+
+  .record-chip {
+    flex: 1;
+    background: white; border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 4px;
+    text-align: center;
+  }
+
+  .record-chip .num {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 20px; font-weight: 800; line-height: 1;
+  }
+
+  .record-chip .lbl {
+    font-size: 9px; text-transform: uppercase;
+    letter-spacing: 1px; color: var(--muted); margin-top: 2px;
+  }
+
 </style>
 </head>
 <body>
@@ -425,6 +506,10 @@
     <div id="knockout-list"><div class="loading-spinner">Loading bracket…</div></div>
   </div>
 </main>
+
+<div class="modal-overlay" id="teamModalOverlay">
+  <div class="team-modal" id="teamModal"></div>
+</div>
 
 <button class="scroll-top" id="scrollTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
 
@@ -729,7 +814,7 @@ function renderMatchCard(m, status) {
     <div class="match-card ${status}">
       <div class="team-block">
         <span class="team-flag">${flag(hn)}</span>
-        <span class="team-name">${hn}</span>
+        <span class="team-name" data-team="${hn.replace(/"/g,'&quot;')}">${hn}</span>
       </div>
       <div class="match-center">
         ${center}
@@ -737,7 +822,7 @@ function renderMatchCard(m, status) {
       </div>
       <div class="team-block right">
         <span class="team-flag">${flag(an)}</span>
-        <span class="team-name">${an}</span>
+        <span class="team-name" data-team="${an.replace(/"/g,'&quot;')}">${an}</span>
       </div>
     </div>`;
 }
@@ -819,7 +904,7 @@ function renderGroups() {
                 <td><span class="rank-num ${i===0?'q1':i===1?'q2':''}">${i+1}</span></td>
                 <td><div class="team-row">
                   <span class="team-row-flag">${flag(r.team)}</span>
-                  <span class="team-row-name">${r.team}</span>
+                  <span class="team-row-name" data-team="${r.team.replace(/"/g,'&quot;')}">${r.team}</span>
                 </div></td>
                 <td>${r.mp}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td>
                 <td>${r.gd >= 0 ? '+'+r.gd : r.gd}</td>
@@ -862,6 +947,96 @@ function renderKnockout() {
   if (!html) html = '<div class="loading-spinner">Knockout bracket unlocks after group stage.</div>';
   container.innerHTML = html;
 }
+
+// ─── TEAM DETAIL MODAL ───────────────────────────────────────────────────────
+function showTeam(name) {
+  const overlay = document.getElementById('teamModalOverlay');
+  const modal   = document.getElementById('teamModal');
+
+  // All matches involving this team
+  const teamMatches = allMatches.filter(m =>
+    m.homeTeam?.name === name || m.awayTeam?.name === name
+  );
+
+  const completed = teamMatches.filter(m => matchStatus(m) === 'completed')
+                               .sort((a,b) => new Date(b.utcDate)-new Date(a.utcDate));
+  const live      = teamMatches.filter(m => matchStatus(m) === 'live');
+  const upcoming  = teamMatches.filter(m => matchStatus(m) === 'upcoming')
+                               .sort((a,b) => new Date(a.utcDate)-new Date(b.utcDate));
+
+  // W-D-L record from finished matches
+  let w=0,d=0,l=0,gf=0,ga=0;
+  completed.forEach(m => {
+    const isHome = m.homeTeam?.name === name;
+    const hs = m.score?.fullTime?.home ?? 0;
+    const as_ = m.score?.fullTime?.away ?? 0;
+    const my = isHome ? hs : as_, opp = isHome ? as_ : hs;
+    gf += my; ga += opp;
+    if (my > opp) w++; else if (my < opp) l++; else d++;
+  });
+
+  const grp = groupOfTeam(name);
+
+  let body = `
+    <div class="team-record-bar">
+      <div class="record-chip"><div class="num">${w}</div><div class="lbl">Wins</div></div>
+      <div class="record-chip"><div class="num">${d}</div><div class="lbl">Draws</div></div>
+      <div class="record-chip"><div class="num">${l}</div><div class="lbl">Losses</div></div>
+      <div class="record-chip"><div class="num">${gf}–${ga}</div><div class="lbl">Goals</div></div>
+    </div>`;
+
+  if (live.length) {
+    body += `<div class="section-head"><h2 style="color:var(--live-red)">🔴 Live Now</h2></div>`;
+    live.forEach(m => body += renderMatchCard(m, 'live'));
+  }
+
+  if (upcoming.length) {
+    body += `<div class="section-head"><h2>Upcoming</h2><span class="count">${upcoming.length} match${upcoming.length>1?'es':''}</span></div>`;
+    upcoming.forEach(m => {
+      body += `<div style="font-size:11px;color:var(--muted);margin:8px 0 4px;font-weight:600">${formatDatePST(m.utcDate)}</div>`;
+      body += renderMatchCard(m, 'upcoming');
+    });
+  }
+
+  if (completed.length) {
+    body += `<div class="section-head"><h2>Results</h2><span class="count">${completed.length} played</span></div>`;
+    completed.forEach(m => {
+      body += `<div style="font-size:11px;color:var(--muted);margin:8px 0 4px;font-weight:600">${formatDatePST(m.utcDate)}</div>`;
+      body += renderMatchCard(m, 'completed');
+    });
+  }
+
+  if (!teamMatches.length) {
+    body += `<div class="loading-spinner">No matches found for ${name}.</div>`;
+  }
+
+  modal.innerHTML = `
+    <div class="team-modal-header">
+      <span class="team-modal-flag">${flag(name)}</span>
+      <div style="flex:1">
+        <div class="team-modal-title">${name}</div>
+        ${grp ? `<div class="team-modal-group">Group ${grp}</div>` : ''}
+      </div>
+      <button class="modal-close" onclick="closeTeamModal()">✕</button>
+    </div>
+    <div class="team-modal-body">${body}</div>`;
+
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeTeamModal() {
+  document.getElementById('teamModalOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// Click delegation: any element with data-team opens the modal.
+// Tapping the dark backdrop closes it.
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-team]');
+  if (t) { showTeam(t.dataset.team); return; }
+  if (e.target.id === 'teamModalOverlay') closeTeamModal();
+});
 
 // ─── NAV ─────────────────────────────────────────────────────────────────────
 function showView(v, btn) {
