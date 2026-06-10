@@ -440,6 +440,7 @@ const REFRESH_NORMAL  = 300_000;  // 5 min otherwise
 const FLAGS = {
   'Mexico':'🇲🇽','South Africa':'🇿🇦','Korea Republic':'🇰🇷','Czechia':'🇨🇿',
   'Czech Republic':'🇨🇿','Canada':'🇨🇦','Bosnia and Herzegovina':'🇧🇦',
+  'Bosnia-Herzegovina':'🇧🇦','South Korea':'🇰🇷','Cabo Verde':'🇨🇻',
   'Qatar':'🇶🇦','Switzerland':'🇨🇭','Brazil':'🇧🇷','Morocco':'🇲🇦',
   'Haiti':'🇭🇹','Scotland':'🏴󠁧󠁢󠁳󠁣󠁴󠁿','United States':'🇺🇸','USA':'🇺🇸',
   'Paraguay':'🇵🇾','Australia':'🇦🇺','Türkiye':'🇹🇷','Turkey':'🇹🇷',
@@ -454,6 +455,24 @@ const FLAGS = {
 };
 
 function flag(name) { return FLAGS[name] || '⚽'; }
+
+// ─── TEAM → GROUP MAPPING (authoritative, from official draw) ────────────────
+const TEAM_GROUPS = {
+  'Mexico':'A','South Africa':'A','South Korea':'A','Korea Republic':'A','Czechia':'A','Czech Republic':'A',
+  'Canada':'B','Bosnia-Herzegovina':'B','Bosnia and Herzegovina':'B','Qatar':'B','Switzerland':'B',
+  'Brazil':'C','Morocco':'C','Haiti':'C','Scotland':'C',
+  'United States':'D','USA':'D','Paraguay':'D','Australia':'D','Türkiye':'D','Turkey':'D',
+  'Germany':'E','Curaçao':'E','Ivory Coast':'E',"Côte d'Ivoire":'E','Ecuador':'E',
+  'Netherlands':'F','Japan':'F','Sweden':'F','Tunisia':'F',
+  'Belgium':'G','Egypt':'G','Iran':'G','New Zealand':'G',
+  'Spain':'H','Cape Verde':'H','Cabo Verde':'H','Saudi Arabia':'H','Uruguay':'H',
+  'France':'I','Senegal':'I','Iraq':'I','Norway':'I',
+  'Argentina':'J','Algeria':'J','Austria':'J','Jordan':'J',
+  'Portugal':'K','DR Congo':'K','Congo DR':'K','Uzbekistan':'K','Colombia':'K',
+  'England':'L','Croatia':'L','Ghana':'L','Panama':'L'
+};
+
+function groupOfTeam(name) { return TEAM_GROUPS[name] || null; }
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
 let allMatches   = [];
@@ -479,13 +498,11 @@ async function loadStandings() {
   standingsMap = {};
   let fallbackIdx = 0;
   const fallbackLetters = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+  const allRows = []; // collect every row in case we need to re-bucket
 
   (data.standings || []).forEach(group => {
-    // Skip HOME/AWAY splits if present — only want TOTAL
     if (group.type && group.type !== 'TOTAL') return;
 
-    // Try to extract the group letter from several possible formats:
-    // "GROUP_A", "Group A", "A", or nested in stage
     const raw = String(group.group || group.name || group.stage || '');
     let letter = null;
     let m = raw.match(/GROUP[_\s]*([A-L])\b/i) || raw.match(/^([A-L])$/i) || raw.match(/\b([A-L])\s*$/i);
@@ -495,7 +512,7 @@ async function loadStandings() {
 
     if (!group.table || !group.table.length) return;
 
-    standingsMap[letter] = group.table.map(row => ({
+    const rows = group.table.map(row => ({
       team: row.team?.name || row.team?.shortName || 'TBD',
       mp:   row.playedGames ?? 0,
       w:    row.won ?? 0, d: row.draw ?? 0, l: row.lost ?? 0,
@@ -504,7 +521,27 @@ async function loadStandings() {
       pts:  row.points ?? 0,
       pos:  row.position ?? 0
     }));
+    standingsMap[letter] = rows;
+    allRows.push(...rows);
   });
+
+  // VALIDATION: a real group has exactly 4 teams. If the API returned one
+  // giant table (or any group with >4 teams), re-bucket every row into its
+  // correct group using the official draw mapping.
+  const malformed = Object.values(standingsMap).some(rows => rows.length > 4);
+  if (malformed && allRows.length > 0) {
+    standingsMap = {};
+    allRows.forEach(r => {
+      const letter = groupOfTeam(r.team);
+      if (!letter) return;
+      if (!standingsMap[letter]) standingsMap[letter] = [];
+      standingsMap[letter].push(r);
+    });
+    // Sort each rebuilt group by points, GD, GF
+    Object.keys(standingsMap).forEach(letter => {
+      standingsMap[letter].sort((a,b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
+    });
+  }
 }
 
 // ─── REFRESH LOGIC ───────────────────────────────────────────────────────────
@@ -567,7 +604,9 @@ function groupOfMatch(m) {
   // Handles "GROUP_A", "Group A", or "A"
   const raw = String(m.group || '');
   const match = raw.match(/GROUP[_\s]*([A-L])\b/i) || raw.match(/^([A-L])$/i) || raw.match(/\b([A-L])\s*$/i);
-  return match ? match[1].toUpperCase() : null;
+  if (match) return match[1].toUpperCase();
+  // Fall back to the official draw mapping by team name
+  return groupOfTeam(m.homeTeam?.name) || groupOfTeam(m.awayTeam?.name) || null;
 }
 
 // ─── RENDER SCHEDULE ─────────────────────────────────────────────────────────
