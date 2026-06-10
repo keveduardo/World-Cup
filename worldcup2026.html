@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>2026 FIFA World Cup Tracker</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Inter:wght@400;500;600&family=Dancing+Script:wght@600&display=swap');
 
   :root {
     --pitch: #0a5c36;
@@ -64,6 +64,14 @@
     font-family: 'Barlow Condensed', sans-serif;
     font-size: 28px; font-weight: 800;
     color: var(--white); line-height: 1;
+  }
+
+  .byline {
+    font-family: 'Dancing Script', cursive;
+    font-size: 16px; font-weight: 600;
+    color: var(--gold);
+    margin-top: 2px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.3);
   }
 
   .header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
@@ -551,11 +559,12 @@
     <div class="header-title">
       <span class="eyebrow">⚽ FIFA World Cup 2026</span>
       <h1>Match Tracker</h1>
+      <span class="byline">by Aquadoc</span>
     </div>
     <div class="header-right">
       <div class="live-clock">
         <div class="time" id="clock">--:-- --</div>
-        <div class="tz">Pacific Time</div>
+        <div class="tz" id="clockTzLabel">Pacific Time</div>
       </div>
       <span class="api-status" id="apiStatus">Connecting…</span>
     </div>
@@ -648,6 +657,45 @@ let refreshTimer = null;
 let currentView  = 'schedule';
 let nextKickoff  = null; // for countdown
 
+// ─── TIMEZONE PREFERENCE (PST default) ───────────────────────────────────────
+const TZ_OPTIONS = [
+  { id: 'America/Los_Angeles', label: 'Pacific' },
+  { id: 'America/Denver',      label: 'Mountain' },
+  { id: 'America/Phoenix',     label: 'Arizona' },
+  { id: 'America/Chicago',     label: 'Central' },
+  { id: 'America/New_York',    label: 'Eastern' },
+  { id: 'auto',                label: 'My device' },
+];
+
+let userTZ = localStorage.getItem('wc_tz') || 'America/Los_Angeles';
+
+function tz() {
+  return userTZ === 'auto'
+    ? Intl.DateTimeFormat().resolvedOptions().timeZone
+    : userTZ;
+}
+
+function tzShort() {
+  // Derive the live abbreviation, e.g. "PDT", "MDT", "EST"
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz(), timeZoneName: 'short'
+    }).formatToParts(new Date());
+    return parts.find(p => p.type === 'timeZoneName')?.value || '';
+  } catch(e) { return ''; }
+}
+
+function setTZ(id) {
+  userTZ = id;
+  localStorage.setItem('wc_tz', id);
+  document.getElementById('clockTzLabel').textContent =
+    (TZ_OPTIONS.find(o => o.id === id)?.label || '') + ' Time';
+  applyTheme();
+  renderCurrentView();
+  updateClock();
+  if (syncCode) syncSave();
+}
+
 // ─── FAVORITES ───────────────────────────────────────────────────────────────
 let favorites = new Set(JSON.parse(localStorage.getItem('wc_favs') || '[]'));
 let syncCode  = localStorage.getItem('wc_sync_code') || '';
@@ -671,7 +719,7 @@ async function toggleFav(name) {
 // ── Cross-device sync via the Apps Script proxy ──
 async function syncSave() {
   try {
-    await fetch(`${PROXY}?type=favsave&code=${encodeURIComponent(syncCode)}&teams=${encodeURIComponent([...favorites].join('|'))}`);
+    await fetch(`${PROXY}?type=favsave&code=${encodeURIComponent(syncCode)}&teams=${encodeURIComponent([...favorites].join('|'))}&tz=${encodeURIComponent(userTZ)}`);
   } catch(e) { /* silent — local copy is the source of truth */ }
 }
 
@@ -680,12 +728,15 @@ async function syncLoad() {
     const res = await fetch(`${PROXY}?type=favload&code=${encodeURIComponent(syncCode)}`);
     const data = await res.json();
     if (data.teams && Array.isArray(data.teams)) {
-      // Merge cloud + local
       data.teams.forEach(t => favorites.add(t));
       saveFavsLocal();
-      syncSave(); // write the merged set back
-      renderCurrentView();
     }
+    if (data.tz && TZ_OPTIONS.some(o => o.id === data.tz)) {
+      userTZ = data.tz;
+      localStorage.setItem('wc_tz', userTZ);
+    }
+    syncSave(); // write the merged set back
+    renderCurrentView();
   } catch(e) { /* ignore */ }
 }
 
@@ -710,7 +761,7 @@ function setupSync() {
 // ─── DARK MODE (auto: dark 8pm–7am Pacific) ──────────────────────────────────
 function applyTheme() {
   const hour = parseInt(new Date().toLocaleString('en-US', {
-    timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false
+    timeZone: tz(), hour: 'numeric', hour12: false
   }), 10);
   const dark = (hour >= 20 || hour < 7);
   document.body.classList.toggle('dark', dark);
@@ -788,7 +839,7 @@ async function refreshAll() {
     statusEl.className = 'api-status ok';
     document.getElementById('error-container').innerHTML = '';
     document.getElementById('lastUpdated').textContent =
-      'Updated ' + new Date().toLocaleTimeString('en-US',{timeZone:'America/Los_Angeles',hour:'numeric',minute:'2-digit',hour12:true}) + ' PST';
+      'Updated ' + new Date().toLocaleTimeString('en-US',{timeZone: tz(),hour:'numeric',minute:'2-digit',hour12:true}) + ' ' + tzShort();
   } catch(e) {
     statusEl.textContent = '✕ Offline';
     statusEl.className = 'api-status err';
@@ -810,19 +861,19 @@ function scheduleNext() {
 function formatPST(isoString) {
   if (!isoString) return '';
   return new Date(isoString).toLocaleTimeString('en-US',{
-    timeZone:'America/Los_Angeles',hour:'numeric',minute:'2-digit',hour12:true
+    timeZone: tz(), hour:'numeric', minute:'2-digit', hour12:true
   });
 }
 
 function formatDatePST(isoString) {
   return new Date(isoString).toLocaleDateString('en-US',{
-    timeZone:'America/Los_Angeles',weekday:'short',month:'short',day:'numeric'
+    timeZone: tz(), weekday:'short', month:'short', day:'numeric'
   });
 }
 
 function datekeyPST(isoString) {
   return new Date(isoString).toLocaleDateString('en-US',{
-    timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'
+    timeZone: tz(), year:'numeric', month:'2-digit', day:'2-digit'
   });
 }
 
@@ -856,7 +907,11 @@ function renderSchedule() {
     const key = g === 'All' ? 'all' : g;
     return `<button class="filter-btn ${activeFilter===key?'active':''}"
       onclick="setFilter('${key}')">${g === 'All' ? 'All' : 'Grp ' + g}</button>`;
-  }).join('') + `<button class="sync-btn" onclick="setupSync()">${syncCode ? '☁ Synced' : '☁ Sync'}</button>`;
+  }).join('')
+    + `<button class="sync-btn" onclick="setupSync()">${syncCode ? '☁ Synced' : '☁ Sync'}</button>`
+    + `<select class="filter-btn" style="appearance:auto" onchange="setTZ(this.value)">
+        ${TZ_OPTIONS.map(o => `<option value="${o.id}" ${o.id===userTZ?'selected':''}>🕐 ${o.label}</option>`).join('')}
+      </select>`;
 
   // Filter
   let matches = allMatches.filter(m =>
@@ -898,7 +953,7 @@ function renderSchedule() {
       <div class="next-up-banner">
         <span class="next-up-label">Next Up</span>
         <span class="next-up-game">${flag(hn)} ${hn} vs ${an} ${flag(an)}</span>
-        <span class="next-up-time">${formatPST(m.utcDate)} PST</span>
+        <span class="next-up-time">${formatPST(m.utcDate)} ${tzShort()}</span>
         <div class="next-up-countdown" id="nextCountdown"></div>
       </div>`;
   } else {
@@ -995,7 +1050,7 @@ function renderMatchCard(m, status) {
   } else {
     center = `${grpTag}
       <div class="vs-display">VS</div>
-      <div class="match-time">${formatPST(m.utcDate)} PST</div>`;
+      <div class="match-time">${formatPST(m.utcDate)} ${tzShort()}</div>`;
   }
 
   const venue = m.venue || '';
@@ -1292,7 +1347,7 @@ function renderCurrentView() {
 // ─── CLOCK ───────────────────────────────────────────────────────────────────
 function updateClock() {
   document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US',{
-    timeZone:'America/Los_Angeles',hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true
+    timeZone: tz(),hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true
   });
   updateCountdown();
 }
@@ -1322,6 +1377,8 @@ window.addEventListener('scroll', () => {
 });
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
+document.getElementById('clockTzLabel').textContent =
+  (TZ_OPTIONS.find(o => o.id === userTZ)?.label || 'Pacific') + ' Time';
 applyTheme();
 setInterval(applyTheme, 60000); // re-check theme each minute
 updateClock();
