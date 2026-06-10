@@ -675,6 +675,71 @@ function venueCity(venue) {
   return hit ? hit.city : '';
 }
 
+// ─── HARDCODED GROUP-STAGE VENUES (API free tier omits venue data) ───────────
+// Key: alphabetically sorted canonical team pair. Each pair plays once.
+const NAME_CANON = {
+  'USA':'United States','Korea Republic':'South Korea','Czech Republic':'Czechia',
+  'Bosnia and Herzegovina':'Bosnia-Herzegovina',"Côte d'Ivoire":'Ivory Coast',
+  'Turkey':'Türkiye','Congo DR':'DR Congo','Cabo Verde':'Cape Verde'
+};
+function canonName(n) { return NAME_CANON[n] || n; }
+
+const STADIUMS = {
+  MEX:['Estadio Azteca','Mexico City, MX'], GDL:['Estadio Akron','Guadalajara, MX'],
+  MTY:['Estadio BBVA','Monterrey, MX'],     VAN:['BC Place','Vancouver, CA'],
+  TOR:['BMO Field','Toronto, CA'],          SEA:['Lumen Field','Seattle, WA'],
+  SF:["Levi's Stadium",'SF Bay Area, CA'],  LA:['SoFi Stadium','Los Angeles, CA'],
+  DAL:['AT&T Stadium','Dallas, TX'],        HOU:['NRG Stadium','Houston, TX'],
+  KC:['Arrowhead Stadium','Kansas City, MO'], ATL:['Mercedes-Benz Stadium','Atlanta, GA'],
+  MIA:['Hard Rock Stadium','Miami, FL'],    BOS:['Gillette Stadium','Boston, MA'],
+  NYNJ:['MetLife Stadium','NY/NJ'],         PHI:['Lincoln Financial Field','Philadelphia, PA']
+};
+
+const PAIR_VENUES = {
+  // Group A
+  'Mexico|South Africa':'MEX','Czechia|South Korea':'GDL','Czechia|South Africa':'ATL',
+  'Mexico|South Korea':'GDL','Czechia|Mexico':'MEX','South Africa|South Korea':'MTY',
+  // Group B
+  'Bosnia-Herzegovina|Canada':'TOR','Qatar|Switzerland':'SF','Bosnia-Herzegovina|Switzerland':'LA',
+  'Canada|Qatar':'VAN','Canada|Switzerland':'VAN','Bosnia-Herzegovina|Qatar':'SEA',
+  // Group C
+  'Brazil|Morocco':'NYNJ','Haiti|Scotland':'BOS','Morocco|Scotland':'BOS',
+  'Brazil|Haiti':'PHI','Brazil|Scotland':'MIA','Haiti|Morocco':'ATL',
+  // Group D
+  'Paraguay|United States':'LA','Australia|Türkiye':'VAN','Australia|United States':'SEA',
+  'Paraguay|Türkiye':'SF','Türkiye|United States':'LA','Australia|Paraguay':'SF',
+  // Group E
+  'Curaçao|Germany':'HOU','Ecuador|Ivory Coast':'PHI','Germany|Ivory Coast':'TOR',
+  'Curaçao|Ecuador':'KC','Ecuador|Germany':'NYNJ','Curaçao|Ivory Coast':'PHI',
+  // Group F
+  'Japan|Netherlands':'DAL','Sweden|Tunisia':'MTY','Netherlands|Sweden':'HOU',
+  'Japan|Tunisia':'MTY','Japan|Sweden':'DAL','Netherlands|Tunisia':'KC',
+  // Group G
+  'Belgium|Egypt':'SEA','Iran|New Zealand':'LA','Belgium|Iran':'LA',
+  'Egypt|New Zealand':'VAN','Egypt|Iran':'SEA','Belgium|New Zealand':'VAN',
+  // Group H
+  'Cape Verde|Spain':'ATL','Saudi Arabia|Uruguay':'MIA','Saudi Arabia|Spain':'ATL',
+  'Cape Verde|Uruguay':'MIA','Cape Verde|Saudi Arabia':'HOU','Spain|Uruguay':'GDL',
+  // Group I
+  'France|Senegal':'NYNJ','Iraq|Norway':'BOS','France|Iraq':'PHI',
+  'Norway|Senegal':'NYNJ','France|Norway':'BOS','Iraq|Senegal':'TOR',
+  // Group J
+  'Algeria|Argentina':'KC','Austria|Jordan':'SF','Argentina|Austria':'DAL',
+  'Algeria|Jordan':'SF','Algeria|Austria':'KC','Argentina|Jordan':'DAL',
+  // Group K
+  'DR Congo|Portugal':'HOU','Colombia|Uzbekistan':'MEX','Portugal|Uzbekistan':'HOU',
+  'Colombia|DR Congo':'GDL','Colombia|Portugal':'MIA','DR Congo|Uzbekistan':'ATL',
+  // Group L
+  'Croatia|England':'DAL','Ghana|Panama':'TOR','England|Ghana':'BOS',
+  'Croatia|Panama':'TOR','England|Panama':'NYNJ','Croatia|Ghana':'PHI'
+};
+
+function lookupVenue(hn, an) {
+  const key = [canonName(hn), canonName(an)].sort().join('|');
+  const code = PAIR_VENUES[key];
+  return code ? STADIUMS[code] : null; // [stadium, city]
+}
+
 // ─── STATE ────────────────────────────────────────────────────────────────────
 let allMatches   = [];
 let standingsMap = {}; // group letter → sorted rows
@@ -1079,8 +1144,12 @@ function renderMatchCard(m, status) {
       <div class="match-time">${formatPST(m.utcDate)} ${tzShort()}</div>`;
   }
 
-  const venue = m.venue || '';
-  const city = venueCity(venue);
+  let venue = m.venue || '';
+  let city = venueCity(venue);
+  if (!venue) {
+    const hc = lookupVenue(hn, an);
+    if (hc) { venue = hc[0]; city = hc[1]; }
+  }
   const meta = [venue ? `🏟 ${venue}` : '', city].filter(Boolean).join(' · ');
   return `
     <div class="match-card ${status}">
