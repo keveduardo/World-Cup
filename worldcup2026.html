@@ -461,6 +461,87 @@
     letter-spacing: 1px; color: var(--muted); margin-top: 2px;
   }
 
+  /* ── FAVORITES ── */
+  .fav-star { color: var(--gold); font-size: 12px; }
+
+  .fav-btn {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: var(--gold); font-size: 18px;
+    width: 36px; height: 36px; border-radius: 50%;
+    cursor: pointer; line-height: 1;
+  }
+
+  .my-teams-section {
+    background: linear-gradient(135deg, #0a5c36, #073d24);
+    border-radius: 10px; padding: 12px 14px; margin-bottom: 16px;
+    border: 1px solid var(--gold);
+  }
+
+  .my-teams-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px; font-weight: 700; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--gold); margin-bottom: 8px;
+  }
+
+  .my-team-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 0; color: var(--white);
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    font-size: 13px; cursor: pointer;
+  }
+  .my-team-row:last-child { border-bottom: none; }
+
+  .my-team-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700; font-size: 15px; min-width: 90px;
+  }
+
+  .my-team-next { flex: 1; color: rgba(255,255,255,0.75); font-size: 12px; }
+  .my-team-time { color: var(--gold); font-size: 12px; font-weight: 600; white-space: nowrap; }
+
+  .sync-btn {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px; font-weight: 700; letter-spacing: 0.5px;
+    text-transform: uppercase; background: white;
+    border: 1px dashed var(--pitch); border-radius: 20px;
+    padding: 5px 12px; cursor: pointer; color: var(--pitch);
+  }
+
+  /* ── THIRD PLACE TRACKER ── */
+  .third-place-card { grid-column: 1 / -1; }
+
+  .third-place-card .group-header { background: #073d24; }
+
+  .tp-status { font-size: 13px; }
+
+  /* ── COUNTDOWN ── */
+  .next-up-countdown {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px; font-weight: 600;
+    color: rgba(255,255,255,0.8); width: 100%;
+  }
+
+  /* ── DARK MODE ── */
+  body.dark {
+    --off-white: #131a14;
+    --card-bg: #1b231c;
+    --text: #e6ebe2;
+    --muted: #93a08c;
+    --border: #2b352c;
+  }
+  body.dark .standings-table thead tr { background: #212b22; }
+  body.dark .standings-table td { border-bottom: 1px solid #242e25; }
+  body.dark .qualify-note { background: #19211a; border-top-color: var(--border); }
+  body.dark .match-card.live { background: #2b1d1e; }
+  body.dark .filter-btn { background: #1b231c; color: var(--text); border-color: var(--border); }
+  body.dark .filter-btn.active, body.dark .filter-btn:hover { background: var(--pitch); color: var(--gold); }
+  body.dark .sync-btn { background: #1b231c; }
+  body.dark .record-chip { background: #1b231c; border-color: var(--border); }
+  body.dark .standings-table tbody tr.qualify-1 { background: rgba(245,197,24,0.08); }
+  body.dark .standings-table tbody tr.qualify-2 { background: rgba(245,197,24,0.04); }
+
+
 </style>
 </head>
 <body>
@@ -565,6 +646,75 @@ let standingsMap = {}; // group letter → sorted rows
 let activeFilter = 'all';
 let refreshTimer = null;
 let currentView  = 'schedule';
+let nextKickoff  = null; // for countdown
+
+// ─── FAVORITES ───────────────────────────────────────────────────────────────
+let favorites = new Set(JSON.parse(localStorage.getItem('wc_favs') || '[]'));
+let syncCode  = localStorage.getItem('wc_sync_code') || '';
+
+function saveFavsLocal() {
+  localStorage.setItem('wc_favs', JSON.stringify([...favorites]));
+}
+
+function isFav(name) { return favorites.has(name); }
+
+function favMark(name) { return isFav(name) ? ' <span class="fav-star">★</span>' : ''; }
+
+async function toggleFav(name) {
+  if (favorites.has(name)) favorites.delete(name);
+  else favorites.add(name);
+  saveFavsLocal();
+  renderCurrentView();
+  if (syncCode) syncSave(); // push to cloud if sync enabled
+}
+
+// ── Cross-device sync via the Apps Script proxy ──
+async function syncSave() {
+  try {
+    await fetch(`${PROXY}?type=favsave&code=${encodeURIComponent(syncCode)}&teams=${encodeURIComponent([...favorites].join('|'))}`);
+  } catch(e) { /* silent — local copy is the source of truth */ }
+}
+
+async function syncLoad() {
+  try {
+    const res = await fetch(`${PROXY}?type=favload&code=${encodeURIComponent(syncCode)}`);
+    const data = await res.json();
+    if (data.teams && Array.isArray(data.teams)) {
+      // Merge cloud + local
+      data.teams.forEach(t => favorites.add(t));
+      saveFavsLocal();
+      syncSave(); // write the merged set back
+      renderCurrentView();
+    }
+  } catch(e) { /* ignore */ }
+}
+
+function setupSync() {
+  const code = prompt(
+    syncCode
+      ? `Sync is ON (code: ${syncCode}).\nEnter a new code, or leave blank to turn sync off.`
+      : 'Make up a sync code (e.g. kevin-wc26).\nUse the same code on your other devices to share favorites.'
+  );
+  if (code === null) return; // cancelled
+  syncCode = code.trim();
+  if (syncCode) {
+    localStorage.setItem('wc_sync_code', syncCode);
+    syncLoad();
+    alert(`Sync enabled with code "${syncCode}".\nEnter the same code on your other devices.`);
+  } else {
+    localStorage.removeItem('wc_sync_code');
+    alert('Sync turned off. Favorites stay on this device only.');
+  }
+}
+
+// ─── DARK MODE (auto: dark 8pm–7am Pacific) ──────────────────────────────────
+function applyTheme() {
+  const hour = parseInt(new Date().toLocaleString('en-US', {
+    timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false
+  }), 10);
+  const dark = (hour >= 20 || hour < 7);
+  document.body.classList.toggle('dark', dark);
+}
 
 // ─── FETCH HELPERS ────────────────────────────────────────────────────────────
 async function proxyFetch(type) {
@@ -700,13 +850,13 @@ function renderSchedule() {
   const nextUpEl    = document.getElementById('next-up-container');
   const filterRowEl = document.getElementById('filter-row');
 
-  // Build group filter buttons
+  // Build group filter buttons + sync button
   const groups = ['All','A','B','C','D','E','F','G','H','I','J','K','L'];
   filterRowEl.innerHTML = groups.map(g => {
     const key = g === 'All' ? 'all' : g;
     return `<button class="filter-btn ${activeFilter===key?'active':''}"
       onclick="setFilter('${key}')">${g === 'All' ? 'All' : 'Grp ' + g}</button>`;
-  }).join('');
+  }).join('') + `<button class="sync-btn" onclick="setupSync()">${syncCode ? '☁ Synced' : '☁ Sync'}</button>`;
 
   // Filter
   let matches = allMatches.filter(m =>
@@ -727,13 +877,15 @@ function renderSchedule() {
   const completed = matches.filter(m => matchStatus(m) === 'completed')
                            .sort((a,b) => new Date(b.utcDate)-new Date(a.utcDate));
 
-  // Next up banner
+  // Next up banner (with countdown)
+  let bannerHtml = '';
   if (live.length > 0) {
     const m = live[0];
     const hn = m.homeTeam?.name || 'TBD', an = m.awayTeam?.name || 'TBD';
     const hs = m.score?.fullTime?.home ?? m.score?.halfTime?.home ?? 0;
     const as_ = m.score?.fullTime?.away ?? m.score?.halfTime?.away ?? 0;
-    nextUpEl.innerHTML = `
+    nextKickoff = null;
+    bannerHtml = `
       <div class="next-up-banner" style="background:var(--live-red)">
         <span class="next-up-label" style="color:white">🔴 LIVE</span>
         <span class="next-up-game">${flag(hn)} ${hn} ${hs} – ${as_} ${an} ${flag(an)}</span>
@@ -741,15 +893,54 @@ function renderSchedule() {
   } else if (upcoming.length > 0) {
     const m = upcoming[0];
     const hn = m.homeTeam?.name || 'TBD', an = m.awayTeam?.name || 'TBD';
-    nextUpEl.innerHTML = `
+    nextKickoff = new Date(m.utcDate);
+    bannerHtml = `
       <div class="next-up-banner">
         <span class="next-up-label">Next Up</span>
         <span class="next-up-game">${flag(hn)} ${hn} vs ${an} ${flag(an)}</span>
         <span class="next-up-time">${formatPST(m.utcDate)} PST</span>
+        <div class="next-up-countdown" id="nextCountdown"></div>
       </div>`;
   } else {
-    nextUpEl.innerHTML = '';
+    nextKickoff = null;
   }
+
+  // ⭐ My Teams section: live or next match for each favorite
+  let myTeamsHtml = '';
+  if (favorites.size > 0 && activeFilter === 'all') {
+    const rows = [...favorites].sort().map(name => {
+      const teamMatches = allMatches.filter(m =>
+        m.homeTeam?.name === name || m.awayTeam?.name === name);
+      const liveM = teamMatches.find(m => matchStatus(m) === 'live');
+      const nextM = teamMatches.filter(m => matchStatus(m) === 'upcoming')
+        .sort((a,b) => new Date(a.utcDate)-new Date(b.utcDate))[0];
+      let info = '', time = '';
+      if (liveM) {
+        const hs = liveM.score?.fullTime?.home ?? 0, as_ = liveM.score?.fullTime?.away ?? 0;
+        const opp = liveM.homeTeam?.name === name ? liveM.awayTeam?.name : liveM.homeTeam?.name;
+        info = `🔴 LIVE vs ${opp}`;
+        time = `${hs} – ${as_}`;
+      } else if (nextM) {
+        const opp = nextM.homeTeam?.name === name ? nextM.awayTeam?.name : nextM.homeTeam?.name;
+        info = `vs ${opp}`;
+        time = `${formatDatePST(nextM.utcDate)} · ${formatPST(nextM.utcDate)}`;
+      } else {
+        info = 'No upcoming matches';
+      }
+      return `<div class="my-team-row" data-team="${name.replace(/"/g,'&quot;')}">
+        <span>${flag(name)}</span>
+        <span class="my-team-name">${name}</span>
+        <span class="my-team-next">${info}</span>
+        <span class="my-team-time">${time}</span>
+      </div>`;
+    }).join('');
+    myTeamsHtml = `<div class="my-teams-section">
+      <div class="my-teams-title">⭐ My Teams</div>${rows}
+    </div>`;
+  }
+
+  nextUpEl.innerHTML = myTeamsHtml + bannerHtml;
+  updateCountdown();
 
   // Build cards grouped by date
   const sorted = [...live, ...upcoming, ...completed];
@@ -814,7 +1005,7 @@ function renderMatchCard(m, status) {
     <div class="match-card ${status}">
       <div class="team-block">
         <span class="team-flag">${flag(hn)}</span>
-        <span class="team-name" data-team="${hn.replace(/"/g,'&quot;')}">${hn}</span>
+        <span class="team-name" data-team="${hn.replace(/"/g,'&quot;')}">${hn}${favMark(hn)}</span>
       </div>
       <div class="match-center">
         ${center}
@@ -822,7 +1013,7 @@ function renderMatchCard(m, status) {
       </div>
       <div class="team-block right">
         <span class="team-flag">${flag(an)}</span>
-        <span class="team-name" data-team="${an.replace(/"/g,'&quot;')}">${an}</span>
+        <span class="team-name" data-team="${an.replace(/"/g,'&quot;')}">${an}${favMark(an)}</span>
       </div>
     </div>`;
 }
@@ -881,6 +1072,49 @@ function renderGroups() {
   }
 
   let html = '';
+
+  // ── BEST THIRD-PLACE TRACKER ──
+  // 8 of the 12 third-place teams advance to the Round of 32
+  const thirds = [];
+  letters.forEach(letter => {
+    const rows = source[letter] || [];
+    if (rows.length >= 3) thirds.push({...rows[2], grp: letter});
+  });
+  if (thirds.length >= 4) {
+    thirds.sort((a,b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
+    html += `
+      <div class="group-card third-place-card">
+        <div class="group-header">
+          <span class="group-letter">3rd</span>
+          <span class="group-teams-preview">Best Third-Place Race — Top 8 advance to Round of 32</span>
+        </div>
+        <table class="standings-table">
+          <thead><tr>
+            <th colspan="2">Team</th>
+            <th>Grp</th><th>MP</th><th>GD</th><th>Pts</th><th></th>
+          </tr></thead>
+          <tbody>
+            ${thirds.map((r,i) => `
+              <tr class="${i < 8 ? 'qualify-1' : ''}">
+                <td><span class="rank-num ${i < 8 ? 'q1' : ''}">${i+1}</span></td>
+                <td><div class="team-row">
+                  <span class="team-row-flag">${flag(r.team)}</span>
+                  <span class="team-row-name" data-team="${r.team.replace(/"/g,'&quot;')}">${r.team}${favMark(r.team)}</span>
+                </div></td>
+                <td>${r.grp}</td>
+                <td>${r.mp}</td>
+                <td>${r.gd >= 0 ? '+'+r.gd : r.gd}</td>
+                <td><span class="pts">${r.pts}</span></td>
+                <td class="tp-status">${i < 8 ? '✅' : '❌'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+        <div class="qualify-note">
+          <span>✅ Currently advancing · ❌ Currently out · Sorted by Pts → GD → GF</span>
+        </div>
+      </div>`;
+  }
+
   letters.forEach(letter => {
     const rows = source[letter] || [];
     if (!rows.length) return; // skip groups with no data
@@ -904,7 +1138,7 @@ function renderGroups() {
                 <td><span class="rank-num ${i===0?'q1':i===1?'q2':''}">${i+1}</span></td>
                 <td><div class="team-row">
                   <span class="team-row-flag">${flag(r.team)}</span>
-                  <span class="team-row-name" data-team="${r.team.replace(/"/g,'&quot;')}">${r.team}</span>
+                  <span class="team-row-name" data-team="${r.team.replace(/"/g,'&quot;')}">${r.team}${favMark(r.team)}</span>
                 </div></td>
                 <td>${r.mp}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td>
                 <td>${r.gd >= 0 ? '+'+r.gd : r.gd}</td>
@@ -1017,6 +1251,7 @@ function showTeam(name) {
         <div class="team-modal-title">${name}</div>
         ${grp ? `<div class="team-modal-group">Group ${grp}</div>` : ''}
       </div>
+      <button class="fav-btn" onclick="toggleFav('${name.replace(/'/g,"\\'")}');showTeam('${name.replace(/'/g,"\\'")}')" title="Favorite">${isFav(name) ? '★' : '☆'}</button>
       <button class="modal-close" onclick="closeTeamModal()">✕</button>
     </div>
     <div class="team-modal-body">${body}</div>`;
@@ -1059,6 +1294,25 @@ function updateClock() {
   document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US',{
     timeZone:'America/Los_Angeles',hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true
   });
+  updateCountdown();
+}
+
+function updateCountdown() {
+  const el = document.getElementById('nextCountdown');
+  if (!el || !nextKickoff) return;
+  const diff = nextKickoff - new Date();
+  if (diff <= 0) { el.textContent = 'Kicking off…'; return; }
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  if (h >= 24) {
+    const d = Math.floor(h / 24);
+    el.textContent = `⏱ Kickoff in ${d}d ${h % 24}h ${m}m`;
+  } else if (h > 0) {
+    el.textContent = `⏱ Kickoff in ${h}h ${m}m ${s}s`;
+  } else {
+    el.textContent = `⏱ Kickoff in ${m}m ${s}s`;
+  }
 }
 
 // ─── SCROLL TOP ──────────────────────────────────────────────────────────────
@@ -1068,9 +1322,12 @@ window.addEventListener('scroll', () => {
 });
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
+applyTheme();
+setInterval(applyTheme, 60000); // re-check theme each minute
 updateClock();
 setInterval(updateClock, 1000);
 refreshAll();
+if (syncCode) syncLoad(); // pull cloud favorites if sync is on
 </script>
 </body>
 </html>
