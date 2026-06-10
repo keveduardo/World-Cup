@@ -430,9 +430,7 @@
 
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const API_KEY = '3692982899254e73aabade229d53ff8c';
-const BASE    = 'https://api.football-data.org/v4';
-const HEADERS = { 'X-Auth-Token': API_KEY };
+const PROXY = 'https://script.google.com/macros/s/AKfycbygDrUKh9hwJbFkdqyumen20h6EaNfcrlZHiw88M6y9rUgnIOdpMNoc3Cmfwn3i2QsH/exec';
 
 // Refresh intervals
 const REFRESH_LIVE    = 60_000;   // 1 min when live game active
@@ -465,19 +463,19 @@ let refreshTimer = null;
 let currentView  = 'schedule';
 
 // ─── FETCH HELPERS ────────────────────────────────────────────────────────────
-async function apiFetch(path) {
-  const res = await fetch(BASE + path, { headers: HEADERS });
+async function proxyFetch(type) {
+  const res = await fetch(`${PROXY}?type=${type}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 
 async function loadMatches() {
-  const data = await apiFetch('/competitions/WC/matches?season=2026');
+  const data = await proxyFetch('matches');
   allMatches = data.matches || [];
 }
 
 async function loadStandings() {
-  const data = await apiFetch('/competitions/WC/standings?season=2026');
+  const data = await proxyFetch('standings');
   standingsMap = {};
   (data.standings || []).forEach(group => {
     const letter = group.group ? group.group.replace('GROUP_','') : '?';
@@ -591,9 +589,9 @@ function renderSchedule() {
   // Next up banner
   if (live.length > 0) {
     const m = live[0];
-    const hn = m.homeTeam.name, an = m.awayTeam.name;
-    const hs = m.score.fullTime.home ?? m.score.halfTime.home ?? 0;
-    const as_ = m.score.fullTime.away ?? m.score.halfTime.away ?? 0;
+    const hn = m.homeTeam?.name || 'TBD', an = m.awayTeam?.name || 'TBD';
+    const hs = m.score?.fullTime?.home ?? m.score?.halfTime?.home ?? 0;
+    const as_ = m.score?.fullTime?.away ?? m.score?.halfTime?.away ?? 0;
     nextUpEl.innerHTML = `
       <div class="next-up-banner" style="background:var(--live-red)">
         <span class="next-up-label" style="color:white">🔴 LIVE</span>
@@ -601,7 +599,7 @@ function renderSchedule() {
       </div>`;
   } else if (upcoming.length > 0) {
     const m = upcoming[0];
-    const hn = m.homeTeam.name, an = m.awayTeam.name;
+    const hn = m.homeTeam?.name || 'TBD', an = m.awayTeam?.name || 'TBD';
     nextUpEl.innerHTML = `
       <div class="next-up-banner">
         <span class="next-up-label">Next Up</span>
@@ -641,21 +639,24 @@ function renderSchedule() {
 }
 
 function renderMatchCard(m, status) {
-  const hn  = m.homeTeam.name, an = m.awayTeam.name;
+  const hn  = m.homeTeam?.name || m.homeTeam?.shortName || 'TBD';
+  const an  = m.awayTeam?.name || m.awayTeam?.shortName || 'TBD';
   const grp = groupOfMatch(m);
   const grpTag = grp ? `<span class="group-tag">GRP ${grp}</span>` :
-    `<span class="group-tag">${m.stage.replace(/_/g,' ')}</span>`;
+    `<span class="group-tag">${(m.stage||'').replace(/_/g,' ')}</span>`;
+
+  // Score helper: prefer full-time, fall back to half-time
+  const ft = m.score?.fullTime || {};
+  const ht = m.score?.halfTime || {};
+  const hs  = ft.home ?? ht.home ?? 0;
+  const as_ = ft.away ?? ht.away ?? 0;
 
   let center = '';
   if (status === 'live') {
-    const hs  = m.score.fullTime.home ?? 0;
-    const as_ = m.score.fullTime.away ?? 0;
     center = `${grpTag}
       <span class="live-badge"><span class="live-dot"></span>LIVE</span>
       <div class="score-display">${hs} – ${as_}</div>`;
   } else if (status === 'completed') {
-    const hs  = m.score.fullTime.home ?? 0;
-    const as_ = m.score.fullTime.away ?? 0;
     center = `${grpTag}
       <div class="score-display">${hs} – ${as_}</div>
       <div class="match-time done">FT</div>`;
@@ -666,6 +667,8 @@ function renderMatchCard(m, status) {
   }
 
   const venue = m.venue || '';
+  const area = m.area?.name || '';
+  const meta = [area, venue].filter(Boolean).join(' · ');
   return `
     <div class="match-card ${status}">
       <div class="team-block">
@@ -674,7 +677,7 @@ function renderMatchCard(m, status) {
       </div>
       <div class="match-center">
         ${center}
-        <div class="match-meta">${m.area?.name || ''} · ${venue}</div>
+        <div class="match-meta">${meta}</div>
       </div>
       <div class="team-block right">
         <span class="team-flag">${flag(an)}</span>
