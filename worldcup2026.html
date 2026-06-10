@@ -649,6 +649,32 @@ const TEAM_GROUPS = {
 
 function groupOfTeam(name) { return TEAM_GROUPS[name] || null; }
 
+// ─── VENUE → CITY (16 official 2026 host stadiums) ───────────────────────────
+const VENUE_CITIES = [
+  { match: /azteca|ciudad de m|mexico city/i,          city: 'Mexico City, MX' },
+  { match: /akron|guadalajara|zapopan/i,               city: 'Guadalajara, MX' },
+  { match: /bbva|monterrey/i,                          city: 'Monterrey, MX' },
+  { match: /bc place|vancouver/i,                      city: 'Vancouver, CA' },
+  { match: /bmo|toronto/i,                             city: 'Toronto, CA' },
+  { match: /lumen|seattle/i,                           city: 'Seattle, WA' },
+  { match: /levi|santa clara|san francisco/i,          city: 'SF Bay Area, CA' },
+  { match: /sofi|inglewood|los angeles/i,              city: 'Los Angeles, CA' },
+  { match: /at&t|arlington|dallas/i,                   city: 'Dallas, TX' },
+  { match: /nrg|houston/i,                             city: 'Houston, TX' },
+  { match: /arrowhead|geha|kansas/i,                   city: 'Kansas City, MO' },
+  { match: /mercedes|atlanta/i,                        city: 'Atlanta, GA' },
+  { match: /hard rock|miami/i,                         city: 'Miami, FL' },
+  { match: /gillette|foxborough|boston/i,              city: 'Boston, MA' },
+  { match: /metlife|east rutherford|new york|jersey/i, city: 'NY/NJ' },
+  { match: /lincoln financial|philadelphia/i,          city: 'Philadelphia, PA' },
+];
+
+function venueCity(venue) {
+  if (!venue) return '';
+  const hit = VENUE_CITIES.find(v => v.match.test(venue));
+  return hit ? hit.city : '';
+}
+
 // ─── STATE ────────────────────────────────────────────────────────────────────
 let allMatches   = [];
 let standingsMap = {}; // group letter → sorted rows
@@ -1054,8 +1080,8 @@ function renderMatchCard(m, status) {
   }
 
   const venue = m.venue || '';
-  const area = m.area?.name || '';
-  const meta = [area, venue].filter(Boolean).join(' · ');
+  const city = venueCity(venue);
+  const meta = [venue ? `🏟 ${venue}` : '', city].filter(Boolean).join(' · ');
   return `
     <div class="match-card ${status}">
       <div class="team-block">
