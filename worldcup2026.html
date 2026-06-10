@@ -530,6 +530,36 @@
     color: rgba(255,255,255,0.8); width: 100%;
   }
 
+  /* ── INFO BUTTON & GUIDE ── */
+  .info-btn {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: var(--gold);
+    width: 26px; height: 26px; border-radius: 50%;
+    font-size: 14px; font-weight: 700;
+    cursor: pointer; line-height: 1;
+    font-family: Georgia, serif; font-style: italic;
+  }
+
+  .guide-item {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    display: flex; gap: 12px; align-items: flex-start;
+  }
+
+  .guide-icon { font-size: 22px; line-height: 1.2; }
+
+  .guide-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 16px; font-weight: 700;
+    margin-bottom: 2px;
+  }
+
+  .guide-text { font-size: 13px; color: var(--muted); line-height: 1.45; }
+
   /* ── DARK MODE ── */
   body.dark {
     --off-white: #131a14;
@@ -558,7 +588,7 @@
   <div class="header-inner">
     <div class="header-title">
       <span class="eyebrow">⚽ FIFA World Cup 2026</span>
-      <h1>Match Tracker</h1>
+      <h1>Match Tracker <button class="info-btn" onclick="showGuide()" title="About this site">i</button></h1>
       <span class="byline">by Aquadoc</span>
     </div>
     <div class="header-right">
@@ -1422,6 +1452,84 @@ document.addEventListener('click', (e) => {
   if (t) { showTeam(t.dataset.team); return; }
   if (e.target.id === 'teamModalOverlay') closeTeamModal();
 });
+
+// ─── FEATURE GUIDE ───────────────────────────────────────────────────────────
+function showGuide() {
+  const overlay = document.getElementById('teamModalOverlay');
+  const modal   = document.getElementById('teamModal');
+
+  modal.innerHTML = `
+    <div class="team-modal-header">
+      <span class="team-modal-flag">⚽</span>
+      <div style="flex:1">
+        <div class="team-modal-title">How This Site Works</div>
+        <div class="team-modal-group">World Cup 2026 Tracker · by Aquadoc</div>
+      </div>
+      <button class="modal-close" onclick="closeTeamModal()">✕</button>
+    </div>
+    <div class="team-modal-body">
+
+      <div class="guide-item">
+        <span class="guide-icon">🔴</span>
+        <div>
+          <div class="guide-title">Live Scores</div>
+          <div class="guide-text">Scores and standings update automatically — every minute during live games, every 5 minutes otherwise. Live matches always float to the top of the schedule.</div>
+        </div>
+      </div>
+
+      <div class="guide-item">
+        <span class="guide-icon">👆</span>
+        <div>
+          <div class="guide-title">Tap Any Team</div>
+          <div class="guide-text">Tap a team name anywhere — schedule, standings, anywhere — to see their full record, results, and upcoming matches. Tap teams inside that panel to keep exploring.</div>
+        </div>
+      </div>
+
+      <div class="guide-item">
+        <span class="guide-icon">⭐</span>
+        <div>
+          <div class="guide-title">Favorites</div>
+          <div class="guide-text">In any team's panel, tap the ☆ star to favorite them. Your teams get pinned in a "My Teams" card at the top of the schedule showing their next kickoff or live score.</div>
+        </div>
+      </div>
+
+      <div class="guide-item">
+        <span class="guide-icon">☁️</span>
+        <div>
+          <div class="guide-title">Sync Across Devices</div>
+          <div class="guide-text">Tap "☁ Sync" near the group filters and make up a code (like "smith-family"). Enter the same code on your other devices and your favorites and timezone follow you. No account needed.</div>
+        </div>
+      </div>
+
+      <div class="guide-item">
+        <span class="guide-icon">🕐</span>
+        <div>
+          <div class="guide-title">Your Timezone</div>
+          <div class="guide-text">All times default to Pacific. Use the 🕐 dropdown next to the filters to switch to Mountain, Central, Eastern, Arizona, or your device's local time — every kickoff time updates instantly.</div>
+        </div>
+      </div>
+
+      <div class="guide-item">
+        <span class="guide-icon">🥉</span>
+        <div>
+          <div class="guide-title">Third-Place Race</div>
+          <div class="guide-text">New for the 48-team format: 8 of the 12 third-place teams advance to the Round of 32. The tracker at the top of Groups & Standings ranks all 12 in real time — ✅ in, ❌ out. Watch this get wild in the final group games.</div>
+        </div>
+      </div>
+
+      <div class="guide-item">
+        <span class="guide-icon">🌙</span>
+        <div>
+          <div class="guide-title">Auto Dark Mode</div>
+          <div class="guide-text">The site switches to dark mode from 8 PM to 7 AM in your chosen timezone. Easy on the eyes for those late kickoffs.</div>
+        </div>
+      </div>
+
+    </div>`;
+
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
 
 // ─── NAV ─────────────────────────────────────────────────────────────────────
 function showView(v, btn) {
