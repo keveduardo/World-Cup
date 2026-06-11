@@ -537,6 +537,55 @@
     color: rgba(255,255,255,0.8); width: 100%;
   }
 
+  /* ── TEAMS TAB ── */
+  .teams-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  @media (min-width: 600px) {
+    .teams-grid { grid-template-columns: 1fr 1fr 1fr; }
+  }
+
+  .team-tile {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    display: flex; align-items: center; gap: 10px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+
+  .team-tile:active { border-color: var(--pitch); }
+
+  .team-tile .flag-img { height: 22px; }
+
+  .team-tile-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 15px; font-weight: 700;
+    flex: 1; line-height: 1.15;
+  }
+
+  .team-tile-grp {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px; font-weight: 700;
+    color: var(--muted); letter-spacing: 1px;
+  }
+
+  .teams-search {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    margin-bottom: 12px;
+    background: var(--card-bg);
+    color: var(--text);
+  }
+
   /* ── INFO BUTTON & GUIDE ── */
   .info-btn {
     background: rgba(255,255,255,0.12);
@@ -613,6 +662,7 @@
     <button class="tab active" onclick="showView('schedule',this)">Schedule</button>
     <button class="tab" onclick="showView('groups',this)">Groups & Standings</button>
     <button class="tab" onclick="showView('knockout',this)">Knockout</button>
+    <button class="tab" onclick="showView('teams',this)">Teams</button>
   </div>
 </div>
 
@@ -631,6 +681,10 @@
 
   <div id="view-knockout" class="view">
     <div id="knockout-list"><div class="loading-spinner">Loading bracket…</div></div>
+  </div>
+
+  <div id="view-teams" class="view">
+    <div id="teams-list"><div class="loading-spinner">Loading teams…</div></div>
   </div>
 </main>
 
@@ -1464,6 +1518,47 @@ document.addEventListener('click', (e) => {
   if (e.target.id === 'teamModalOverlay') closeTeamModal();
 });
 
+// ─── RENDER TEAMS ────────────────────────────────────────────────────────────
+let teamSearch = '';
+
+function getAllTeams() {
+  // Prefer real names from API matches; fall back to the official draw list
+  const names = new Set();
+  allMatches.forEach(m => {
+    if (m.homeTeam?.name && groupOfTeam(m.homeTeam.name)) names.add(m.homeTeam.name);
+    if (m.awayTeam?.name && groupOfTeam(m.awayTeam.name)) names.add(m.awayTeam.name);
+  });
+  if (names.size === 0) {
+    // Canonical list (skip alias spellings)
+    const seen = new Set();
+    Object.entries(TEAM_GROUPS).forEach(([name, grp]) => {
+      const key = grp + ':' + (FLAG_CODES[name] || name);
+      if (!seen.has(key)) { seen.add(key); names.add(name); }
+    });
+  }
+  return [...names].sort((a,b) => a.localeCompare(b));
+}
+
+function renderTeams() {
+  const container = document.getElementById('teams-list');
+  const teams = getAllTeams().filter(t =>
+    !teamSearch || t.toLowerCase().includes(teamSearch.toLowerCase()));
+
+  const tiles = teams.map(name => `
+    <div class="team-tile" data-team="${name.replace(/"/g,'&quot;')}">
+      ${flag(name)}
+      <span class="team-tile-name">${name}${favMark(name)}</span>
+      <span class="team-tile-grp">GRP ${groupOfTeam(name) || '?'}</span>
+    </div>`).join('');
+
+  container.innerHTML = `
+    <input class="teams-search" type="search" placeholder="🔍 Search teams…"
+      value="${teamSearch.replace(/"/g,'&quot;')}"
+      oninput="teamSearch=this.value;renderTeams();this.focus();this.setSelectionRange(this.value.length,this.value.length)">
+    <div class="teams-grid">${tiles}</div>
+    ${teams.length === 0 ? '<div class="loading-spinner">No teams match your search.</div>' : ''}`;
+}
+
 // ─── FEATURE GUIDE ───────────────────────────────────────────────────────────
 function showGuide() {
   const overlay = document.getElementById('teamModalOverlay');
@@ -1556,6 +1651,7 @@ function renderCurrentView() {
   if (currentView === 'schedule') renderSchedule();
   else if (currentView === 'groups') renderGroups();
   else if (currentView === 'knockout') renderKnockout();
+  else if (currentView === 'teams') renderTeams();
 }
 
 // ─── CLOCK ───────────────────────────────────────────────────────────────────
