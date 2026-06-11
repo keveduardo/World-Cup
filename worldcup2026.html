@@ -844,6 +844,17 @@ function lookupVenue(hn, an) {
   return code ? STADIUMS[code] : null; // [stadium, city]
 }
 
+function matchVenueText(m) {
+  let venue = m.venue || '';
+  let city = venueCity(venue);
+  if (!venue) {
+    const hc = lookupVenue(m.homeTeam?.name || '', m.awayTeam?.name || '');
+    if (hc) { venue = hc[0]; city = hc[1]; }
+  }
+  return [venue, city].filter(Boolean).join(' · ');
+}
+
+
 // ─── STATE ────────────────────────────────────────────────────────────────────
 let allMatches   = [];
 let standingsMap = {}; // group letter → sorted rows
@@ -1135,20 +1146,24 @@ function renderSchedule() {
     const hs = m.score?.fullTime?.home ?? m.score?.halfTime?.home ?? 0;
     const as_ = m.score?.fullTime?.away ?? m.score?.halfTime?.away ?? 0;
     nextKickoff = null;
+    const liveVenueTxt = matchVenueText(m);
     bannerHtml = `
       <div class="next-up-banner" style="background:var(--live-red)">
         <span class="next-up-label" style="color:white">🔴 LIVE</span>
         <span class="next-up-game">${flag(hn)} ${hn} ${hs} – ${as_} ${an} ${flag(an)}</span>
+        ${liveVenueTxt ? `<div class="next-up-countdown">🏟 ${liveVenueTxt}</div>` : ''}
       </div>`;
   } else if (upcoming.length > 0) {
     const m = upcoming[0];
     const hn = m.homeTeam?.name || 'TBD', an = m.awayTeam?.name || 'TBD';
     nextKickoff = new Date(m.utcDate);
+    const venueTxt = matchVenueText(m);
     bannerHtml = `
       <div class="next-up-banner">
         <span class="next-up-label">Next Up</span>
         <span class="next-up-game">${flag(hn)} ${hn} vs ${an} ${flag(an)}</span>
         <span class="next-up-time">${formatPST(m.utcDate)} ${tzShort()}</span>
+        ${venueTxt ? `<div class="next-up-countdown">🏟 ${venueTxt}</div>` : ''}
         <div class="next-up-countdown" id="nextCountdown"></div>
       </div>`;
   } else {
@@ -1158,7 +1173,21 @@ function renderSchedule() {
   // ⭐ My Teams section: live or next match for each favorite
   let myTeamsHtml = '';
   if (favorites.size > 0 && activeFilter === 'all') {
-    const rows = [...favorites].sort().map(name => {
+    // Sort favorites by soonest game: live first, then earliest kickoff,
+    // then teams with no remaining matches last
+    const favList = [...favorites].map(name => {
+      const tm = allMatches.filter(m =>
+        m.homeTeam?.name === name || m.awayTeam?.name === name);
+      const hasLive = tm.some(m => matchStatus(m) === 'live');
+      const next = tm.filter(m => matchStatus(m) === 'upcoming')
+        .sort((a,b) => new Date(a.utcDate)-new Date(b.utcDate))[0];
+      return {
+        name,
+        sortKey: hasLive ? 0 : (next ? new Date(next.utcDate).getTime() : Infinity)
+      };
+    }).sort((a,b) => a.sortKey - b.sortKey).map(f => f.name);
+
+    const rows = favList.map(name => {
       const teamMatches = allMatches.filter(m =>
         m.homeTeam?.name === name || m.awayTeam?.name === name);
       const liveM = teamMatches.find(m => matchStatus(m) === 'live');
@@ -1168,11 +1197,13 @@ function renderSchedule() {
       if (liveM) {
         const hs = liveM.score?.fullTime?.home ?? 0, as_ = liveM.score?.fullTime?.away ?? 0;
         const opp = liveM.homeTeam?.name === name ? liveM.awayTeam?.name : liveM.homeTeam?.name;
-        info = `🔴 LIVE vs ${opp}`;
+        const v = matchVenueText(liveM);
+        info = `🔴 LIVE vs ${opp}${v ? ' · 🏟 ' + v : ''}`;
         time = `${hs} – ${as_}`;
       } else if (nextM) {
         const opp = nextM.homeTeam?.name === name ? nextM.awayTeam?.name : nextM.homeTeam?.name;
-        info = `vs ${opp}`;
+        const v = matchVenueText(nextM);
+        info = `vs ${opp}${v ? ' · 🏟 ' + v : ''}`;
         time = `${formatDatePST(nextM.utcDate)} · ${formatPST(nextM.utcDate)}`;
       } else {
         info = 'No upcoming matches';
