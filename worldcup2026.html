@@ -1445,48 +1445,48 @@ function renderGroups() {
 // utc times are kickoff converted from ET (EDT = UTC-4). Stadium codes map to STADIUMS.
 const KO_SCHEDULE = {
   LAST_32: [
-    {date:'2026-06-28',et:'15:00',v:'LA',  home:'2A',away:'2B'},
-    {date:'2026-06-29',et:'12:00',v:'HOU', home:'1E',away:'3rd'},
-    {date:'2026-06-29',et:'15:00',v:'LA',  home:'1C',away:'2F'},
-    {date:'2026-06-29',et:'18:00',v:'DAL', home:'1F',away:'2C'},
-    {date:'2026-06-30',et:'12:00',v:'ATL', home:'1I',away:'3rd'},
-    {date:'2026-06-30',et:'15:00',v:'SF',  home:'2E',away:'2I'},
-    {date:'2026-06-30',et:'18:00',v:'SEA', home:'1A',away:'3rd'},
-    {date:'2026-06-30',et:'21:00',v:'LA',  home:'1L',away:'3rd'},
-    {date:'2026-07-01',et:'12:00',v:'BOS', home:'1D',away:'3rd'},
-    {date:'2026-07-01',et:'15:00',v:'NYNJ',home:'1G',away:'3rd'},
-    {date:'2026-07-01',et:'18:00',v:'PHI', home:'2K',away:'2L'},
-    {date:'2026-07-01',et:'21:00',v:'VAN', home:'1H',away:'2J'},
-    {date:'2026-07-02',et:'12:00',v:'KC',  home:'1B',away:'3rd'},
-    {date:'2026-07-02',et:'15:00',v:'MIA', home:'1K',away:'3rd'},
-    {date:'2026-07-02',et:'18:00',v:'DAL', home:'2D',away:'2G'},
-    {date:'2026-07-03',et:'15:00',v:'TOR', home:'1J',away:'2H'},
+    {n:73,date:'2026-06-28',et:'15:00',v:'LA',  home:'2A',away:'2B'},
+    {n:76,date:'2026-06-29',et:'13:00',v:'HOU', home:'1C',away:'2F'},
+    {n:74,date:'2026-06-29',et:'16:30',v:'BOS', home:'1E',away:'3rd A/B/C/D/F'},
+    {n:75,date:'2026-06-29',et:'21:00',v:'MTY', home:'1F',away:'2C'},
+    {n:78,date:'2026-06-30',et:'13:00',v:'DAL', home:'2E',away:'2I'},
+    {n:77,date:'2026-06-30',et:'17:00',v:'NYNJ',home:'1I',away:'3rd C/D/F/G/H'},
+    {n:79,date:'2026-06-30',et:'21:00',v:'MEX', home:'1A',away:'3rd C/E/F/H/I'},
+    {n:80,date:'2026-07-01',et:'12:00',v:'ATL', home:'1L',away:'3rd E/H/I/J/K'},
+    {n:82,date:'2026-07-01',et:'16:00',v:'SEA', home:'1G',away:'3rd A/E/H/I/J'},
+    {n:81,date:'2026-07-01',et:'20:00',v:'SF',  home:'1D',away:'3rd B/E/F/I/J'},
+    {n:84,date:'2026-07-02',et:'15:00',v:'LA',  home:'1H',away:'2J'},
+    {n:83,date:'2026-07-02',et:'19:00',v:'TOR', home:'2K',away:'2L'},
+    {n:85,date:'2026-07-02',et:'23:00',v:'VAN', home:'1B',away:'3rd E/F/G/I/J'},
+    {n:88,date:'2026-07-03',et:'14:00',v:'DAL', home:'2D',away:'2G'},
+    {n:86,date:'2026-07-03',et:'18:00',v:'MIA', home:'1J',away:'2H'},
+    {n:87,date:'2026-07-03',et:'21:30',v:'KC',  home:'1K',away:'3rd D/E/I/J/L'},
   ],
   LAST_16: [
-    {date:'2026-07-04',et:'12:00',v:'PHI', home:'W74',away:'W77'},
-    {date:'2026-07-04',et:'16:00',v:'HOU', home:'W73',away:'W75'},
-    {date:'2026-07-05',et:'12:00',v:'DAL', home:'W76',away:'W78'},
-    {date:'2026-07-05',et:'16:00',v:'SEA', home:'W79',away:'W81'},
-    {date:'2026-07-06',et:'12:00',v:'ATL', home:'W83',away:'W84'},
-    {date:'2026-07-06',et:'16:00',v:'BOS', home:'W80',away:'W82'},
-    {date:'2026-07-07',et:'12:00',v:'LA',  home:'W85',away:'W87'},
-    {date:'2026-07-07',et:'16:00',v:'KC',  home:'W86',away:'W88'},
+    {n:90,date:'2026-07-04',et:'13:00',v:'HOU', home:'W 73',away:'W 75'},
+    {n:89,date:'2026-07-04',et:'17:00',v:'PHI', home:'W 74',away:'W 77'},
+    {n:91,date:'2026-07-05',et:'16:00',v:'NYNJ',home:'W 76',away:'W 78'},
+    {n:92,date:'2026-07-05',et:'20:00',v:'MEX', home:'W 79',away:'W 80'},
+    {n:93,date:'2026-07-06',et:'15:00',v:'DAL', home:'W 83',away:'W 84'},
+    {n:94,date:'2026-07-06',et:'20:00',v:'SEA', home:'W 81',away:'W 82'},
+    {n:95,date:'2026-07-07',et:'12:00',v:'ATL', home:'W 86',away:'W 88'},
+    {n:96,date:'2026-07-07',et:'16:00',v:'VAN', home:'W 85',away:'W 87'},
   ],
   QUARTER_FINALS: [
-    {date:'2026-07-09',et:'12:00',v:'BOS', home:'W89',away:'W90'},
-    {date:'2026-07-10',et:'15:00',v:'LA',  home:'W93',away:'W94'},
-    {date:'2026-07-11',et:'12:00',v:'MIA', home:'W91',away:'W92'},
-    {date:'2026-07-11',et:'16:00',v:'KC',  home:'W95',away:'W96'},
+    {n:97, date:'2026-07-09',et:'16:00',v:'BOS', home:'W 89',away:'W 90'},
+    {n:98, date:'2026-07-10',et:'15:00',v:'LA',  home:'W 93',away:'W 94'},
+    {n:99, date:'2026-07-11',et:'17:00',v:'MIA', home:'W 91',away:'W 92'},
+    {n:100,date:'2026-07-11',et:'21:00',v:'KC',  home:'W 95',away:'W 96'},
   ],
   SEMI_FINALS: [
-    {date:'2026-07-14',et:'15:00',v:'DAL', home:'W97',away:'W98'},
-    {date:'2026-07-15',et:'15:00',v:'ATL', home:'W99',away:'W100'},
+    {n:101,date:'2026-07-14',et:'15:00',v:'DAL', home:'W 97',away:'W 98'},
+    {n:102,date:'2026-07-15',et:'15:00',v:'ATL', home:'W 99',away:'W 100'},
   ],
   THIRD_PLACE: [
-    {date:'2026-07-18',et:'15:00',v:'MIA', home:'L SF1',away:'L SF2'},
+    {n:103,date:'2026-07-18',et:'17:00',v:'MIA', home:'L SF1',away:'L SF2'},
   ],
   FINAL: [
-    {date:'2026-07-19',et:'15:00',v:'NYNJ',home:'W SF1',away:'W SF2'},
+    {n:104,date:'2026-07-19',et:'15:00',v:'NYNJ',home:'W SF1',away:'W SF2'},
   ],
 };
 
@@ -1508,7 +1508,7 @@ function renderPlaceholderKO(slot) {
         <span class="team-name" style="color:var(--muted)">${slot.home}</span>
       </div>
       <div class="match-center">
-        <span class="group-tag">TBD</span>
+        <span class="group-tag">${slot.n ? 'MATCH ' + slot.n : 'TBD'}</span>
         <div class="vs-display">VS</div>
         <div class="match-time">${formatPST(iso)} ${tzShort()}</div>
         <div class="match-meta">${formatDatePST(iso)}${meta ? ' · 🏟 ' + meta : ''}</div>
