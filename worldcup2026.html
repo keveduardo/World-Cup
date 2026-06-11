@@ -1138,7 +1138,36 @@ function todayKeyPST() { return datekeyPST(new Date().toISOString()); }
 function matchStatus(m) {
   if (m.status === 'IN_PLAY' || m.status === 'PAUSED') return 'live';
   if (m.status === 'FINISHED') return 'completed';
+  // API can lag on flipping status to live. If kickoff has passed but the match
+  // isn't finished, treat the first ~2.5 hours as "live" so it surfaces at the top.
+  if (m.status === 'TIMED' || m.status === 'SCHEDULED' || !m.status) {
+    const start = new Date(m.utcDate).getTime();
+    const now = Date.now();
+    if (now >= start && now < start + 150 * 60000) return 'live';
+  }
   return 'upcoming';
+}
+
+// Live match clock: returns {label, detail} based on minute/half if available
+function matchClock(m) {
+  // Prefer the API's own minute if present
+  const start = new Date(m.utcDate).getTime();
+  const elapsedMin = Math.floor((Date.now() - start) / 60000);
+
+  // If the API marks it paused, that's half-time
+  if (m.status === 'PAUSED') return { label: 'HALF TIME', detail: '' };
+
+  // Use API minute when available, else estimate from kickoff
+  let minute = (typeof m.minute === 'number') ? m.minute : elapsedMin;
+  if (minute < 0) minute = 0;
+
+  if (minute <= 45) return { label: `1st Half`, detail: `${minute}'` };
+  if (minute <= 47) return { label: `1st Half`, detail: `45+'` };
+  if (minute < 60)  return { label: `Half Time`, detail: '' };
+  // crude: assume ~15min break, second half starts ~60min after KO
+  const secondHalfMin = 45 + Math.max(0, minute - 60);
+  if (secondHalfMin <= 90) return { label: `2nd Half`, detail: `${secondHalfMin}'` };
+  return { label: `2nd Half`, detail: `90+'` };
 }
 
 function groupOfMatch(m) {
@@ -1200,11 +1229,13 @@ function renderSchedule() {
     const as_ = m.score?.fullTime?.away ?? m.score?.halfTime?.away ?? 0;
     nextKickoff = null;
     const liveVenueTxt = matchVenueText(m);
+    const clk = matchClock(m);
+    const apiLive = (m.status === 'IN_PLAY' || m.status === 'PAUSED');
     bannerHtml = `
       <div class="next-up-banner" style="background:var(--live-red)">
-        <span class="next-up-label" style="color:white">🔴 LIVE</span>
+        <span class="next-up-label" style="color:white">🔴 ${clk.detail || 'LIVE'}</span>
         <span class="next-up-game">${flag(hn)} ${hn} ${hs} – ${as_} ${an} ${flag(an)}</span>
-        ${liveVenueTxt ? `<div class="next-up-countdown">🏟 ${liveVenueTxt}</div>` : ''}
+        <div class="next-up-countdown">${clk.label}${!apiLive ? ' · awaiting score from API' : ''}${liveVenueTxt ? ' · 🏟 ' + liveVenueTxt : ''}</div>
       </div>`;
   } else if (upcoming.length > 0) {
     const m = upcoming[0];
@@ -1357,9 +1388,13 @@ function renderMatchCard(m, status) {
 
   let center = '';
   if (status === 'live') {
+    const apiLive = (m.status === 'IN_PLAY' || m.status === 'PAUSED');
+    const clk = matchClock(m);
+    const scoreKnown = (m.score?.fullTime?.home != null) || apiLive;
     center = `${grpTag}
-      <span class="live-badge"><span class="live-dot"></span>LIVE</span>
-      <div class="score-display">${hs} – ${as_}</div>`;
+      <span class="live-badge"><span class="live-dot"></span>${clk.detail || 'LIVE'}</span>
+      <div class="score-display">${hs} – ${as_}</div>
+      <div class="match-time" style="color:var(--live-red)">${clk.label}${!scoreKnown ? ' · awaiting score' : ''}</div>`;
   } else if (status === 'completed') {
     center = `${grpTag}
       <div class="score-display">${hs} – ${as_}</div>
@@ -2020,6 +2055,14 @@ updateClock();
 setInterval(updateClock, 1000);
 refreshAll();
 if (syncCode) syncLoad(); // pull cloud favorites if sync is on
+
+// Live minute ticker: while a match is live and the schedule tab is showing,
+// re-render every 20s so the clock label (1st Half 23', etc.) advances between
+// the full data refreshes.
+setInterval(() => {
+  const anyLive = allMatches.some(m => matchStatus(m) === 'live');
+  if (anyLive && currentView === 'schedule') renderSchedule();
+}, 20000);
 
 // Restore the last tab the user was on (defaults to schedule)
 (function restoreLastTab() {
