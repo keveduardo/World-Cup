@@ -574,6 +574,15 @@
     color: var(--muted); letter-spacing: 1px;
   }
 
+  .tile-star {
+    background: none; border: none;
+    font-size: 20px; line-height: 1;
+    color: var(--border); cursor: pointer;
+    padding: 4px; margin: -4px;
+  }
+
+  .tile-star.on { color: var(--gold); }
+
   .teams-search {
     width: 100%;
     padding: 10px 14px;
@@ -1513,6 +1522,8 @@ function closeTeamModal() {
 // Click delegation: any element with data-team opens the modal.
 // Tapping the dark backdrop closes it.
 document.addEventListener('click', (e) => {
+  const star = e.target.closest('[data-fav]');
+  if (star) { toggleFav(star.dataset.fav); return; }
   const t = e.target.closest('[data-team]');
   if (t) { showTeam(t.dataset.team); return; }
   if (e.target.id === 'teamModalOverlay') closeTeamModal();
@@ -1547,8 +1558,9 @@ function renderTeams() {
   const tiles = teams.map(name => `
     <div class="team-tile" data-team="${name.replace(/"/g,'&quot;')}">
       ${flag(name)}
-      <span class="team-tile-name">${name}${favMark(name)}</span>
+      <span class="team-tile-name">${name}</span>
       <span class="team-tile-grp">GRP ${groupOfTeam(name) || '?'}</span>
+      <button class="tile-star ${isFav(name)?'on':''}" data-fav="${name.replace(/"/g,'&quot;')}" title="Favorite">${isFav(name)?'★':'☆'}</button>
     </div>`).join('');
 
   container.innerHTML = `
