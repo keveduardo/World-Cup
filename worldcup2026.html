@@ -513,6 +513,69 @@
   }
   .roster-link:active { opacity: 0.7; }
 
+  /* ── MATCH DETAIL ── */
+  .event-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 4px; border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .event-clock {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700; color: var(--muted);
+    min-width: 32px; font-size: 14px;
+  }
+  .event-icon { font-size: 15px; }
+  .event-detail { flex: 1; }
+
+  .stat-head {
+    display: flex; justify-content: space-between;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; padding: 4px 0;
+  }
+  .stat-row {
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    align-items: center; padding: 7px 0;
+    border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .stat-h { text-align: left; font-weight: 700; }
+  .stat-a { text-align: right; font-weight: 700; }
+  .stat-label { color: var(--muted); font-size: 11px; padding: 0 12px; }
+
+  .lineup { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .lineup-player {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 8px; font-size: 12px;
+  }
+  .lp-pos {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700; color: var(--gold);
+    background: var(--pitch); border-radius: 3px;
+    padding: 0 4px; font-size: 10px; margin-right: 4px;
+  }
+
+  .detail-btn {
+    display: block; width: 100%; text-align: center;
+    background: var(--live-red); color: white;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+    text-transform: uppercase;
+    border: none; border-radius: 6px;
+    padding: 6px; margin-top: 6px; cursor: pointer;
+  }
+  .detail-btn.done { background: var(--done); }
+  .detail-btn:active { opacity: 0.8; }
+
+  .team-form {
+    font-size: 9px; letter-spacing: 1px; margin-top: 1px;
+    font-family: 'Barlow Condensed', sans-serif; font-weight: 700;
+  }
+  .form-w { color: #1a9d4e; } .form-d { color: #b0922a; } .form-l { color: var(--live-red); }
+
+  .broadcast-tag {
+    font-size: 10px; color: var(--muted); margin-top: 2px;
+  }
+
   .record-chip {
     flex: 1;
     background: white; border: 1px solid var(--border);
@@ -1199,13 +1262,18 @@ async function loadEspnLive() {
       if (!home || !away) return;
       const key = [canonName(home.team?.displayName || ''), canonName(away.team?.displayName || '')].sort().join('|');
       const st = ev.status || comp.status || {};
+      const bc = (comp.broadcasts?.[0]?.names || comp.geoBroadcasts?.map(g => g.media?.shortName) || []).filter(Boolean);
       espnMap[key] = {
+        id: ev.id,                                   // event id for summary calls
         state: st.type?.state,                       // 'pre' | 'in' | 'post'
         desc: st.type?.description || '',            // 'Halftime', 'Full Time'...
         clock: st.displayClock || '',                // "75'"
         period: st.period || 0,
         homeScore: parseInt(home.score, 10),
-        awayScore: parseInt(away.score, 10)
+        awayScore: parseInt(away.score, 10),
+        homeForm: home.form || '',                   // "WWWDD"
+        awayForm: away.form || '',
+        broadcast: [...new Set(bc)].slice(0,3).join(', ')
       };
     });
 
@@ -1227,7 +1295,8 @@ async function loadEspnLive() {
         m.score = m.score || {};
         m.score.fullTime = { home: e.homeScore, away: e.awayScore };
       }
-      m._espn = e; // for the live clock display
+      m._espn = e;        // clock + ids + form + broadcast
+      m._espnId = e.id;   // shortcut for summary fetch
     });
   } catch(err) { /* ESPN unavailable — football-data values remain */ }
 }
@@ -1578,20 +1647,43 @@ function renderMatchCard(m, status) {
     ? `<div class="match-wx" data-wx-code="${wxCode}" data-wx-when="${m.utcDate}">⛅ …</div>`
     : '';
 
+  // Recent form (last 5) from ESPN, shown for upcoming/live games within range
+  const homeForm = m._espn?.homeForm || '';
+  const awayForm = m._espn?.awayForm || '';
+  const formHtml = (s) => s ? `<div class="team-form">${[...s].map(ch =>
+    `<span class="form-${ch.toLowerCase()}">${ch}</span>`).join(' ')}</div>` : '';
+
+  // Broadcast channel (ESPN), shown for upcoming games
+  const bcast = m._espn?.broadcast;
+  const bcastHtml = (bcast && status === 'upcoming')
+    ? `<div class="broadcast-tag">📺 ${bcast}</div>` : '';
+
+  // Match Details button (live or completed games with an ESPN id)
+  const eid = m._espnId || '';
+  const detailBtn = (eid && (status === 'live' || status === 'completed'))
+    ? `<button class="detail-btn ${status==='completed'?'done':''}"
+        onclick="showMatchDetail('${eid}','${hn.replace(/'/g,"\\'")}','${an.replace(/'/g,"\\'")}')">
+        ${status === 'live' ? '⚽ Live Match Details' : '📊 Match Details'}</button>`
+    : '';
+
   return `
     <div class="match-card ${status}">
       <div class="team-block" data-team="${hn.replace(/"/g,'&quot;')}">
         <span class="team-flag">${flag(hn)}</span>
         <span class="team-name">${hn}${favMark(hn)}</span>
+        ${formHtml(homeForm)}
       </div>
       <div class="match-center">
         ${center}
         <div class="match-meta">${meta}</div>
         ${wxSlot}
+        ${bcastHtml}
+        ${detailBtn}
       </div>
       <div class="team-block right" data-team="${an.replace(/"/g,'&quot;')}">
         <span class="team-flag">${flag(an)}</span>
         <span class="team-name">${an}${favMark(an)}</span>
+        ${formHtml(awayForm)}
       </div>
     </div>`;
 }
@@ -1873,6 +1965,127 @@ function renderKnockout() {
 }
 
 // ─── TEAM DETAIL MODAL ───────────────────────────────────────────────────────
+// ─── MATCH DETAIL (goals, cards, stats from ESPN summary) ────────────────────
+async function showMatchDetail(eventId, hn, an) {
+  const overlay = document.getElementById('teamModalOverlay');
+  const modal   = document.getElementById('teamModal');
+
+  modal.innerHTML = `
+    <div class="team-modal-header">
+      <span class="team-modal-flag">⚽</span>
+      <div style="flex:1">
+        <div class="team-modal-title">${hn} vs ${an}</div>
+        <div class="team-modal-group">Match Details</div>
+      </div>
+      <button class="modal-close" onclick="closeTeamModal()">✕</button>
+    </div>
+    <div class="team-modal-body"><div class="loading-spinner">Loading match details…</div></div>`;
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  try {
+    const data = await proxyFetch('espnsummary&event=' + eventId);
+    const body = renderMatchDetailBody(data, hn, an);
+    modal.querySelector('.team-modal-body').innerHTML = body;
+  } catch(e) {
+    modal.querySelector('.team-modal-body').innerHTML =
+      '<div class="loading-spinner">Could not load match details right now.</div>';
+  }
+}
+
+function renderMatchDetailBody(data, hn, an) {
+  let html = '';
+
+  // ── Key events: goals, cards, subs ──
+  const events = [];
+  (data.commentary || []).forEach(c => {
+    if (c.play && (c.play.type?.text || '')) {
+      // not always structured — skip generic commentary
+    }
+  });
+  // ESPN summary "keyEvents" is the cleanest source
+  const keyEvents = data.keyEvents || [];
+  keyEvents.forEach(ev => {
+    const t = ev.type?.text || '';
+    const clock = ev.clock?.displayValue || '';
+    const team = ev.team?.displayName || '';
+    const players = (ev.participants || []).map(p => p.athlete?.displayName).filter(Boolean);
+    let icon = '';
+    if (/goal/i.test(t) && !/own/i.test(t)) icon = '⚽';
+    else if (/own goal/i.test(t)) icon = '⚽ (OG)';
+    else if (/yellow/i.test(t)) icon = '🟨';
+    else if (/red/i.test(t)) icon = '🟥';
+    else if (/substitution/i.test(t)) icon = '🔄';
+    else if (/penalty/i.test(t)) icon = '🎯';
+    if (icon) {
+      events.push({ clock, icon, team, detail: players.join(', ') || t });
+    }
+  });
+
+  if (events.length) {
+    html += `<div class="section-head"><h2>Key Events</h2></div>`;
+    events.forEach(ev => {
+      html += `<div class="event-row">
+        <span class="event-clock">${ev.clock}</span>
+        <span class="event-icon">${ev.icon}</span>
+        <span class="event-detail"><b>${ev.team}</b> ${ev.detail}</span>
+      </div>`;
+    });
+  }
+
+  // ── Team statistics ──
+  const teams = data.boxscore?.teams || [];
+  if (teams.length === 2) {
+    const homeStats = {}, awayStats = {};
+    (teams[0].statistics || []).forEach(s => homeStats[s.name] = s.displayValue);
+    (teams[1].statistics || []).forEach(s => awayStats[s.name] = s.displayValue);
+    const wantStats = [
+      ['possessionPct','Possession'],
+      ['totalShots','Shots'],
+      ['shotsOnTarget','On Target'],
+      ['wonCorners','Corners'],
+      ['foulsCommitted','Fouls'],
+      ['yellowCards','Yellow Cards']
+    ];
+    const rows = wantStats.filter(([k]) => homeStats[k] != null || awayStats[k] != null);
+    if (rows.length) {
+      const t0 = teams[0].team?.displayName || hn;
+      const t1 = teams[1].team?.displayName || an;
+      html += `<div class="section-head"><h2>Match Stats</h2></div>`;
+      html += `<div class="stat-head"><span>${t0}</span><span></span><span>${t1}</span></div>`;
+      rows.forEach(([k,label]) => {
+        html += `<div class="stat-row">
+          <span class="stat-h">${homeStats[k] ?? '–'}</span>
+          <span class="stat-label">${label}</span>
+          <span class="stat-a">${awayStats[k] ?? '–'}</span>
+        </div>`;
+      });
+    }
+  }
+
+  // ── Lineups ──
+  const rosters = data.rosters || [];
+  if (rosters.length === 2) {
+    rosters.forEach(r => {
+      const starters = (r.roster || []).filter(p => p.starter);
+      if (!starters.length) return;
+      const teamName = r.team?.displayName || '';
+      const formation = r.formation || '';
+      html += `<div class="section-head"><h2>${teamName} XI</h2>${formation ? `<span class="count">${formation}</span>` : ''}</div>`;
+      html += '<div class="lineup">';
+      starters.forEach(p => {
+        const nm = p.athlete?.displayName || '';
+        const pos = p.position?.abbreviation || '';
+        html += `<div class="lineup-player"><span class="lp-pos">${pos}</span> ${nm}</div>`;
+      });
+      html += '</div>';
+    });
+  }
+
+  if (!html) html = '<div class="loading-spinner">No detailed data available yet for this match.</div>';
+  return html;
+}
+
 function showTeam(name) {
   const overlay = document.getElementById('teamModalOverlay');
   const modal   = document.getElementById('teamModal');
