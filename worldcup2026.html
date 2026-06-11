@@ -36,8 +36,7 @@
     background-image: repeating-linear-gradient(90deg,transparent,transparent 48px,rgba(255,255,255,0.03) 48px,rgba(255,255,255,0.03) 50px),
       repeating-linear-gradient(0deg,transparent,transparent 48px,rgba(255,255,255,0.03) 48px,rgba(255,255,255,0.03) 50px);
     padding: 20px 16px 16px;
-    position: sticky;
-    top: 0;
+    position: relative;
     z-index: 100;
     border-bottom: 3px solid var(--gold);
   }
@@ -99,8 +98,12 @@
 
   .tab-bar {
     background: #073d24;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
+    border-bottom: 3px solid var(--gold);
     overflow-x: auto; scrollbar-width: none;
+    position: sticky;
+    top: 0;
+    z-index: 99;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
   }
   .tab-bar::-webkit-scrollbar { display: none; }
 
@@ -457,8 +460,19 @@
   .team-modal-body { padding: 14px 16px 30px; }
 
   .team-record-bar {
-    display: flex; gap: 8px; margin-bottom: 16px;
+    display: flex; gap: 8px; margin-bottom: 12px;
   }
+
+  .roster-link {
+    display: block; text-align: center;
+    background: var(--pitch); color: var(--gold);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 15px; font-weight: 700; letter-spacing: 0.5px;
+    padding: 11px; border-radius: 10px;
+    text-decoration: none; margin-bottom: 16px;
+    border: 1px solid var(--gold);
+  }
+  .roster-link:active { opacity: 0.7; }
 
   .record-chip {
     flex: 1;
@@ -1607,7 +1621,8 @@ function showTeam(name) {
       <div class="record-chip"><div class="num">${d}</div><div class="lbl">Draws</div></div>
       <div class="record-chip"><div class="num">${l}</div><div class="lbl">Losses</div></div>
       <div class="record-chip"><div class="num">${gf}–${ga}</div><div class="lbl">Goals</div></div>
-    </div>`;
+    </div>
+    <a class="roster-link" href="${rosterURL(name)}" target="_blank" rel="noopener">👥 View Roster &amp; Player Bios →</a>`;
 
   if (live.length) {
     body += `<div class="section-head"><h2 style="color:var(--live-red)">🔴 Live Now</h2></div>`;
@@ -1783,6 +1798,18 @@ function showGuide() {
 
   overlay.classList.add('open');
   document.body.style.overflow = 'hidden';
+}
+
+// ─── ROSTER LINK (Wikipedia 2026 squads page) ────────────────────────────────
+function rosterURL(name) {
+  const anchorNames = {
+    'United States':'United_States','South Korea':'South_Korea',
+    'Bosnia-Herzegovina':'Bosnia_and_Herzegovina','Ivory Coast':'Ivory_Coast',
+    'DR Congo':'DR_Congo','Cape Verde':'Cape_Verde','Saudi Arabia':'Saudi_Arabia',
+    'New Zealand':'New_Zealand','South Africa':'South_Africa','Czechia':'Czech_Republic'
+  };
+  const anchor = anchorNames[name] || name.replace(/ /g,'_');
+  return 'https://en.wikipedia.org/wiki/2026_FIFA_World_Cup_squads#' + encodeURIComponent(anchor);
 }
 
 // ─── CROSS-NAV HELPERS ───────────────────────────────────────────────────────
