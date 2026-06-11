@@ -169,6 +169,13 @@
 
   .team-flag { font-size: 22px; line-height: 1; }
 
+  .flag-img {
+    height: 1em; width: auto;
+    vertical-align: -0.12em;
+    border-radius: 2px;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.08);
+  }
+
   .team-name {
     font-family: 'Barlow Condensed', sans-serif;
     font-size: 15px; font-weight: 700;
@@ -642,24 +649,28 @@ const REFRESH_LIVE    = 60_000;   // 1 min when live game active
 const REFRESH_NORMAL  = 300_000;  // 5 min otherwise
 
 // ─── FLAGS ───────────────────────────────────────────────────────────────────
-const FLAGS = {
-  'Mexico':'🇲🇽','South Africa':'🇿🇦','Korea Republic':'🇰🇷','Czechia':'🇨🇿',
-  'Czech Republic':'🇨🇿','Canada':'🇨🇦','Bosnia and Herzegovina':'🇧🇦',
-  'Bosnia-Herzegovina':'🇧🇦','South Korea':'🇰🇷','Cabo Verde':'🇨🇻',
-  'Qatar':'🇶🇦','Switzerland':'🇨🇭','Brazil':'🇧🇷','Morocco':'🇲🇦',
-  'Haiti':'🇭🇹','Scotland':'🏴󠁧󠁢󠁳󠁣󠁴󠁿','United States':'🇺🇸','USA':'🇺🇸',
-  'Paraguay':'🇵🇾','Australia':'🇦🇺','Türkiye':'🇹🇷','Turkey':'🇹🇷',
-  'Germany':'🇩🇪','Curaçao':'🇨🇼','Ivory Coast':'🇨🇮',"Côte d'Ivoire":'🇨🇮',
-  'Ecuador':'🇪🇨','Netherlands':'🇳🇱','Japan':'🇯🇵','Sweden':'🇸🇪',
-  'Tunisia':'🇹🇳','Belgium':'🇧🇪','Egypt':'🇪🇬','Iran':'🇮🇷',
-  'New Zealand':'🇳🇿','Spain':'🇪🇸','Cape Verde':'🇨🇻','Saudi Arabia':'🇸🇦',
-  'Uruguay':'🇺🇾','France':'🇫🇷','Senegal':'🇸🇳','Iraq':'🇮🇶','Norway':'🇳🇴',
-  'Argentina':'🇦🇷','Algeria':'🇩🇿','Austria':'🇦🇹','Jordan':'🇯🇴',
-  'Portugal':'🇵🇹','DR Congo':'🇨🇩','Congo DR':'🇨🇩','Uzbekistan':'🇺🇿',
-  'Colombia':'🇨🇴','England':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','Croatia':'🇭🇷','Ghana':'🇬🇭','Panama':'🇵🇦'
+const FLAG_CODES = {
+  'Mexico':'mx','South Africa':'za','South Korea':'kr','Korea Republic':'kr',
+  'Czechia':'cz','Czech Republic':'cz','Canada':'ca',
+  'Bosnia-Herzegovina':'ba','Bosnia and Herzegovina':'ba','Qatar':'qa','Switzerland':'ch',
+  'Brazil':'br','Morocco':'ma','Haiti':'ht','Scotland':'gb-sct',
+  'United States':'us','USA':'us','Paraguay':'py','Australia':'au',
+  'Türkiye':'tr','Turkey':'tr','Germany':'de','Curaçao':'cw',
+  'Ivory Coast':'ci',"Côte d'Ivoire":'ci','Ecuador':'ec',
+  'Netherlands':'nl','Japan':'jp','Sweden':'se','Tunisia':'tn',
+  'Belgium':'be','Egypt':'eg','Iran':'ir','New Zealand':'nz',
+  'Spain':'es','Cape Verde':'cv','Cabo Verde':'cv','Saudi Arabia':'sa','Uruguay':'uy',
+  'France':'fr','Senegal':'sn','Iraq':'iq','Norway':'no',
+  'Argentina':'ar','Algeria':'dz','Austria':'at','Jordan':'jo',
+  'Portugal':'pt','DR Congo':'cd','Congo DR':'cd','Uzbekistan':'uz','Colombia':'co',
+  'England':'gb-eng','Croatia':'hr','Ghana':'gh','Panama':'pa'
 };
 
-function flag(name) { return FLAGS[name] || '⚽'; }
+function flag(name) {
+  const code = FLAG_CODES[name];
+  if (!code) return '⚽';
+  return `<img class="flag-img" src="https://flagcdn.com/w40/${code}.png" alt="${name}" loading="lazy">`;
+}
 
 // ─── TEAM → GROUP MAPPING (authoritative, from official draw) ────────────────
 const TEAM_GROUPS = {
