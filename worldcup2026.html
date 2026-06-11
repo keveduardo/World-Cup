@@ -1534,11 +1534,14 @@ function renderKnockout() {
   let html = '';
   stages.forEach(({key, label}) => {
     const matches = allMatches.filter(m => m.stage === key);
+    // A match has "real" teams only if both names map to actual countries
+    const realMatches = matches.filter(m =>
+      groupOfTeam(m.homeTeam?.name) && groupOfTeam(m.awayTeam?.name));
 
-    if (matches.length) {
+    if (realMatches.length) {
       // Real fixtures available from the API
-      html += `<div class="section-head"><h2>${label}</h2><span class="count">${matches.length} match${matches.length>1?'es':''}</span></div>`;
-      matches.sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate)).forEach(m => {
+      html += `<div class="section-head"><h2>${label}</h2><span class="count">${realMatches.length} match${realMatches.length>1?'es':''}</span></div>`;
+      realMatches.sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate)).forEach(m => {
         html += renderMatchCard(m, matchStatus(m));
       });
     } else if (KO_SCHEDULE[key]) {
