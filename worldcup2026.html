@@ -718,7 +718,7 @@ const FLAG_CODES = {
   'Bosnia-Herzegovina':'ba','Bosnia and Herzegovina':'ba','Qatar':'qa','Switzerland':'ch',
   'Brazil':'br','Morocco':'ma','Haiti':'ht','Scotland':'gb-sct',
   'United States':'us','USA':'us','Paraguay':'py','Australia':'au',
-  'Türkiye':'tr','Turkey':'tr','Germany':'de','Curaçao':'cw',
+  'Türkiye':'tr','Turkey':'tr','Germany':'de','Curaçao':'cw','Curacao':'cw',
   'Ivory Coast':'ci',"Côte d'Ivoire":'ci','Ecuador':'ec',
   'Netherlands':'nl','Japan':'jp','Sweden':'se','Tunisia':'tn',
   'Belgium':'be','Egypt':'eg','Iran':'ir','New Zealand':'nz',
@@ -741,7 +741,7 @@ const TEAM_GROUPS = {
   'Canada':'B','Bosnia-Herzegovina':'B','Bosnia and Herzegovina':'B','Qatar':'B','Switzerland':'B',
   'Brazil':'C','Morocco':'C','Haiti':'C','Scotland':'C',
   'United States':'D','USA':'D','Paraguay':'D','Australia':'D','Türkiye':'D','Turkey':'D',
-  'Germany':'E','Curaçao':'E','Ivory Coast':'E',"Côte d'Ivoire":'E','Ecuador':'E',
+  'Germany':'E','Curaçao':'E','Curacao':'E','Ivory Coast':'E',"Côte d'Ivoire":'E','Ecuador':'E',
   'Netherlands':'F','Japan':'F','Sweden':'F','Tunisia':'F',
   'Belgium':'G','Egypt':'G','Iran':'G','New Zealand':'G',
   'Spain':'H','Cape Verde':'H','Cabo Verde':'H','Saudi Arabia':'H','Uruguay':'H',
@@ -784,7 +784,7 @@ function venueCity(venue) {
 const NAME_CANON = {
   'USA':'United States','Korea Republic':'South Korea','Czech Republic':'Czechia',
   'Bosnia and Herzegovina':'Bosnia-Herzegovina',"Côte d'Ivoire":'Ivory Coast',
-  'Turkey':'Türkiye','Congo DR':'DR Congo','Cabo Verde':'Cape Verde'
+  'Turkey':'Türkiye','Congo DR':'DR Congo','Cabo Verde':'Cape Verde','Curacao':'Curaçao'
 };
 function canonName(n) { return NAME_CANON[n] || n; }
 
@@ -1097,8 +1097,12 @@ function groupOfMatch(m) {
   const raw = String(m.group || '');
   const match = raw.match(/GROUP[_\s]*([A-L])\b/i) || raw.match(/^([A-L])$/i) || raw.match(/\b([A-L])\s*$/i);
   if (match) return match[1].toUpperCase();
-  // Fall back to the official draw mapping by team name
-  return groupOfTeam(m.homeTeam?.name) || groupOfTeam(m.awayTeam?.name) || null;
+  // Team-name fallback applies to group-stage matches only —
+  // knockout matches should show the round name, not a group tag
+  if (!m.stage || m.stage === 'GROUP_STAGE') {
+    return groupOfTeam(m.homeTeam?.name) || groupOfTeam(m.awayTeam?.name) || null;
+  }
+  return null;
 }
 
 // ─── RENDER SCHEDULE ─────────────────────────────────────────────────────────
@@ -1264,6 +1268,17 @@ function renderMatchCard(m, status) {
   const hs  = ft.home ?? ht.home ?? 0;
   const as_ = ft.away ?? ht.away ?? 0;
 
+  // Extra time / penalty shootout annotations
+  const pens = m.score?.penalties;
+  const dur  = m.score?.duration;
+  let endTag = 'FT';
+  let penLine = '';
+  if (dur === 'PENALTY_SHOOTOUT' && pens && pens.home != null) {
+    endTag = `${pens.home} – ${pens.away} pens`;
+  } else if (dur === 'EXTRA_TIME') {
+    endTag = 'AET';
+  }
+
   let center = '';
   if (status === 'live') {
     center = `${grpTag}
@@ -1272,7 +1287,7 @@ function renderMatchCard(m, status) {
   } else if (status === 'completed') {
     center = `${grpTag}
       <div class="score-display">${hs} – ${as_}</div>
-      <div class="match-time done">FT</div>`;
+      <div class="match-time done">${endTag}</div>`;
   } else {
     center = `${grpTag}
       <div class="vs-display">VS</div>
