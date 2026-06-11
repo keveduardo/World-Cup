@@ -164,7 +164,8 @@
     background: #fff8f8;
   }
 
-  .team-block { display: flex; flex-direction: column; gap: 2px; }
+  .team-block { display: flex; flex-direction: column; gap: 2px; cursor: pointer; }
+  .team-block:active { opacity: 0.6; }
   .team-block.right { text-align: right; align-items: flex-end; }
 
   .team-flag { font-size: 22px; line-height: 1; }
@@ -1303,17 +1304,17 @@ function renderMatchCard(m, status) {
   const meta = [venue ? `🏟 ${venue}` : '', city].filter(Boolean).join(' · ');
   return `
     <div class="match-card ${status}">
-      <div class="team-block">
+      <div class="team-block" data-team="${hn.replace(/"/g,'&quot;')}">
         <span class="team-flag">${flag(hn)}</span>
-        <span class="team-name" data-team="${hn.replace(/"/g,'&quot;')}">${hn}${favMark(hn)}</span>
+        <span class="team-name">${hn}${favMark(hn)}</span>
       </div>
       <div class="match-center">
         ${center}
         <div class="match-meta">${meta}</div>
       </div>
-      <div class="team-block right">
+      <div class="team-block right" data-team="${an.replace(/"/g,'&quot;')}">
         <span class="team-flag">${flag(an)}</span>
-        <span class="team-name" data-team="${an.replace(/"/g,'&quot;')}">${an}${favMark(an)}</span>
+        <span class="team-name">${an}${favMark(an)}</span>
       </div>
     </div>`;
 }
@@ -1638,7 +1639,7 @@ function showTeam(name) {
       <span class="team-modal-flag">${flag(name)}</span>
       <div style="flex:1">
         <div class="team-modal-title">${name}</div>
-        ${grp ? `<div class="team-modal-group">Group ${grp}</div>` : ''}
+        ${grp ? `<div class="team-modal-group" style="cursor:pointer;text-decoration:underline" onclick="goToGroup('${grp}')">Group ${grp} →</div>` : ''}
       </div>
       <button class="fav-btn" onclick="toggleFav('${name.replace(/'/g,"\\'")}');showTeam('${name.replace(/'/g,"\\'")}')" title="Favorite">${isFav(name) ? '★' : '☆'}</button>
       <button class="modal-close" onclick="closeTeamModal()">✕</button>
@@ -1782,6 +1783,43 @@ function showGuide() {
 
   overlay.classList.add('open');
   document.body.style.overflow = 'hidden';
+}
+
+// ─── CROSS-NAV HELPERS ───────────────────────────────────────────────────────
+function activateTab(viewName) {
+  // Click the matching tab button so the underline + active state update
+  const tabs = document.querySelectorAll('.tab');
+  for (const t of tabs) {
+    if (t.getAttribute('onclick')?.includes(`'${viewName}'`)) { t.click(); return; }
+  }
+}
+
+function goToGroup(letter) {
+  closeTeamModal();
+  activateTab('groups');
+  // Scroll the chosen group card into view
+  setTimeout(() => {
+    const cards = document.querySelectorAll('#groups-grid .group-card');
+    for (const c of cards) {
+      const gl = c.querySelector('.group-letter');
+      if (gl && gl.textContent.trim() === letter) {
+        c.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        c.style.transition = 'box-shadow 0.3s';
+        c.style.boxShadow = '0 0 0 3px var(--gold)';
+        setTimeout(() => { c.style.boxShadow = ''; }, 1600);
+        break;
+      }
+    }
+  }, 120);
+}
+
+function goToTeamSchedule(name) {
+  closeTeamModal();
+  activeFilter = (groupOfTeam(name) || 'all');
+  activateTab('schedule');
+  // The group filter narrows the schedule to that team's group;
+  // the team's own matches are highlighted via the favorites-independent flow.
+  setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 120);
 }
 
 // ─── NAV ─────────────────────────────────────────────────────────────────────
