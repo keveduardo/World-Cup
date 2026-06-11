@@ -223,6 +223,12 @@
 
   .match-meta { font-size: 11px; color: var(--muted); text-align: center; margin-top: 2px; }
 
+  .match-wx {
+    font-size: 11px; font-weight: 600;
+    color: var(--upcoming); text-align: center; margin-top: 3px;
+  }
+  body.dark .match-wx { color: #6db3ff; }
+
   .group-tag {
     display: inline-block;
     background: var(--pitch); color: var(--gold);
@@ -757,7 +763,7 @@
 const PROXY = 'https://script.google.com/macros/s/AKfycbygDrUKh9hwJbFkdqyumen20h6EaNfcrlZHiw88M6y9rUgnIOdpMNoc3Cmfwn3i2QsH/exec';
 
 // Refresh intervals
-const REFRESH_LIVE    = 60_000;   // 1 min when live game active
+const REFRESH_LIVE    = 30_000;   // 30s when live game active (ESPN cache is 30s)
 const REFRESH_NORMAL  = 300_000;  // 5 min otherwise
 
 // ─── FLAGS ───────────────────────────────────────────────────────────────────
@@ -848,6 +854,19 @@ const STADIUMS = {
   NYNJ:['MetLife Stadium','NY/NJ'],         PHI:['Lincoln Financial Field','Philadelphia, PA']
 };
 
+// Stadium coordinates [lat, lon] for weather lookup. Indoor/retractable-roof
+// venues flagged so we can note the roof.
+const STADIUM_GEO = {
+  MEX:[19.3029,-99.1505,false], GDL:[20.6818,-103.4628,false],
+  MTY:[25.6693,-100.2443,false], VAN:[49.2768,-123.1119,true],
+  TOR:[43.6332,-79.4185,false],  SEA:[47.5952,-122.3316,false],
+  SF:[37.4030,-121.9700,false],  LA:[33.9535,-118.3392,true],
+  DAL:[32.7473,-97.0945,true],   HOU:[29.6847,-95.4107,true],
+  KC:[39.0489,-94.4839,false],   ATL:[33.7553,-84.4006,true],
+  MIA:[25.9580,-80.2389,false],  BOS:[42.0909,-71.2643,false],
+  NYNJ:[40.8135,-74.0745,false], PHI:[39.9008,-75.1675,false]
+};
+
 const PAIR_VENUES = {
   // Group A
   'Mexico|South Africa':'MEX','Czechia|South Korea':'GDL','Czechia|South Africa':'ATL',
@@ -891,6 +910,83 @@ function lookupVenue(hn, an) {
   const key = [canonName(hn), canonName(an)].sort().join('|');
   const code = PAIR_VENUES[key];
   return code ? STADIUMS[code] : null; // [stadium, city]
+}
+
+function lookupVenueCode(m) {
+  // Returns the stadium code (e.g. 'LA') for a match, group stage only
+  const key = [canonName(m.homeTeam?.name || ''), canonName(m.awayTeam?.name || '')].sort().join('|');
+  return PAIR_VENUES[key] || null;
+}
+
+// ─── STADIUM WEATHER (Open-Meteo, no key) ────────────────────────────────────
+const weatherCache = {}; // code → {temp, code, roof, ts}
+
+function wxIcon(code, isDay) {
+  // Open-Meteo WMO weather codes → emoji
+  if (code === 0) return isDay ? '☀️' : '🌙';
+  if (code <= 2) return isDay ? '🌤️' : '☁️';
+  if (code === 3) return '☁️';
+  if (code <= 48) return '🌫️';
+  if (code <= 67) return '🌧️';
+  if (code <= 77) return '🌨️';
+  if (code <= 82) return '🌧️';
+  if (code <= 86) return '🌨️';
+  if (code <= 99) return '⛈️';
+  return '🌡️';
+}
+
+async function fetchVenueWeather(code, whenISO) {
+  const geo = STADIUM_GEO[code];
+  if (!geo) return null;
+  const [lat, lon, roof] = geo;
+  // Cache for 30 min per stadium
+  const cached = weatherCache[code];
+  if (cached && Date.now() - cached.ts < 30 * 60000) return cached;
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
+      + `&hourly=temperature_2m,weather_code&temperature_unit=fahrenheit`
+      + `&timezone=auto&forecast_days=2`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const times = data.hourly?.time || [];
+    const temps = data.hourly?.temperature_2m || [];
+    const codes = data.hourly?.weather_code || [];
+    // Find the hour closest to kickoff
+    const target = new Date(whenISO).getTime();
+    let bestI = 0, bestDiff = Infinity;
+    times.forEach((t, i) => {
+      const diff = Math.abs(new Date(t).getTime() - target);
+      if (diff < bestDiff) { bestDiff = diff; bestI = i; }
+    });
+    const hour = new Date(times[bestI]).getHours();
+    const isDay = hour >= 7 && hour < 19;
+    const result = {
+      temp: Math.round(temps[bestI]),
+      wcode: codes[bestI],
+      icon: wxIcon(codes[bestI], isDay),
+      roof,
+      ts: Date.now()
+    };
+    weatherCache[code] = result;
+    return result;
+  } catch(e) { return null; }
+}
+
+// Populate weather for all match cards within 24h (called after render)
+async function loadMatchWeather() {
+  const now = Date.now();
+  const els = document.querySelectorAll('[data-wx-code][data-wx-when]');
+  for (const el of els) {
+    const code = el.getAttribute('data-wx-code');
+    const whenISO = el.getAttribute('data-wx-when');
+    if (Math.abs(new Date(whenISO) - now) > 24 * 3600 * 1000) continue;
+    const wx = await fetchVenueWeather(code, whenISO);
+    if (wx) {
+      el.innerHTML = wx.roof
+        ? `${wx.icon} ${wx.temp}°F · 🏟 roof`
+        : `${wx.icon} ${wx.temp}°F`;
+    }
+  }
 }
 
 function matchVenueText(m) {
@@ -1085,11 +1181,63 @@ async function loadStandings() {
   }
 }
 
+
+// ─── ESPN LIVE OVERLAY (real-time scores + match clock) ──────────────────────
+async function loadEspnLive() {
+  try {
+    const data = await proxyFetch('espn');
+    const events = data.events || [];
+    if (!events.length) return;
+
+    // Build lookup: sorted canonical team pair → espn live info
+    const espnMap = {};
+    events.forEach(ev => {
+      const comp = ev.competitions?.[0];
+      if (!comp) return;
+      const home = comp.competitors?.find(c => c.homeAway === 'home');
+      const away = comp.competitors?.find(c => c.homeAway === 'away');
+      if (!home || !away) return;
+      const key = [canonName(home.team?.displayName || ''), canonName(away.team?.displayName || '')].sort().join('|');
+      const st = ev.status || comp.status || {};
+      espnMap[key] = {
+        state: st.type?.state,                       // 'pre' | 'in' | 'post'
+        desc: st.type?.description || '',            // 'Halftime', 'Full Time'...
+        clock: st.displayClock || '',                // "75'"
+        period: st.period || 0,
+        homeScore: parseInt(home.score, 10),
+        awayScore: parseInt(away.score, 10)
+      };
+    });
+
+    // Merge into allMatches
+    allMatches.forEach(m => {
+      const key = [canonName(m.homeTeam?.name || ''), canonName(m.awayTeam?.name || '')].sort().join('|');
+      const e = espnMap[key];
+      if (!e) return;
+      // Only trust ESPN within ±1 day of the scheduled match (pairs are unique
+      // in groups; knockout rematches are months apart so this is safe)
+      if (Math.abs(new Date(m.utcDate) - Date.now()) > 36 * 3600 * 1000) return;
+
+      if (e.state === 'in') {
+        m.status = /half\s*time|halftime/i.test(e.desc) ? 'PAUSED' : 'IN_PLAY';
+      } else if (e.state === 'post') {
+        m.status = 'FINISHED';
+      }
+      if (!isNaN(e.homeScore) && !isNaN(e.awayScore) && e.state !== 'pre') {
+        m.score = m.score || {};
+        m.score.fullTime = { home: e.homeScore, away: e.awayScore };
+      }
+      m._espn = e; // for the live clock display
+    });
+  } catch(err) { /* ESPN unavailable — football-data values remain */ }
+}
+
 // ─── REFRESH LOGIC ───────────────────────────────────────────────────────────
 async function refreshAll() {
   const statusEl = document.getElementById('apiStatus');
   try {
     await Promise.all([loadMatches(), loadStandings()]);
+    await loadEspnLive(); // overlay real-time scores + clock from ESPN
     statusEl.textContent = '● Live';
     statusEl.className = 'api-status ok';
     document.getElementById('error-container').innerHTML = '';
@@ -1150,6 +1298,15 @@ function matchStatus(m) {
 
 // Live match clock: returns {label, detail} based on minute/half if available
 function matchClock(m) {
+  // Prefer ESPN's real match clock when present
+  if (m._espn && m._espn.state === 'in') {
+    const e = m._espn;
+    if (/half\s*time|halftime/i.test(e.desc)) return { label: 'Half Time', detail: '' };
+    const half = e.period === 1 ? '1st Half' : e.period === 2 ? '2nd Half'
+      : e.period > 2 ? 'Extra Time' : 'Live';
+    return { label: half, detail: e.clock || '' };
+  }
+
   // Prefer the API's own minute if present
   const start = new Date(m.utcDate).getTime();
   const elapsedMin = Math.floor((Date.now() - start) / 60000);
@@ -1230,7 +1387,7 @@ function renderSchedule() {
     nextKickoff = null;
     const liveVenueTxt = matchVenueText(m);
     const clk = matchClock(m);
-    const apiLive = (m.status === 'IN_PLAY' || m.status === 'PAUSED');
+    const apiLive = (m.status === 'IN_PLAY' || m.status === 'PAUSED') || !!m._espn;
     bannerHtml = `
       <div class="next-up-banner" style="background:var(--live-red)">
         <span class="next-up-label" style="color:white">🔴 ${clk.detail || 'LIVE'}</span>
@@ -1349,6 +1506,7 @@ function renderSchedule() {
 
   if (!html) html = `<div class="loading-spinner">No matches found.</div>`;
   container.innerHTML = html;
+  loadMatchWeather(); // fill in weather for matches within 24h
 }
 
 function jumpToToday() {
@@ -1388,7 +1546,7 @@ function renderMatchCard(m, status) {
 
   let center = '';
   if (status === 'live') {
-    const apiLive = (m.status === 'IN_PLAY' || m.status === 'PAUSED');
+    const apiLive = (m.status === 'IN_PLAY' || m.status === 'PAUSED') || !!m._espn;
     const clk = matchClock(m);
     const scoreKnown = (m.score?.fullTime?.home != null) || apiLive;
     center = `${grpTag}
@@ -1412,6 +1570,14 @@ function renderMatchCard(m, status) {
     if (hc) { venue = hc[0]; city = hc[1]; }
   }
   const meta = [venue ? `🏟 ${venue}` : '', city].filter(Boolean).join(' · ');
+
+  // Weather slot: only for matches within 24h (filled in async after render)
+  const wxCode = lookupVenueCode(m);
+  const within24h = Math.abs(new Date(m.utcDate) - Date.now()) <= 24 * 3600 * 1000;
+  const wxSlot = (wxCode && within24h && status !== 'completed')
+    ? `<div class="match-wx" data-wx-code="${wxCode}" data-wx-when="${m.utcDate}">⛅ …</div>`
+    : '';
+
   return `
     <div class="match-card ${status}">
       <div class="team-block" data-team="${hn.replace(/"/g,'&quot;')}">
@@ -1421,6 +1587,7 @@ function renderMatchCard(m, status) {
       <div class="match-center">
         ${center}
         <div class="match-meta">${meta}</div>
+        ${wxSlot}
       </div>
       <div class="team-block right" data-team="${an.replace(/"/g,'&quot;')}">
         <span class="team-flag">${flag(an)}</span>
