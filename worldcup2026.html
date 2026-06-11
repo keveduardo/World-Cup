@@ -1441,6 +1441,85 @@ function renderGroups() {
 }
 
 // ─── RENDER KNOCKOUT ─────────────────────────────────────────────────────────
+// ─── HARDCODED KNOCKOUT SCHEDULE (dates/times/venues — teams TBD) ─────────────
+// utc times are kickoff converted from ET (EDT = UTC-4). Stadium codes map to STADIUMS.
+const KO_SCHEDULE = {
+  LAST_32: [
+    {date:'2026-06-28',et:'15:00',v:'LA',  home:'2A',away:'2B'},
+    {date:'2026-06-29',et:'12:00',v:'HOU', home:'1E',away:'3rd'},
+    {date:'2026-06-29',et:'15:00',v:'LA',  home:'1C',away:'2F'},
+    {date:'2026-06-29',et:'18:00',v:'DAL', home:'1F',away:'2C'},
+    {date:'2026-06-30',et:'12:00',v:'ATL', home:'1I',away:'3rd'},
+    {date:'2026-06-30',et:'15:00',v:'SF',  home:'2E',away:'2I'},
+    {date:'2026-06-30',et:'18:00',v:'SEA', home:'1A',away:'3rd'},
+    {date:'2026-06-30',et:'21:00',v:'LA',  home:'1L',away:'3rd'},
+    {date:'2026-07-01',et:'12:00',v:'BOS', home:'1D',away:'3rd'},
+    {date:'2026-07-01',et:'15:00',v:'NYNJ',home:'1G',away:'3rd'},
+    {date:'2026-07-01',et:'18:00',v:'PHI', home:'2K',away:'2L'},
+    {date:'2026-07-01',et:'21:00',v:'VAN', home:'1H',away:'2J'},
+    {date:'2026-07-02',et:'12:00',v:'KC',  home:'1B',away:'3rd'},
+    {date:'2026-07-02',et:'15:00',v:'MIA', home:'1K',away:'3rd'},
+    {date:'2026-07-02',et:'18:00',v:'DAL', home:'2D',away:'2G'},
+    {date:'2026-07-03',et:'15:00',v:'TOR', home:'1J',away:'2H'},
+  ],
+  LAST_16: [
+    {date:'2026-07-04',et:'12:00',v:'PHI', home:'W74',away:'W77'},
+    {date:'2026-07-04',et:'16:00',v:'HOU', home:'W73',away:'W75'},
+    {date:'2026-07-05',et:'12:00',v:'DAL', home:'W76',away:'W78'},
+    {date:'2026-07-05',et:'16:00',v:'SEA', home:'W79',away:'W81'},
+    {date:'2026-07-06',et:'12:00',v:'ATL', home:'W83',away:'W84'},
+    {date:'2026-07-06',et:'16:00',v:'BOS', home:'W80',away:'W82'},
+    {date:'2026-07-07',et:'12:00',v:'LA',  home:'W85',away:'W87'},
+    {date:'2026-07-07',et:'16:00',v:'KC',  home:'W86',away:'W88'},
+  ],
+  QUARTER_FINALS: [
+    {date:'2026-07-09',et:'12:00',v:'BOS', home:'W89',away:'W90'},
+    {date:'2026-07-10',et:'15:00',v:'LA',  home:'W93',away:'W94'},
+    {date:'2026-07-11',et:'12:00',v:'MIA', home:'W91',away:'W92'},
+    {date:'2026-07-11',et:'16:00',v:'KC',  home:'W95',away:'W96'},
+  ],
+  SEMI_FINALS: [
+    {date:'2026-07-14',et:'15:00',v:'DAL', home:'W97',away:'W98'},
+    {date:'2026-07-15',et:'15:00',v:'ATL', home:'W99',away:'W100'},
+  ],
+  THIRD_PLACE: [
+    {date:'2026-07-18',et:'15:00',v:'MIA', home:'L SF1',away:'L SF2'},
+  ],
+  FINAL: [
+    {date:'2026-07-19',et:'15:00',v:'NYNJ',home:'W SF1',away:'W SF2'},
+  ],
+};
+
+function etToUtcISO(date, et) {
+  // ET in summer = EDT = UTC-4
+  const [y,mo,d] = date.split('-').map(Number);
+  const [h,mi] = et.split(':').map(Number);
+  return new Date(Date.UTC(y, mo-1, d, h+4, mi)).toISOString();
+}
+
+function renderPlaceholderKO(slot) {
+  const stad = STADIUMS[slot.v] || ['',''];
+  const iso = etToUtcISO(slot.date, slot.et);
+  const meta = [stad[0], stad[1]].filter(Boolean).join(' · ');
+  return `
+    <div class="match-card upcoming">
+      <div class="team-block">
+        <span class="team-flag">⚪</span>
+        <span class="team-name" style="color:var(--muted)">${slot.home}</span>
+      </div>
+      <div class="match-center">
+        <span class="group-tag">TBD</span>
+        <div class="vs-display">VS</div>
+        <div class="match-time">${formatPST(iso)} ${tzShort()}</div>
+        <div class="match-meta">${formatDatePST(iso)}${meta ? ' · 🏟 ' + meta : ''}</div>
+      </div>
+      <div class="team-block right">
+        <span class="team-flag">⚪</span>
+        <span class="team-name" style="color:var(--muted)">${slot.away}</span>
+      </div>
+    </div>`;
+}
+
 function renderKnockout() {
   const container = document.getElementById('knockout-list');
   const stages = [
@@ -1455,15 +1534,22 @@ function renderKnockout() {
   let html = '';
   stages.forEach(({key, label}) => {
     const matches = allMatches.filter(m => m.stage === key);
-    if (!matches.length) return;
 
-    html += `<div class="section-head"><h2>${label}</h2><span class="count">${matches.length} match${matches.length>1?'es':''}</span></div>`;
-    matches.sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate)).forEach(m => {
-      html += renderMatchCard(m, matchStatus(m));
-    });
+    if (matches.length) {
+      // Real fixtures available from the API
+      html += `<div class="section-head"><h2>${label}</h2><span class="count">${matches.length} match${matches.length>1?'es':''}</span></div>`;
+      matches.sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate)).forEach(m => {
+        html += renderMatchCard(m, matchStatus(m));
+      });
+    } else if (KO_SCHEDULE[key]) {
+      // Placeholder schedule — dates/times/venues known, teams TBD
+      const slots = KO_SCHEDULE[key];
+      html += `<div class="section-head"><h2>${label}</h2><span class="count">${slots.length} match${slots.length>1?'es':''} · teams TBD</span></div>`;
+      slots.forEach(slot => { html += renderPlaceholderKO(slot); });
+    }
   });
 
-  if (!html) html = '<div class="loading-spinner">Knockout bracket unlocks after group stage.</div>';
+  if (!html) html = '<div class="loading-spinner">Knockout schedule loading…</div>';
   container.innerHTML = html;
 }
 
