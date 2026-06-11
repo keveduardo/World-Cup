@@ -321,6 +321,16 @@
     font-size: 16px; font-weight: 800; color: var(--text);
   }
 
+  .clinch-badge {
+    display: inline-block;
+    background: var(--pitch); color: var(--gold);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 9px; font-weight: 700; letter-spacing: 0.5px;
+    padding: 1px 5px; border-radius: 3px;
+    margin-left: 5px; vertical-align: middle;
+  }
+  .clinch-badge.first { background: var(--gold); color: var(--pitch); }
+
   .qualify-note {
     padding: 6px 14px; font-size: 11px; color: var(--muted);
     background: #f8faf4; border-top: 1px solid var(--border);
@@ -356,6 +366,29 @@
   }
 
   .filter-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+
+  .today-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin-bottom: 14px; flex-wrap: wrap;
+  }
+  .today-bar:empty { display: none; }
+
+  .today-count {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 15px; font-weight: 700; letter-spacing: 0.3px;
+    color: var(--pitch);
+  }
+  body.dark .today-count { color: var(--gold); }
+
+  .jump-today-btn {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px; font-weight: 700; letter-spacing: 0.5px;
+    text-transform: uppercase;
+    background: var(--pitch); color: var(--gold);
+    border: none; border-radius: 20px;
+    padding: 6px 14px; cursor: pointer;
+  }
+  .jump-today-btn:active { opacity: 0.7; }
 
   .filter-btn {
     font-family: 'Barlow Condensed', sans-serif;
@@ -668,7 +701,7 @@
   <div class="header-inner">
     <div class="header-title">
       <span class="eyebrow">⚽ FIFA World Cup 2026</span>
-      <h1>Match Tracker <button class="info-btn" onclick="showGuide()" title="About this site">i</button></h1>
+      <h1>Match Tracker <button class="info-btn" onclick="showGuide()" title="About this site">i</button> <button class="info-btn" onclick="shareSite()" title="Share" style="font-style:normal">⤴</button></h1>
       <span class="byline">by Aquadoc</span>
     </div>
     <div class="header-right">
@@ -695,6 +728,7 @@
     <div id="next-up-container"></div>
     <div id="error-container"></div>
     <div class="filter-row" id="filter-row"></div>
+    <div id="today-bar" class="today-bar"></div>
     <div id="schedule-list"><div class="loading-spinner">Loading matches…</div></div>
     <div class="last-updated" id="lastUpdated"></div>
   </div>
@@ -1245,6 +1279,22 @@ function renderSchedule() {
   // Build cards grouped by date
   const sorted = [...live, ...upcoming, ...completed];
   const todayK = todayKeyPST();
+
+  // Count today's matches (for the header + jump button)
+  const todayCount = matches.filter(m => datekeyPST(m.utcDate) === todayK).length;
+  const todayBar = document.getElementById('today-bar');
+  if (todayBar) {
+    if (todayCount > 0) {
+      todayBar.innerHTML = `<span class="today-count">📅 ${todayCount} match${todayCount>1?'es':''} today</span>
+        <button class="jump-today-btn" onclick="jumpToToday()">Jump to today ↓</button>`;
+    } else {
+      const nextUp = upcoming[0];
+      todayBar.innerHTML = nextUp
+        ? `<span class="today-count">No matches today · next on ${formatDatePST(nextUp.utcDate)}</span>`
+        : '';
+    }
+  }
+
   let html = '', lastDate = null;
 
   sorted.forEach(m => {
@@ -1256,7 +1306,7 @@ function renderSchedule() {
       lastDate = '__live__';
     } else if (status !== 'live' && dk !== lastDate) {
       const isToday = dk === todayK;
-      html += `<div class="date-divider ${isToday?'today':''}">
+      html += `<div class="date-divider ${isToday?'today':''}" ${isToday?'id="today-divider"':''}>
         <span class="date-label">${formatDatePST(m.utcDate)}</span>
         ${isToday ? '<span class="today-pill">Today</span>' : ''}
       </div>`;
@@ -1268,6 +1318,17 @@ function renderSchedule() {
 
   if (!html) html = `<div class="loading-spinner">No matches found.</div>`;
   container.innerHTML = html;
+}
+
+function jumpToToday() {
+  const el = document.getElementById('today-divider');
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    // No matches today — jump to the first live or upcoming card instead
+    const firstCard = document.querySelector('#schedule-list .match-card');
+    if (firstCard) firstCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 function renderMatchCard(m, status) {
@@ -1435,6 +1496,27 @@ function renderGroups() {
     if (!rows.length) return; // skip groups with no data
     const preview = rows.slice(0,2).map(r=>r.team).join(' · ');
 
+    // Determine clinched status: a team has "clinched" a top-2 spot if no team
+    // below them can mathematically catch them on points by the end of the group.
+    // Each team plays 3 group games (3 pts per win).
+    const clinched = rows.map((r, i) => {
+      const gamesLeft = 3 - r.mp;
+      const maxPossible = r.pts + gamesLeft * 3;
+      // Count how many OTHER teams could still finish above or tie this team
+      let couldPass = 0;
+      rows.forEach((o, j) => {
+        if (j === i) return;
+        const oMax = o.pts + (3 - o.mp) * 3;
+        if (oMax >= r.pts) couldPass++;
+      });
+      // Clinched top-2 if at most 1 other team can reach/exceed your current points
+      const clinchedTop2 = couldPass <= 1;
+      // Clinched 1st if no other team can reach your points
+      const clinchedFirst = couldPass === 0;
+      // Eliminated if you can't reach the 2nd-place team's secured minimum
+      return { clinchedTop2, clinchedFirst };
+    });
+
     html += `
       <div class="group-card">
         <div class="group-header">
@@ -1454,6 +1536,8 @@ function renderGroups() {
                 <td><div class="team-row">
                   <span class="team-row-flag">${flag(r.team)}</span>
                   <span class="team-row-name" data-team="${r.team.replace(/"/g,'&quot;')}">${r.team}${favMark(r.team)}</span>
+                  ${clinched[i].clinchedFirst ? '<span class="clinch-badge first">✓ WON GRP</span>'
+                    : clinched[i].clinchedTop2 ? '<span class="clinch-badge">✓ ADV</span>' : ''}
                 </div></td>
                 <td>${r.mp}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td>
                 <td>${r.gd >= 0 ? '+'+r.gd : r.gd}</td>
@@ -1657,6 +1741,7 @@ function showTeam(name) {
         ${grp ? `<div class="team-modal-group" style="cursor:pointer;text-decoration:underline" onclick="goToGroup('${grp}')">Group ${grp} →</div>` : ''}
       </div>
       <button class="fav-btn" onclick="toggleFav('${name.replace(/'/g,"\\'")}');showTeam('${name.replace(/'/g,"\\'")}')" title="Favorite">${isFav(name) ? '★' : '☆'}</button>
+      <button class="fav-btn" onclick="shareTeam('${name.replace(/'/g,"\\'")}')" title="Share" style="font-size:16px">⤴</button>
       <button class="modal-close" onclick="closeTeamModal()">✕</button>
     </div>
     <div class="team-modal-body">${body}</div>`;
@@ -1800,6 +1885,31 @@ function showGuide() {
   document.body.style.overflow = 'hidden';
 }
 
+// ─── SHARE ───────────────────────────────────────────────────────────────────
+async function shareSite() {
+  const data = {
+    title: 'World Cup 2026 Match Tracker',
+    text: 'Live World Cup 2026 scores, standings & schedule — by Aquadoc' + (syncCode ? `\nSync code: ${syncCode}` : ''),
+    url: window.location.href
+  };
+  try {
+    if (navigator.share) { await navigator.share(data); }
+    else { await navigator.clipboard.writeText(data.url); alert('Link copied to clipboard!'); }
+  } catch(e) { /* cancelled */ }
+}
+
+async function shareTeam(name) {
+  const data = {
+    title: `${name} — World Cup 2026`,
+    text: `Follow ${name} at the World Cup on the Match Tracker by Aquadoc`,
+    url: window.location.href
+  };
+  try {
+    if (navigator.share) { await navigator.share(data); }
+    else { await navigator.clipboard.writeText(data.url); alert('Link copied to clipboard!'); }
+  } catch(e) { /* cancelled */ }
+}
+
 // ─── ROSTER LINK (Wikipedia 2026 squads page) ────────────────────────────────
 function rosterURL(name) {
   const anchorNames = {
@@ -1856,6 +1966,7 @@ function showView(v, btn) {
   document.getElementById('view-'+v).classList.add('active');
   if (btn) btn.classList.add('active');
   currentView = v;
+  localStorage.setItem('wc_last_tab', v); // remember for next visit
   renderCurrentView();
   // Always start each tab from the top
   window.scrollTo({ top: 0, behavior: 'auto' });
@@ -1909,6 +2020,17 @@ updateClock();
 setInterval(updateClock, 1000);
 refreshAll();
 if (syncCode) syncLoad(); // pull cloud favorites if sync is on
+
+// Restore the last tab the user was on (defaults to schedule)
+(function restoreLastTab() {
+  const last = localStorage.getItem('wc_last_tab');
+  if (last && last !== 'schedule') {
+    const tabs = document.querySelectorAll('.tab');
+    for (const t of tabs) {
+      if (t.getAttribute('onclick')?.includes(`'${last}'`)) { t.click(); break; }
+    }
+  }
+})();
 </script>
 </body>
 </html>
