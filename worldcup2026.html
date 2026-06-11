@@ -1857,6 +1857,8 @@ function showView(v, btn) {
   if (btn) btn.classList.add('active');
   currentView = v;
   renderCurrentView();
+  // Always start each tab from the top
+  window.scrollTo({ top: 0, behavior: 'auto' });
 }
 
 function renderCurrentView() {
