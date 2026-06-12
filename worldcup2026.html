@@ -2156,6 +2156,7 @@ function showTeam(name) {
         ${grp ? `<div class="team-modal-group" style="cursor:pointer;text-decoration:underline" onclick="goToGroup('${grp}')">Group ${grp} →</div>` : ''}
       </div>
       <button class="fav-btn" onclick="toggleFav('${name.replace(/'/g,"\\'")}');showTeam('${name.replace(/'/g,"\\'")}')" title="Favorite">${isFav(name) ? '★' : '☆'}</button>
+      <a class="fav-btn" href="${rosterURL(name)}" target="_blank" rel="noopener" title="Roster &amp; player bios" style="font-size:16px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none">👥</a>
       <button class="fav-btn" onclick="shareTeam('${name.replace(/'/g,"\\'")}')" title="Share" style="font-size:16px">⤴</button>
       <button class="modal-close" onclick="closeTeamModal()">✕</button>
     </div>
