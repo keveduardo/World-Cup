@@ -283,6 +283,14 @@
     font-family: 'Barlow Condensed', sans-serif;
     font-size: 14px; font-weight: 600;
     color: rgba(255,255,255,0.7); letter-spacing: 0.3px;
+    flex: 1;
+  }
+
+  .group-strength {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px; font-weight: 700;
+    color: var(--gold); background: rgba(0,0,0,0.2);
+    padding: 2px 7px; border-radius: 10px; white-space: nowrap;
   }
 
   .standings-table { width: 100%; border-collapse: collapse; }
@@ -487,6 +495,17 @@
     font-family: 'Barlow Condensed', sans-serif;
     font-size: 12px; font-weight: 700; letter-spacing: 1px;
     color: var(--gold); text-transform: uppercase;
+  }
+
+  .team-modal-rank {
+    font-size: 11px; font-weight: 600;
+    color: rgba(255,255,255,0.75); margin-top: 1px;
+  }
+
+  .rank-chip {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 10px; font-weight: 700;
+    color: var(--muted); margin-left: 4px;
   }
 
   .modal-close {
@@ -979,6 +998,25 @@ function lookupVenueCode(m) {
   // Returns the stadium code (e.g. 'LA') for a match, group stage only
   const key = [canonName(m.homeTeam?.name || ''), canonName(m.awayTeam?.name || '')].sort().join('|');
   return PAIR_VENUES[key] || null;
+}
+
+
+// ─── FIFA WORLD RANKINGS (final pre-tournament, June 2026) ───────────────────
+// Source: FIFA/Coca-Cola Men's World Ranking. Static for the tournament.
+const FIFA_RANK = {
+  'Argentina':1,'Spain':2,'France':3,'England':4,'Portugal':5,'Brazil':6,
+  'Netherlands':7,'Belgium':8,'Germany':9,'Croatia':10,'Morocco':11,'Colombia':13,
+  'Mexico':14,'Uruguay':15,'United States':17,'Switzerland':18,'Japan':19,
+  'Senegal':20,'Iran':21,'Denmark':22,'Austria':23,'Ecuador':24,'Türkiye':25,
+  'Australia':26,'Canada':28,'Egypt':32,'Algeria':33,'Norway':34,'Panama':35,
+  'South Korea':36,'Ivory Coast':40,'Scotland':41,'Paraguay':42,'Tunisia':43,
+  'Ghana':44,'Saudi Arabia':45,'Iraq':46,'DR Congo':47,'Qatar':48,'Czechia':49,
+  'Cape Verde':70,'Uzbekistan':57,'Jordan':62,'Bosnia-Herzegovina':74,
+  'South Africa':61,'New Zealand':86,'Curaçao':82,'Haiti':84
+};
+
+function fifaRank(name) {
+  return FIFA_RANK[name] || FIFA_RANK[canonName(name)] || null;
 }
 
 // ─── STADIUM WEATHER (Open-Meteo, no key) ────────────────────────────────────
@@ -1811,11 +1849,17 @@ function renderGroups() {
       return { clinchedTop2, clinchedFirst };
     });
 
+    // Group strength: average FIFA rank of the 4 teams (lower = stronger)
+    const groupTeams = (GROUPS.find(g => g.letter === letter)?.teams) || rows.map(r=>r.team);
+    const ranks = groupTeams.map(t => fifaRank(t)).filter(Boolean);
+    const avgRank = ranks.length ? Math.round(ranks.reduce((a,b)=>a+b,0)/ranks.length) : null;
+
     html += `
       <div class="group-card">
         <div class="group-header">
           <span class="group-letter">${letter}</span>
           <span class="group-teams-preview">${preview}…</span>
+          ${avgRank ? `<span class="group-strength" title="Average FIFA rank">avg #${avgRank}</span>` : ''}
         </div>
         <table class="standings-table">
           <thead><tr>
@@ -1830,6 +1874,7 @@ function renderGroups() {
                 <td><div class="team-row">
                   <span class="team-row-flag">${flag(r.team)}</span>
                   <span class="team-row-name" data-team="${r.team.replace(/"/g,'&quot;')}">${r.team}${favMark(r.team)}</span>
+                  ${fifaRank(r.team) ? `<span class="rank-chip">#${fifaRank(r.team)}</span>` : ''}
                   ${clinched[i].clinchedFirst ? '<span class="clinch-badge first">✓ WON GRP</span>'
                     : clinched[i].clinchedTop2 ? '<span class="clinch-badge">✓ ADV</span>' : ''}
                 </div></td>
@@ -1840,7 +1885,7 @@ function renderGroups() {
           </tbody>
         </table>
         <div class="qualify-note">
-          <span>🟢 Top 2 advance automatically · Best 3rd-place teams may also advance</span>
+          <span>🟢 Top 2 advance automatically · Best 3rd-place teams may also advance · 🌍 = FIFA world rank</span>
         </div>
       </div>`;
   });
@@ -2154,6 +2199,7 @@ function showTeam(name) {
       <div style="flex:1">
         <div class="team-modal-title">${name}</div>
         ${grp ? `<div class="team-modal-group" style="cursor:pointer;text-decoration:underline" onclick="goToGroup('${grp}')">Group ${grp} →</div>` : ''}
+        ${fifaRank(name) ? `<div class="team-modal-rank">🌍 FIFA Rank #${fifaRank(name)}</div>` : ''}
       </div>
       <button class="fav-btn" onclick="toggleFav('${name.replace(/'/g,"\\'")}');showTeam('${name.replace(/'/g,"\\'")}')" title="Favorite">${isFav(name) ? '★' : '☆'}</button>
       <a class="fav-btn" href="${rosterURL(name)}" target="_blank" rel="noopener" title="Roster &amp; player bios" style="font-size:16px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none">👥</a>
@@ -2211,7 +2257,7 @@ function renderTeams() {
     <div class="team-tile" data-team="${name.replace(/"/g,'&quot;')}">
       ${flag(name)}
       <span class="team-tile-name">${name}</span>
-      <span class="team-tile-grp">GRP ${groupOfTeam(name) || '?'}</span>
+      <span class="team-tile-grp">GRP ${groupOfTeam(name) || '?'}${fifaRank(name) ? ' · #' + fifaRank(name) : ''}</span>
       <button class="tile-star ${isFav(name)?'on':''}" data-fav="${name.replace(/"/g,'&quot;')}" title="Favorite">${isFav(name)?'★':'☆'}</button>
     </div>`).join('');
 
