@@ -864,7 +864,7 @@ const FLAG_CODES = {
   'Ivory Coast':'ci',"Côte d'Ivoire":'ci','Ecuador':'ec',
   'Netherlands':'nl','Japan':'jp','Sweden':'se','Tunisia':'tn',
   'Belgium':'be','Egypt':'eg','Iran':'ir','New Zealand':'nz',
-  'Spain':'es','Cape Verde':'cv','Cabo Verde':'cv','Saudi Arabia':'sa','Uruguay':'uy',
+  'Spain':'es','Cape Verde':'cv','Cabo Verde':'cv','Cape Verde Islands':'cv','Saudi Arabia':'sa','Uruguay':'uy',
   'France':'fr','Senegal':'sn','Iraq':'iq','Norway':'no',
   'Argentina':'ar','Algeria':'dz','Austria':'at','Jordan':'jo',
   'Portugal':'pt','DR Congo':'cd','Congo DR':'cd','Uzbekistan':'uz','Colombia':'co',
@@ -886,14 +886,22 @@ const TEAM_GROUPS = {
   'Germany':'E','Curaçao':'E','Curacao':'E','Ivory Coast':'E',"Côte d'Ivoire":'E','Ecuador':'E',
   'Netherlands':'F','Japan':'F','Sweden':'F','Tunisia':'F',
   'Belgium':'G','Egypt':'G','Iran':'G','New Zealand':'G',
-  'Spain':'H','Cape Verde':'H','Cabo Verde':'H','Saudi Arabia':'H','Uruguay':'H',
+  'Spain':'H','Cape Verde':'H','Cabo Verde':'H','Cape Verde Islands':'H','Saudi Arabia':'H','Uruguay':'H',
   'France':'I','Senegal':'I','Iraq':'I','Norway':'I',
   'Argentina':'J','Algeria':'J','Austria':'J','Jordan':'J',
   'Portugal':'K','DR Congo':'K','Congo DR':'K','Uzbekistan':'K','Colombia':'K',
   'England':'L','Croatia':'L','Ghana':'L','Panama':'L'
 };
 
-function groupOfTeam(name) { return TEAM_GROUPS[name] || null; }
+function groupOfTeam(name) {
+  if (!name) return null;
+  if (TEAM_GROUPS[name]) return TEAM_GROUPS[name];
+  const canon = canonName(name);
+  if (TEAM_GROUPS[canon]) return TEAM_GROUPS[canon];
+  // Last resort: strip common suffixes/prefixes ("X Islands", "Republic of X")
+  const stripped = name.replace(/\s+Islands?$/i,'').replace(/^Republic of\s+/i,'').trim();
+  return TEAM_GROUPS[stripped] || null;
+}
 
 // ─── VENUE → CITY (16 official 2026 host stadiums) ───────────────────────────
 const VENUE_CITIES = [
@@ -926,7 +934,7 @@ function venueCity(venue) {
 const NAME_CANON = {
   'USA':'United States','Korea Republic':'South Korea','Czech Republic':'Czechia',
   'Bosnia and Herzegovina':'Bosnia-Herzegovina',"Côte d'Ivoire":'Ivory Coast',
-  'Turkey':'Türkiye','Congo DR':'DR Congo','Cabo Verde':'Cape Verde','Curacao':'Curaçao'
+  'Turkey':'Türkiye','Congo DR':'DR Congo','Cabo Verde':'Cape Verde','Cape Verde Islands':'Cape Verde','Curacao':'Curaçao'
 };
 function canonName(n) { return NAME_CANON[n] || n; }
 
@@ -1014,6 +1022,7 @@ const FIFA_RANK = {
   'Mexico':14,'Uruguay':15,'United States':17,'Switzerland':18,'Japan':19,
   'Senegal':20,'Iran':21,'Denmark':22,'Austria':23,'Ecuador':24,'Türkiye':25,
   'Australia':26,'Canada':28,'Egypt':32,'Algeria':33,'Norway':34,'Panama':35,
+  'Sweden':37,
   'South Korea':36,'Ivory Coast':40,'Scotland':41,'Paraguay':42,'Tunisia':43,
   'Ghana':44,'Saudi Arabia':45,'Iraq':46,'DR Congo':47,'Qatar':48,'Czechia':49,
   'Cape Verde':70,'Uzbekistan':57,'Jordan':62,'Bosnia-Herzegovina':74,
