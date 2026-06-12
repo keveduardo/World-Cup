@@ -591,6 +591,11 @@
   }
   .form-w { color: #1a9d4e; } .form-d { color: #b0922a; } .form-l { color: var(--live-red); }
 
+  .card-rank {
+    font-size: 10px; font-weight: 600;
+    color: var(--muted); margin-top: 1px;
+  }
+
   .broadcast-tag {
     font-size: 10px; color: var(--muted); margin-top: 2px;
   }
@@ -1709,6 +1714,7 @@ function renderMatchCard(m, status) {
       <div class="team-block" data-team="${hn.replace(/"/g,'&quot;')}">
         <span class="team-flag">${flag(hn)}</span>
         <span class="team-name">${hn}${favMark(hn)}</span>
+        ${fifaRank(hn) ? `<span class="card-rank">🌍 #${fifaRank(hn)}</span>` : ''}
         ${formHtml(homeForm)}
       </div>
       <div class="match-center">
@@ -1721,6 +1727,7 @@ function renderMatchCard(m, status) {
       <div class="team-block right" data-team="${an.replace(/"/g,'&quot;')}">
         <span class="team-flag">${flag(an)}</span>
         <span class="team-name">${an}${favMark(an)}</span>
+        ${fifaRank(an) ? `<span class="card-rank">🌍 #${fifaRank(an)}</span>` : ''}
         ${formHtml(awayForm)}
       </div>
     </div>`;
@@ -1850,8 +1857,14 @@ function renderGroups() {
     });
 
     // Group strength: average FIFA rank of the 4 teams (lower = stronger)
-    const groupTeams = (GROUPS.find(g => g.letter === letter)?.teams) || rows.map(r=>r.team);
-    const ranks = groupTeams.map(t => fifaRank(t)).filter(Boolean);
+    const groupTeams = Object.keys(TEAM_GROUPS).filter(t => TEAM_GROUPS[t] === letter);
+    const seen = new Set();
+    const uniqTeams = groupTeams.filter(t => {
+      const code = fifaRank(t);
+      if (!code || seen.has(code)) return false;
+      seen.add(code); return true;
+    });
+    const ranks = uniqTeams.map(t => fifaRank(t)).filter(Boolean);
     const avgRank = ranks.length ? Math.round(ranks.reduce((a,b)=>a+b,0)/ranks.length) : null;
 
     html += `
