@@ -600,6 +600,10 @@
     font-size: 10px; color: var(--muted); margin-top: 2px;
   }
 
+  .attendance-tag {
+    font-size: 10px; color: var(--muted); margin-top: 2px;
+  }
+
   .record-chip {
     flex: 1;
     background: white; border: 1px solid var(--border);
@@ -1325,7 +1329,9 @@ async function loadEspnLive() {
         awayScore: parseInt(away.score, 10),
         homeForm: home.form || '',                   // "WWWDD"
         awayForm: away.form || '',
-        broadcast: [...new Set(bc)].slice(0,3).join(', ')
+        broadcast: [...new Set(bc)].slice(0,3).join(', '),
+        attendance: comp.attendance || 0,
+        venueName: comp.venue?.fullName || ''
       };
     });
 
@@ -1586,44 +1592,84 @@ function renderSchedule() {
   updateCountdown();
 
   // Build cards grouped by date
-  const sorted = [...live, ...upcoming, ...completed];
   const todayK = todayKeyPST();
 
+  // Split into TODAY (all statuses) and OTHER days
+  const todayMatches = matches.filter(m => datekeyPST(m.utcDate) === todayK);
+  const otherMatches = matches.filter(m => datekeyPST(m.utcDate) !== todayK);
+
+  // Within today: live → upcoming → completed
+  const tStatus = m => matchStatus(m);
+  const todaySorted = [
+    ...todayMatches.filter(m => tStatus(m) === 'live'),
+    ...todayMatches.filter(m => tStatus(m) === 'upcoming').sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate)),
+    ...todayMatches.filter(m => tStatus(m) === 'completed').sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate)),
+  ];
+
+  // Other days: future first (chronological), then past days (reverse) at the very bottom
+  const futureOther = otherMatches.filter(m => new Date(m.utcDate) > Date.now())
+                                  .sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate));
+  const pastOther   = otherMatches.filter(m => new Date(m.utcDate) <= Date.now())
+                                  .sort((a,b)=>new Date(b.utcDate)-new Date(a.utcDate));
+
   // Count today's matches (for the header + jump button)
-  const todayCount = matches.filter(m => datekeyPST(m.utcDate) === todayK).length;
+  const todayCount = todayMatches.length;
   const todayBar = document.getElementById('today-bar');
   if (todayBar) {
     if (todayCount > 0) {
-      todayBar.innerHTML = `<span class="today-count">📅 ${todayCount} match${todayCount>1?'es':''} today</span>
-        <button class="jump-today-btn" onclick="jumpToToday()">Jump to today ↓</button>`;
+      const done = todayMatches.filter(m => tStatus(m) === 'completed').length;
+      const liveN = todayMatches.filter(m => tStatus(m) === 'live').length;
+      let summary = `${todayCount} match${todayCount>1?'es':''} today`;
+      if (liveN) summary += ` · ${liveN} live`;
+      if (done) summary += ` · ${done} final`;
+      todayBar.innerHTML = `<span class="today-count">📅 ${summary}</span>`;
     } else {
-      const nextUp = upcoming[0];
+      const nextUp = futureOther[0];
       todayBar.innerHTML = nextUp
         ? `<span class="today-count">No matches today · next on ${formatDatePST(nextUp.utcDate)}</span>`
         : '';
     }
   }
 
-  let html = '', lastDate = null;
+  let html = '';
 
-  sorted.forEach(m => {
-    const status = matchStatus(m);
+  // ── TODAY section (pinned at top) ──
+  if (todaySorted.length) {
+    html += `<div class="date-divider today" id="today-divider">
+      <span class="date-label" style="color:var(--pitch)">${formatDatePST(todaySorted[0].utcDate)}</span>
+      <span class="today-pill">Today</span>
+    </div>`;
+    todaySorted.forEach(m => { html += renderMatchCard(m, matchStatus(m)); });
+  }
+
+  // ── Remaining future days, grouped by date ──
+  let lastDate = null;
+  futureOther.forEach(m => {
     const dk = datekeyPST(m.utcDate);
-
-    if (status === 'live' && lastDate !== '__live__') {
-      html += `<div class="date-divider today"><span class="date-label" style="color:var(--live-red)">🔴 Live Now</span></div>`;
-      lastDate = '__live__';
-    } else if (status !== 'live' && dk !== lastDate) {
-      const isToday = dk === todayK;
-      html += `<div class="date-divider ${isToday?'today':''}" ${isToday?'id="today-divider"':''}>
+    if (dk !== lastDate) {
+      html += `<div class="date-divider">
         <span class="date-label">${formatDatePST(m.utcDate)}</span>
-        ${isToday ? '<span class="today-pill">Today</span>' : ''}
       </div>`;
       lastDate = dk;
     }
-
-    html += renderMatchCard(m, status);
+    html += renderMatchCard(m, matchStatus(m));
   });
+
+  // ── Past days (earlier results), grouped by date, at the bottom ──
+  if (pastOther.length) {
+    html += `<div class="date-divider"><span class="date-label" style="color:var(--muted)">◂ Earlier Results</span></div>`;
+    lastDate = null;
+    pastOther.forEach(m => {
+      const dk = datekeyPST(m.utcDate);
+      if (dk !== lastDate) {
+        html += `<div class="date-divider">
+          <span class="date-label">${formatDatePST(m.utcDate)}</span>
+        </div>`;
+        lastDate = dk;
+      }
+      html += renderMatchCard(m, matchStatus(m));
+    });
+  }
 
   if (!html) html = `<div class="loading-spinner">No matches found.</div>`;
   container.innerHTML = html;
@@ -1710,6 +1756,11 @@ function renderMatchCard(m, status) {
   const bcastHtml = (bcast && status === 'upcoming')
     ? `<div class="broadcast-tag">📺 ${bcast}</div>` : '';
 
+  // Attendance (ESPN), shown for live/completed games once available
+  const att = m._espn?.attendance;
+  const attHtml = (att && att > 0 && status !== 'upcoming')
+    ? `<div class="attendance-tag">👥 ${att.toLocaleString()} fans</div>` : '';
+
   // Match Details button (live or completed games with an ESPN id)
   const eid = m._espnId || '';
   const detailBtn = (eid && (status === 'live' || status === 'completed'))
@@ -1731,6 +1782,7 @@ function renderMatchCard(m, status) {
         <div class="match-meta">${meta}</div>
         ${wxSlot}
         ${bcastHtml}
+        ${attHtml}
         ${detailBtn}
       </div>
       <div class="team-block right" data-team="${an.replace(/"/g,'&quot;')}">
