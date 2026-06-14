@@ -1598,13 +1598,9 @@ function renderSchedule() {
   const todayMatches = matches.filter(m => datekeyPST(m.utcDate) === todayK);
   const otherMatches = matches.filter(m => datekeyPST(m.utcDate) !== todayK);
 
-  // Within today: live → upcoming → completed
+  // Within today: chronological order (as played) — completed first, then live, then upcoming
   const tStatus = m => matchStatus(m);
-  const todaySorted = [
-    ...todayMatches.filter(m => tStatus(m) === 'live'),
-    ...todayMatches.filter(m => tStatus(m) === 'upcoming').sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate)),
-    ...todayMatches.filter(m => tStatus(m) === 'completed').sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate)),
-  ];
+  const todaySorted = todayMatches.slice().sort((a,b) => new Date(a.utcDate) - new Date(b.utcDate));
 
   // Other days: future first (chronological), then past days (reverse) at the very bottom
   const futureOther = otherMatches.filter(m => new Date(m.utcDate) > Date.now())
