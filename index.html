@@ -1396,8 +1396,17 @@ async function loadEspnLive() {
 async function refreshAll() {
   const statusEl = document.getElementById('apiStatus');
   try {
-    await Promise.all([loadMatches(), loadStandings()]);
-    await loadEspnLive(); // overlay real-time scores + clock from ESPN
+    // Fire all three fetches in parallel. Render as soon as matches land so the
+    // page isn't blocked waiting on the slowest call.
+    const matchesP   = loadMatches();
+    const standingsP = loadStandings();
+
+    await matchesP;          // first paint as soon as the schedule is ready
+    renderCurrentView();
+
+    // ESPN overlay + standings finish in the background, then re-render
+    await Promise.all([standingsP, loadEspnLive()]);
+
     statusEl.textContent = '● Live';
     statusEl.className = 'api-status ok';
     document.getElementById('error-container').innerHTML = '';
