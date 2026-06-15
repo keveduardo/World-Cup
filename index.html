@@ -293,7 +293,7 @@
     padding: 2px 7px; border-radius: 10px; white-space: nowrap;
   }
 
-  .standings-table { width: 100%; border-collapse: collapse; }
+  .standings-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
 
   .standings-table thead tr {
     background: #f3f5ef; border-bottom: 1px solid var(--border);
@@ -301,18 +301,21 @@
 
   .standings-table th {
     font-size: 10px; font-weight: 600;
-    text-transform: uppercase; letter-spacing: 1px;
-    color: var(--muted); padding: 7px 10px; text-align: center;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--muted); padding: 7px 2px; text-align: center;
   }
 
-  .standings-table th:first-child { text-align: left; padding-left: 14px; }
+  .standings-table th:first-child { text-align: left; padding-left: 10px; }
+  /* Stat columns get a fixed narrow width; team column takes the rest */
+  .standings-table th:not(:first-child), .standings-table td:not(:first-child) { width: 30px; }
+  .standings-table th:nth-child(2), .standings-table td:nth-child(2) { width: auto; }
 
   .standings-table td {
-    padding: 9px 10px; text-align: center;
+    padding: 9px 2px; text-align: center;
     font-size: 13px; border-bottom: 1px solid #f0f2ec;
   }
 
-  .standings-table td:first-child { text-align: left; padding-left: 14px; }
+  .standings-table td:first-child { text-align: left; padding-left: 10px; width: 26px; }
   .standings-table tbody tr:last-child td { border-bottom: none; }
   .standings-table tbody tr.qualify-1 { background: rgba(10,92,54,0.07); }
   .standings-table tbody tr.qualify-2 { background: rgba(10,92,54,0.03); }
@@ -320,15 +323,19 @@
   .rank-num {
     font-family: 'Barlow Condensed', sans-serif;
     font-size: 15px; font-weight: 800; color: var(--muted);
-    width: 20px; display: inline-block;
+    width: 16px; display: inline-block;
   }
 
   .rank-num.q1 { color: var(--pitch); }
   .rank-num.q2 { color: #0e7a4a; }
 
-  .team-row { display: flex; align-items: center; gap: 6px; }
-  .team-row-flag { font-size: 16px; }
-  .team-row-name { font-size: 13px; font-weight: 600; }
+  .team-row { display: flex; align-items: center; gap: 5px; min-width: 0; }
+  .team-row-flag { font-size: 16px; flex-shrink: 0; }
+  .team-row-name {
+    font-size: 13px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    min-width: 0;
+  }
 
   .pts {
     font-family: 'Barlow Condensed', sans-serif;
@@ -386,6 +393,22 @@
     gap: 10px; margin-bottom: 14px; flex-wrap: wrap;
   }
   .today-bar:empty { display: none; }
+
+  .collapse-header {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--pitch); color: var(--gold);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 15px; font-weight: 700; letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 11px 14px; border-radius: 10px;
+    margin: 16px 0 10px; cursor: pointer;
+    border: 1px solid var(--gold);
+  }
+  .collapse-header:active { opacity: 0.8; }
+  .collapse-meta {
+    font-size: 12px; color: rgba(255,255,255,0.7);
+    letter-spacing: 0; text-transform: none;
+  }
 
   .today-count {
     font-family: 'Barlow Condensed', sans-serif;
@@ -505,7 +528,7 @@
   .rank-chip {
     font-family: 'Barlow Condensed', sans-serif;
     font-size: 10px; font-weight: 700;
-    color: var(--muted); margin-left: 4px;
+    color: var(--muted); margin-left: 3px; flex-shrink: 0;
   }
 
   .modal-close {
@@ -1123,21 +1146,32 @@ function matchVenueText(m) {
 let allMatches   = [];
 let standingsMap = {}; // group letter → sorted rows
 let activeFilter = 'all';
+let scheduleSections = { past: false, future: false }; // collapsed by default
 let refreshTimer = null;
 let currentView  = 'schedule';
 let nextKickoff  = null; // for countdown
 
-// ─── TIMEZONE PREFERENCE (PST default) ───────────────────────────────────────
+// ─── TIMEZONE PREFERENCE (defaults to device timezone) ───────────────────────
 const TZ_OPTIONS = [
+  { id: 'auto',                label: 'My device' },
   { id: 'America/Los_Angeles', label: 'Pacific' },
   { id: 'America/Denver',      label: 'Mountain' },
   { id: 'America/Phoenix',     label: 'Arizona' },
   { id: 'America/Chicago',     label: 'Central' },
   { id: 'America/New_York',    label: 'Eastern' },
-  { id: 'auto',                label: 'My device' },
 ];
 
-let userTZ = localStorage.getItem('wc_tz') || 'America/Los_Angeles';
+// First-time visitors default to their device timezone; manual choice persists.
+let userTZ = localStorage.getItem('wc_tz') || 'auto';
+
+function tzLabel() {
+  // For 'auto', show the live abbreviation (e.g. "Eastern (EDT)"); else the named label
+  if (userTZ === 'auto') {
+    const abbr = tzShort();
+    return abbr ? abbr + ' (device)' : 'Device Time';
+  }
+  return (TZ_OPTIONS.find(o => o.id === userTZ)?.label || 'Pacific') + ' Time';
+}
 
 function tz() {
   return userTZ === 'auto'
@@ -1158,8 +1192,7 @@ function tzShort() {
 function setTZ(id) {
   userTZ = id;
   localStorage.setItem('wc_tz', id);
-  document.getElementById('clockTzLabel').textContent =
-    (TZ_OPTIONS.find(o => o.id === id)?.label || '') + ' Time';
+  document.getElementById('clockTzLabel').textContent = tzLabel();
   applyTheme();
   renderCurrentView();
   updateClock();
@@ -1629,7 +1662,28 @@ function renderSchedule() {
 
   let html = '';
 
-  // ── TODAY section (pinned at top) ──
+  // ── EARLIER RESULTS (collapsible, above today, collapsed by default) ──
+  if (pastOther.length) {
+    const open = scheduleSections.past;
+    const days = new Set(pastOther.map(m => datekeyPST(m.utcDate))).size;
+    html += `<div class="collapse-header" onclick="toggleSection('past')">
+      <span>◂ Earlier Results</span>
+      <span class="collapse-meta">${pastOther.length} games · ${days} day${days>1?'s':''} ${open?'▲':'▼'}</span>
+    </div>`;
+    if (open) {
+      let lastDate = null;
+      pastOther.forEach(m => {
+        const dk = datekeyPST(m.utcDate);
+        if (dk !== lastDate) {
+          html += `<div class="date-divider"><span class="date-label">${formatDatePST(m.utcDate)}</span></div>`;
+          lastDate = dk;
+        }
+        html += renderMatchCard(m, matchStatus(m));
+      });
+    }
+  }
+
+  // ── TODAY (always expanded, pinned) ──
   if (todaySorted.length) {
     html += `<div class="date-divider today" id="today-divider">
       <span class="date-label" style="color:var(--pitch)">${formatDatePST(todaySorted[0].utcDate)}</span>
@@ -1638,38 +1692,35 @@ function renderSchedule() {
     todaySorted.forEach(m => { html += renderMatchCard(m, matchStatus(m)); });
   }
 
-  // ── Remaining future days, grouped by date ──
-  let lastDate = null;
-  futureOther.forEach(m => {
-    const dk = datekeyPST(m.utcDate);
-    if (dk !== lastDate) {
-      html += `<div class="date-divider">
-        <span class="date-label">${formatDatePST(m.utcDate)}</span>
-      </div>`;
-      lastDate = dk;
+  // ── UPCOMING (collapsible, below today, collapsed by default) ──
+  if (futureOther.length) {
+    const open = scheduleSections.future;
+    const days = new Set(futureOther.map(m => datekeyPST(m.utcDate))).size;
+    html += `<div class="collapse-header" onclick="toggleSection('future')">
+      <span>▸ Upcoming Matches</span>
+      <span class="collapse-meta">${futureOther.length} games · ${days} day${days>1?'s':''} ${open?'▲':'▼'}</span>
+    </div>`;
+    if (open) {
+      let lastDate = null;
+      futureOther.forEach(m => {
+        const dk = datekeyPST(m.utcDate);
+        if (dk !== lastDate) {
+          html += `<div class="date-divider"><span class="date-label">${formatDatePST(m.utcDate)}</span></div>`;
+          lastDate = dk;
+        }
+        html += renderMatchCard(m, matchStatus(m));
+      });
     }
-    html += renderMatchCard(m, matchStatus(m));
-  });
-
-  // ── Past days (earlier results), grouped by date, at the bottom ──
-  if (pastOther.length) {
-    html += `<div class="date-divider"><span class="date-label" style="color:var(--muted)">◂ Earlier Results</span></div>`;
-    lastDate = null;
-    pastOther.forEach(m => {
-      const dk = datekeyPST(m.utcDate);
-      if (dk !== lastDate) {
-        html += `<div class="date-divider">
-          <span class="date-label">${formatDatePST(m.utcDate)}</span>
-        </div>`;
-        lastDate = dk;
-      }
-      html += renderMatchCard(m, matchStatus(m));
-    });
   }
 
   if (!html) html = `<div class="loading-spinner">No matches found.</div>`;
   container.innerHTML = html;
   loadMatchWeather(); // fill in weather for matches within 24h
+}
+
+function toggleSection(which) {
+  scheduleSections[which] = !scheduleSections[which];
+  renderSchedule();
 }
 
 function jumpToToday() {
@@ -2544,8 +2595,7 @@ window.addEventListener('scroll', () => {
 });
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
-document.getElementById('clockTzLabel').textContent =
-  (TZ_OPTIONS.find(o => o.id === userTZ)?.label || 'Pacific') + ' Time';
+document.getElementById('clockTzLabel').textContent = tzLabel();
 applyTheme();
 setInterval(applyTheme, 60000); // re-check theme each minute
 updateClock();
