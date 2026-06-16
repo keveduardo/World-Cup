@@ -236,6 +236,8 @@
     font-size: 11px; font-weight: 700; letter-spacing: 1px;
     padding: 2px 6px; border-radius: 3px;
   }
+  .group-tag.clickable { cursor: pointer; }
+  .group-tag.clickable:active { opacity: 0.7; }
 
   .date-divider {
     display: flex; align-items: center;
@@ -1747,8 +1749,9 @@ function renderMatchCard(m, status) {
   const hn  = m.homeTeam?.name || m.homeTeam?.shortName || 'TBD';
   const an  = m.awayTeam?.name || m.awayTeam?.shortName || 'TBD';
   const grp = groupOfMatch(m);
-  const grpTag = grp ? `<span class="group-tag">GRP ${grp}</span>` :
-    `<span class="group-tag">${(m.stage||'').replace(/_/g,' ')}</span>`;
+  const grpTag = grp
+    ? `<span class="group-tag clickable" onclick="goToGroup('${grp}')">GRP ${grp} ›</span>`
+    : `<span class="group-tag">${(m.stage||'').replace(/_/g,' ')}</span>`;
 
   // Score helper: prefer full-time, fall back to half-time
   const ft = m.score?.fullTime || {};
