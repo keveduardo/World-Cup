@@ -50,6 +50,30 @@
     gap: 12px;
   }
 
+  /* keeps the Pool pill tucked immediately to the left of the clock */
+  .header-right-group { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+
+  /* Pool call-to-action pill — sits just left of the clock */
+  .pool-nav {
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;
+    color: #073d24; background: var(--gold);
+    border: none; border-radius: 999px; padding: 6px 11px;
+    cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    transition: transform 0.12s, box-shadow 0.12s;
+  }
+  .pool-nav:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+  .pool-nav .nv-new {
+    font-size: 8px; font-weight: 800; letter-spacing: 0.5px;
+    background: #073d24; color: var(--gold);
+    padding: 1px 5px; border-radius: 999px;
+  }
+  @media (max-width: 600px) {
+    .pool-nav { font-size: 11px; padding: 5px 8px; }
+  }
+
   .header-title { display: flex; flex-direction: column; }
 
   .eyebrow {
@@ -832,6 +856,8 @@
   .pool-go { width: 100%; padding: 12px; margin-top: 6px; border-radius: 8px;
     background: var(--pitch); color: var(--gold); font-size: 15px; font-weight: 600; }
   .pool-join-note { font-size: 12px; color: var(--muted); margin-top: 12px; line-height: 1.5; }
+  .pool-link { color: var(--pitch); font-weight: 700; cursor: pointer; text-decoration: underline; }
+  body.dark .pool-link { color: var(--gold); }
 
   .pool-hdr { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
     background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
@@ -919,12 +945,15 @@
       <h1>Match Tracker <button class="info-btn" onclick="showGuide()" title="About this site">i</button> <button class="info-btn" onclick="shareSite()" title="Share" style="font-style:normal">⤴</button></h1>
       <span class="byline">by Aquadoc</span>
     </div>
-    <div class="header-right">
+    <div class="header-right-group">
+      <button class="pool-nav" onclick="showView('pool', null)" title="Knockout prediction pool">Pool <span class="nv-new">NEW</span></button>
+      <div class="header-right">
       <div class="live-clock">
         <div class="time" id="clock">--:-- --</div>
         <div class="tz" id="clockTzLabel">Pacific Time</div>
       </div>
       <span class="api-status" id="apiStatus">Connecting…</span>
+    </div>
     </div>
   </div>
 </header>
@@ -935,7 +964,6 @@
     <button class="tab" onclick="showView('groups',this)">Groups & Standings</button>
     <button class="tab" onclick="showView('knockout',this)">Knockout</button>
     <button class="tab" onclick="showView('teams',this)">Teams</button>
-    <button class="tab" onclick="showView('pool',this)">Pool</button>
   </div>
 </div>
 
@@ -2732,6 +2760,7 @@ let poolPicks    = {};      // { matchNumber: teamName }
 let poolChampion = '';
 let poolBoard    = null;    // last leaderboard payload from the Worker
 let poolSub      = 'bracket';
+let poolJoinMode = 'login';  // 'login' (personal code only) | 'signup' (full form)
 let POOL_ADV     = null;    // advancedSets() cache, rebuilt each render
 let POOL_R32FX   = {};      // { matchNumber: {home, away} } resolved R32 fixtures
 let _poolSaveT   = null;
@@ -2838,39 +2867,61 @@ function poolSetSub(s){ poolSub=s; renderPool(); if(s==='leaderboard') poolLoadB
 function poolCopyCode(){ try{ navigator.clipboard.writeText(poolMe); }catch(e){} }
 function poolLeave(){
   ['wc_pool_pool','wc_pool_me','wc_pool_name'].forEach(k=>localStorage.removeItem(k));
-  poolPool=''; poolMe=''; poolName=''; poolPicks={}; poolChampion=''; poolBoard=null; poolSub='bracket';
+  poolPool=''; poolMe=''; poolName=''; poolPicks={}; poolChampion=''; poolBoard=null; poolSub='bracket'; poolJoinMode='login';
   renderPool();
 }
 function savePoolSoon(){ clearTimeout(_poolSaveT); _poolSaveT=setTimeout(savePool, 700); }
 function poolPicksStr(){ return Object.keys(poolPicks).filter(n=>poolPicks[n]).map(n=>n+':'+poolPicks[n]).join('|'); }
 async function savePool(){
-  if(!poolMe || !poolPool) return;
+  if(!poolMe) return;
   const u=`${PROXY}?type=poolsave&pool=${encodeURIComponent(poolPool)}&me=${encodeURIComponent(poolMe)}`
     +`&name=${encodeURIComponent(poolName)}&picks=${encodeURIComponent(poolPicksStr())}&champion=${encodeURIComponent(poolChampion)}`;
   try{ await fetch(u); }catch(e){}
 }
 async function poolLoadBoard(){
-  if(!poolPool) return;
-  try{ const r=await fetch(`${PROXY}?type=poolboard&pool=${encodeURIComponent(poolPool)}`);
+  if(!poolMe) return;
+  try{ const r=await fetch(`${PROXY}?type=poolboard&me=${encodeURIComponent(poolMe)}&pool=${encodeURIComponent(poolPool)}`);
     const d=await r.json(); if(d && d.players) poolBoard=d; }catch(e){}
   if(currentView==='pool' && poolSub==='leaderboard') renderPool();
 }
-async function poolJoinSubmit(){
+function poolSetJoinMode(m){ poolJoinMode=m; renderPool(); }
+async function poolLoginSubmit(){
+  const me=document.getElementById('poolMeInput').value.trim();
+  if(!me){ alert('Enter your personal code.'); return; }
+  let d;
+  try{ const r=await fetch(`${PROXY}?type=poolload&me=${encodeURIComponent(me)}`); d=await r.json(); }
+  catch(e){ alert('Could not reach the pool. Try again.'); return; }
+  if(!d || !d.entry){ alert('No bracket found for that code. If you are new, tap “Sign up”.'); return; }
+  poolMe=me; poolPool='';
+  poolPicks=d.entry.picks||{}; poolChampion=d.entry.champion||''; poolName=d.entry.name||'';
+  localStorage.setItem('wc_pool_me', poolMe);
+  localStorage.setItem('wc_pool_name', poolName);
+  localStorage.removeItem('wc_pool_pool');
+  poolSub='bracket'; renderPool(); poolLoadBoard();
+}
+async function poolSignupSubmit(){
   const pool=document.getElementById('poolCodeInput').value.trim();
   const name=document.getElementById('poolNameInput').value.trim();
   let me=document.getElementById('poolMeInput').value.trim();
   if(!pool || !name){ alert('Enter the pool code and your name.'); return; }
   if(!me) me = name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') + '-' + Math.random().toString(36).slice(2,6);
-  let d;
-  try{ const r=await fetch(`${PROXY}?type=poolload&pool=${encodeURIComponent(pool)}&me=${encodeURIComponent(me)}`); d=await r.json(); }
+  // make sure the personal code isn't already taken
+  let chk;
+  try{ const r=await fetch(`${PROXY}?type=poolload&me=${encodeURIComponent(me)}`); chk=await r.json(); }
   catch(e){ alert('Could not reach the pool. Try again.'); return; }
-  if(!d || d.error){ alert('That pool code didn’t work.'); return; }
-  poolPool=pool; poolMe=me; poolName=name;
-  if(d.entry){ poolPicks=d.entry.picks||{}; poolChampion=d.entry.champion||''; if(d.entry.name) poolName=d.entry.name; }
-  localStorage.setItem('wc_pool_pool', poolPool);
+  if(chk && chk.entry){ alert('That personal code is already in use. If it is yours, tap “Log in”; otherwise pick a different code.'); return; }
+  // create the entry (Worker requires the pool code for a new entry)
+  let res;
+  try{
+    const u=`${PROXY}?type=poolsave&pool=${encodeURIComponent(pool)}&me=${encodeURIComponent(me)}&name=${encodeURIComponent(name)}&picks=&champion=`;
+    res=await (await fetch(u)).json();
+  }catch(e){ alert('Could not reach the pool. Try again.'); return; }
+  if(!res || res.error){ alert('That pool code did not work. Double-check it with whoever set up the pool.'); return; }
+  poolPool=pool; poolMe=me; poolName=name; poolPicks={}; poolChampion='';
   localStorage.setItem('wc_pool_me', poolMe);
   localStorage.setItem('wc_pool_name', poolName);
-  poolSub='bracket'; renderPool(); savePool(); poolLoadBoard();
+  localStorage.setItem('wc_pool_pool', poolPool);
+  poolSub='bracket'; renderPool(); poolLoadBoard();
 }
 
 // ── render ──
@@ -2958,26 +3009,33 @@ function poolHeaderHTML(){
     + `<button class="pool-leave" onclick="poolLeave()">leave</button></div>`;
 }
 function poolJoinHTML(){
+  if(poolJoinMode==='signup'){
+    return `<div class="pool-join"><h3>🔮 Join the Pool</h3>`
+      + `<p class="pool-join-sub">First time here? Enter the shared pool code, your name, and choose a personal code — that code is all you'll need to get back in later, even on a new device.</p>`
+      + `<label class="pool-field"><span>Pool code</span><input id="poolCodeInput" placeholder="shared family code" value="${poolEsc(poolPool)}"></label>`
+      + `<label class="pool-field"><span>Your name</span><input id="poolNameInput" placeholder="e.g. Kevin" value="${poolEsc(poolName)}"></label>`
+      + `<label class="pool-field"><span>Personal code <small>(your login — leave blank to auto-generate)</small></span><input id="poolMeInput" placeholder="optional" value="${poolEsc(poolMe)}"></label>`
+      + `<button class="pool-go" onclick="poolSignupSubmit()">Create my bracket</button>`
+      + `<div class="pool-join-note">Already signed up? <a class="pool-link" onclick="poolSetJoinMode('login')">Log in with your personal code</a></div></div>`;
+  }
   return `<div class="pool-join"><h3>🔮 Knockout Prediction Pool</h3>`
-    + `<p class="pool-join-sub">Predict the winner of every knockout match. Later rounds are worth more, and there's a bonus for calling the champion. Lock in before each kickoff.</p>`
-    + `<label class="pool-field"><span>Pool code</span><input id="poolCodeInput" placeholder="shared family code" value="${poolEsc(poolPool)}"></label>`
-    + `<label class="pool-field"><span>Your name</span><input id="poolNameInput" placeholder="e.g. Kevin" value="${poolEsc(poolName)}"></label>`
-    + `<label class="pool-field"><span>Personal code <small>(re-open your bracket on other devices — leave blank to auto-make one)</small></span><input id="poolMeInput" placeholder="optional" value="${poolEsc(poolMe)}"></label>`
-    + `<button class="pool-go" onclick="poolJoinSubmit()">Join / Load my picks</button>`
-    + `<div class="pool-join-note">No accounts. Anyone with the pool code joins one shared leaderboard. Your personal code is how you get back into your own bracket later.</div></div>`;
+    + `<p class="pool-join-sub">Enter your personal code to open your bracket.</p>`
+    + `<label class="pool-field"><span>Personal code</span><input id="poolMeInput" placeholder="your code" value="${poolEsc(poolMe)}"></label>`
+    + `<button class="pool-go" onclick="poolLoginSubmit()">Open my bracket</button>`
+    + `<div class="pool-join-note">New here? <a class="pool-link" onclick="poolSetJoinMode('signup')">Sign up</a> to join the pool.</div></div>`;
 }
 function renderPool(){
   const c=document.getElementById('view-pool');
   if(!c) return;
-  if(!poolPool || !poolMe){ c.innerHTML=poolJoinHTML(); return; }
+  if(!poolMe){ c.innerHTML=poolJoinHTML(); return; }
   POOL_ADV=advancedSets();
   POOL_R32FX=r32Fixtures();
   validateBracket();
   c.innerHTML = poolHeaderHTML() + (poolSub==='leaderboard' ? poolLeaderboardHTML() : poolBracketHTML());
 }
 async function poolInit(){
-  if(poolPool && poolMe){
-    try{ const r=await fetch(`${PROXY}?type=poolload&pool=${encodeURIComponent(poolPool)}&me=${encodeURIComponent(poolMe)}`);
+  if(poolMe){
+    try{ const r=await fetch(`${PROXY}?type=poolload&me=${encodeURIComponent(poolMe)}`);
       const d=await r.json();
       if(d && d.entry){ poolPicks=d.entry.picks||{}; poolChampion=d.entry.champion||''; if(d.entry.name) poolName=d.entry.name; }
     }catch(e){}
@@ -3008,6 +3066,7 @@ setInterval(() => {
 (function restoreLastTab() {
   const last = localStorage.getItem('wc_last_tab');
   if (last && last !== 'schedule') {
+    if (last === 'pool') { showView('pool', null); return; }
     const tabs = document.querySelectorAll('.tab');
     for (const t of tabs) {
       if (t.getAttribute('onclick')?.includes(`'${last}'`)) { t.click(); break; }
