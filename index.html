@@ -934,6 +934,15 @@
   .pool-lb .lb-champ { font-size: 12px; }
   .pool-empty { color: var(--muted); padding: 16px 0; text-align: center; }
 
+  /* clinched / possible-opponent hints */
+  .ko-clinch { color: #0e7a4a; font-weight: 800; }
+  body.dark .ko-clinch { color: #6effa0; }
+  .ko-poss-wrap { background: var(--off-white); border: 1px solid var(--border);
+    border-radius: 8px; margin: -4px 0 14px; padding: 8px 12px; font-size: 12px; }
+  .ko-poss { color: var(--muted); line-height: 1.55; }
+  .ko-poss b { color: var(--text); }
+  .pool-poss { font-size: 11.5px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+  .pool-poss b { color: var(--text); }
 </style>
 </head>
 <body>
@@ -2215,15 +2224,82 @@ function etToUtcISO(date, et) {
   return new Date(Date.UTC(y, mo-1, d, h+4, mi)).toISOString();
 }
 
+// ─── GROUP CLINCH ENGINE (points-only — never shows a wrong team) ─────────────
+// Brute-forces every win/draw/loss combo of a group's remaining games. A team can
+// hold a position in a scenario if its points rank-band covers it (ties count as
+// "possible" since goal difference could break either way). A position is CLINCHED
+// when exactly one team can ever land there; otherwise we list the "possible" teams.
+let _clinchSig = null, _clinchData = null;
+function groupClinch(L){
+  const rows = standingsMap[L];
+  const blank = { 1:{clinched:null,possible:[]}, 2:{clinched:null,possible:[]} };
+  if(!rows || rows.length < 2) return blank;
+  const teams = rows.map(r=>r.team);
+  const basePts = {}; rows.forEach(r=> basePts[canonName(r.team)] = r.pts||0);
+  const rem = allMatches.filter(m=> m.stage==='GROUP_STAGE'
+      && groupOfTeam(m.homeTeam?.name)===L && groupOfTeam(m.awayTeam?.name)===L && m.status!=='FINISHED');
+  const k = rem.length;
+  const poss1 = new Set(), poss2 = new Set();
+  for(let mask=0; mask < 3**k; mask++){
+    const pts = {...basePts}; let mm = mask;
+    for(let i=0;i<k;i++){ const o = mm%3; mm = (mm-o)/3;
+      const h = canonName(rem[i].homeTeam.name), a = canonName(rem[i].awayTeam.name);
+      if(o===0) pts[h]+=3; else if(o===1){ pts[h]++; pts[a]++; } else pts[a]+=3; }
+    teams.forEach(t=>{ const c = canonName(t), me = pts[c]; let gt=0, eq=0;
+      teams.forEach(u=>{ if(u!==t){ const v = pts[canonName(u)]; if(v>me) gt++; else if(v===me) eq++; } });
+      const lo = gt+1, hi = gt+eq+1;     // rank band this team could occupy after tiebreaks
+      if(lo<=1 && 1<=hi) poss1.add(t);
+      if(lo<=2 && 2<=hi) poss2.add(t);
+    });
+  }
+  const a1=[...poss1], a2=[...poss2];
+  return { 1:{ clinched:a1.length===1?a1[0]:null, possible:a1 },
+           2:{ clinched:a2.length===1?a2[0]:null, possible:a2 } };
+}
+function clinchAll(){
+  const groups = standingsMap || {};
+  const sig = (allMatches||[]).filter(m=>m.stage==='GROUP_STAGE')
+                .map(m=>(m.status==='FINISHED'?'1':'0')).join('') + '|' + Object.keys(groups).join('');
+  if(sig !== _clinchSig){ _clinchData={}; Object.keys(groups).forEach(L=>{ _clinchData[L]=groupClinch(L); }); _clinchSig=sig; }
+  return _clinchData;
+}
+function resolveKOSlot(desc){
+  const m=/^([12])([A-L])$/.exec((desc||'').trim());
+  if(!m) return null;                  // third-place / other descriptors aren't clinch-resolvable
+  const g = clinchAll()[m[2]];
+  return g ? Object.assign({ groupSize:(standingsMap[m[2]]||[]).length||4 }, g[+m[1]]) : null;
+}
+function koClinchedTeam(desc){ const i=resolveKOSlot(desc); return i && i.clinched ? i.clinched : null; }
+function koSideHTML(desc){
+  const info = resolveKOSlot(desc);
+  if(info && info.clinched){
+    return `<span class="team-flag">${flag(info.clinched)}</span>`
+      + `<span class="team-name">${info.clinched} <span class="ko-clinch" title="Clinched ${desc}">✓</span></span>`;
+  }
+  return `<span class="team-flag">⚪</span><span class="team-name" style="color:var(--muted)">${desc}</span>`;
+}
+function koPossibleStrip(slot){
+  const seen=new Set(), parts=[];
+  [slot.home, slot.away].forEach(desc=>{
+    if(seen.has(desc)) return; seen.add(desc);
+    const info = resolveKOSlot(desc);
+    if(info && !info.clinched && info.possible.length>1 && info.possible.length<info.groupSize){
+      const list = info.possible.map(t=>`${flag(t)} ${t}`).join(' · ');
+      parts.push(`<div class="ko-poss"><b>${desc}</b> · ${info.possible.length} possible: ${list}</div>`);
+    }
+  });
+  return parts.length ? `<div class="ko-poss-wrap">${parts.join('')}</div>` : '';
+}
+
 function renderPlaceholderKO(slot) {
   const stad = STADIUMS[slot.v] || ['',''];
   const iso = etToUtcISO(slot.date, slot.et);
   const meta = [stad[0], stad[1]].filter(Boolean).join(' · ');
   return `
+    <div class="ko-slot-wrap">
     <div class="match-card upcoming">
       <div class="team-block">
-        <span class="team-flag">⚪</span>
-        <span class="team-name" style="color:var(--muted)">${slot.home}</span>
+        ${koSideHTML(slot.home)}
       </div>
       <div class="match-center">
         <span class="group-tag">${slot.n ? 'MATCH ' + slot.n : 'TBD'}</span>
@@ -2232,9 +2308,10 @@ function renderPlaceholderKO(slot) {
         <div class="match-meta">${formatDatePST(iso)}${meta ? ' · 🏟 ' + meta : ''}</div>
       </div>
       <div class="team-block right">
-        <span class="team-flag">⚪</span>
-        <span class="team-name" style="color:var(--muted)">${slot.away}</span>
+        ${koSideHTML(slot.away)}
       </div>
+    </div>
+    ${koPossibleStrip(slot)}
     </div>`;
 }
 
@@ -2792,12 +2869,17 @@ function resolvePlacement(desc){
 function r32Fixtures(){
   const out={};
   const fx=allMatches.filter(m=>m.stage==='LAST_32' && groupOfTeam(m.homeTeam?.name) && groupOfTeam(m.awayTeam?.name));
-  if(!fx.length) return out;
   KO_SCHEDULE.LAST_32.forEach(slot=>{
-    const home=resolvePlacement(slot.home); if(!home) return;     // home side is always a group winner/runner-up
-    const hc=canonName(home);
-    const f=fx.find(m=>canonName(m.homeTeam.name)===hc || canonName(m.awayTeam.name)===hc);
-    if(f) out[slot.n]={ home:f.homeTeam.name, away:f.awayTeam.name };
+    // 1) prefer the official API fixture once teams are seeded
+    if(fx.length){
+      const home=resolvePlacement(slot.home);
+      if(home){ const hc=canonName(home);
+        const f=fx.find(m=>canonName(m.homeTeam.name)===hc || canonName(m.awayTeam.name)===hc);
+        if(f){ out[slot.n]={ home:f.homeTeam.name, away:f.awayTeam.name }; return; } }
+    }
+    // 2) otherwise early-fill from clinched group positions (both sides must be locked)
+    const h=koClinchedTeam(slot.home), a=koClinchedTeam(slot.away);
+    if(h && a) out[slot.n]={ home:h, away:a };
   });
   return out;
 }
@@ -2946,7 +3028,21 @@ function poolSlotHTML(slot){
   const when=ko.toLocaleString('en-US',{ timeZone: tz(), month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
   let body;
   if(!cands || (!cands[0] && !cands[1])){
-    body=`<div class="pool-tbd">${(n>=73&&n<=88) ? 'Teams set after the group stage' : 'Pick the earlier matches first'}</div>`;
+    let msg = (n>=73&&n<=88) ? 'Teams set when the group stage clinches' : 'Pick the earlier matches first';
+    let extra = '';
+    if(n>=73&&n<=88){
+      const s=koSlot(n);
+      [s.home, s.away].forEach(desc=>{
+        const info=resolveKOSlot(desc);
+        if(!info) return;
+        if(info.clinched){
+          extra += `<div class="pool-poss"><b>${desc}</b>: ${flag(info.clinched)} ${info.clinched} ✓</div>`;
+        } else if(info.possible.length>1 && info.possible.length<info.groupSize){
+          extra += `<div class="pool-poss"><b>${desc}</b> · ${info.possible.length} possible: ${info.possible.map(t=>flag(t)+' '+t).join(' · ')}</div>`;
+        }
+      });
+    }
+    body=`<div class="pool-tbd">${msg}</div>${extra}`;
   } else {
     const a=poolTeamBtn(n, cands[0], pick && pick===cands[0], locked, pick===cands[0]?res:'');
     const b=poolTeamBtn(n, cands[1], pick && pick===cands[1], locked, pick===cands[1]?res:'');
