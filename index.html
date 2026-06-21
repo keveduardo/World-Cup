@@ -943,6 +943,12 @@
   .ko-poss b { color: var(--text); }
   .pool-poss { font-size: 11.5px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
   .pool-poss b { color: var(--text); }
+  [data-team] { cursor: pointer; }
+  .team-row[data-team]:hover .team-row-name,
+  .team-name[data-team]:hover,
+  .group-teams-preview [data-team]:hover,
+  .ko-poss [data-team]:hover,
+  .pool-poss [data-team]:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -2073,7 +2079,7 @@ function renderGroups() {
             ${thirds.map((r,i) => `
               <tr class="${i < 8 ? 'qualify-1' : ''}">
                 <td><span class="rank-num ${i < 8 ? 'q1' : ''}">${i+1}</span></td>
-                <td><div class="team-row">
+                <td><div class="team-row" data-team="${r.team.replace(/"/g,'&quot;')}">
                   <span class="team-row-flag">${flag(r.team)}</span>
                   <span class="team-row-name" data-team="${r.team.replace(/"/g,'&quot;')}">${r.team}${favMark(r.team)}</span>
                 </div></td>
@@ -2094,7 +2100,7 @@ function renderGroups() {
   letters.forEach(letter => {
     const rows = source[letter] || [];
     if (!rows.length) return; // skip groups with no data
-    const preview = rows.slice(0,2).map(r=>r.team).join(' · ');
+    const preview = rows.slice(0,2).map(r=>`<span data-team="${r.team.replace(/"/g,'&quot;')}">${r.team}</span>`).join(' · ');
 
     // Determine clinched status: a team has "clinched" a top-2 spot if no team
     // below them can mathematically catch them on points by the end of the group.
@@ -2145,7 +2151,7 @@ function renderGroups() {
             ${rows.map((r,i) => `
               <tr class="${i===0?'qualify-1':i===1?'qualify-2':''}">
                 <td><span class="rank-num ${i===0?'q1':i===1?'q2':''}">${i+1}</span></td>
-                <td><div class="team-row">
+                <td><div class="team-row" data-team="${r.team.replace(/"/g,'&quot;')}">
                   <span class="team-row-flag">${flag(r.team)}</span>
                   <span class="team-row-name" data-team="${r.team.replace(/"/g,'&quot;')}">${r.team}${favMark(r.team)}</span>
                   ${fifaRank(r.team) ? `<span class="rank-chip">#${fifaRank(r.team)}</span>` : ''}
@@ -2273,8 +2279,9 @@ function koClinchedTeam(desc){ const i=resolveKOSlot(desc); return i && i.clinch
 function koSideHTML(desc){
   const info = resolveKOSlot(desc);
   if(info && info.clinched){
-    return `<span class="team-flag">${flag(info.clinched)}</span>`
-      + `<span class="team-name">${info.clinched} <span class="ko-clinch" title="Clinched ${desc}">✓</span></span>`;
+    const dt = info.clinched.replace(/"/g,'&quot;');
+    return `<span class="team-flag" data-team="${dt}">${flag(info.clinched)}</span>`
+      + `<span class="team-name" data-team="${dt}">${info.clinched} <span class="ko-clinch" title="Clinched ${desc}">✓</span></span>`;
   }
   return `<span class="team-flag">⚪</span><span class="team-name" style="color:var(--muted)">${desc}</span>`;
 }
@@ -2284,7 +2291,7 @@ function koPossibleStrip(slot){
     if(seen.has(desc)) return; seen.add(desc);
     const info = resolveKOSlot(desc);
     if(info && !info.clinched && info.possible.length>1 && info.possible.length<info.groupSize){
-      const list = info.possible.map(t=>`${flag(t)} ${t}`).join(' · ');
+      const list = info.possible.map(t=>`<span data-team="${t.replace(/"/g,'&quot;')}">${flag(t)} ${t}</span>`).join(' · ');
       parts.push(`<div class="ko-poss"><b>${desc}</b> · ${info.possible.length} possible: ${list}</div>`);
     }
   });
@@ -3036,9 +3043,9 @@ function poolSlotHTML(slot){
         const info=resolveKOSlot(desc);
         if(!info) return;
         if(info.clinched){
-          extra += `<div class="pool-poss"><b>${desc}</b>: ${flag(info.clinched)} ${info.clinched} ✓</div>`;
+          extra += `<div class="pool-poss"><b>${desc}</b>: <span data-team="${info.clinched.replace(/"/g,'&quot;')}">${flag(info.clinched)} ${info.clinched}</span> ✓</div>`;
         } else if(info.possible.length>1 && info.possible.length<info.groupSize){
-          extra += `<div class="pool-poss"><b>${desc}</b> · ${info.possible.length} possible: ${info.possible.map(t=>flag(t)+' '+t).join(' · ')}</div>`;
+          extra += `<div class="pool-poss"><b>${desc}</b> · ${info.possible.length} possible: ${info.possible.map(t=>'<span data-team="'+t.replace(/"/g,'&quot;')+'">'+flag(t)+' '+t+'</span>').join(' · ')}</div>`;
         }
       });
     }
