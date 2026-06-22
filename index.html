@@ -2723,14 +2723,23 @@ async function shareTeam(name) {
 
 // ─── ROSTER LINK (Wikipedia 2026 squads page) ────────────────────────────────
 function rosterURL(name) {
-  const anchorNames = {
-    'United States':'United_States','South Korea':'South_Korea',
-    'Bosnia-Herzegovina':'Bosnia_and_Herzegovina','Ivory Coast':'Ivory_Coast',
-    'DR Congo':'DR_Congo','Cape Verde':'Cape_Verde','Saudi Arabia':'Saudi_Arabia',
-    'New Zealand':'New_Zealand','South Africa':'South_Africa','Czechia':'Czech_Republic'
+  // Link to the team's OWN Wikipedia article — always exists and has the current
+  // squad + player bios. Most are "{name} national football team"; these few differ
+  // (US/Canada/Australia use "men's national soccer team"; a couple have other titles).
+  const exact = {
+    'United States': "United States men's national soccer team",
+    'USA': "United States men's national soccer team",
+    'Canada': "Canada men's national soccer team",
+    'Australia': "Australia men's national soccer team",
+    'Bosnia-Herzegovina': 'Bosnia and Herzegovina national football team',
+    'Bosnia and Herzegovina': 'Bosnia and Herzegovina national football team',
+    'Czechia': 'Czech Republic national football team',
+    'Czech Republic': 'Czech Republic national football team',
+    'IR Iran': 'Iran national football team',
+    'Korea Republic': 'South Korea national football team'
   };
-  const anchor = anchorNames[name] || name.replace(/ /g,'_');
-  return 'https://en.wikipedia.org/wiki/2026_FIFA_World_Cup_squads#' + encodeURIComponent(anchor);
+  const title = exact[name] || (name + ' national football team');
+  return 'https://en.wikipedia.org/wiki/' + encodeURIComponent(title.replace(/ /g, '_'));
 }
 
 // ─── CROSS-NAV HELPERS ───────────────────────────────────────────────────────
