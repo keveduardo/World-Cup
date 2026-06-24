@@ -1037,6 +1037,16 @@
   .pool-help-list { margin: 0; padding-left: 18px; }
   .pool-help-list li { font-size: 13px; color: var(--text); line-height: 1.55; margin-bottom: 6px; }
   .pool-help-list b { color: var(--text); }
+
+  /* pool admin (remove members) */
+  .pool-board-actions { display: flex; gap: 6px; }
+  .pool-admin-note { font-size: 12px; color: var(--muted); margin: -4px 0 10px; }
+  .pool-admin-note.ok { color: var(--pitch); font-weight: 700; }
+  body.dark .pool-admin-note.ok { color: var(--gold); }
+  .lb-remove { flex: none; margin-left: 4px; background: rgba(200,40,40,.10); border: 1px solid rgba(200,40,40,.35);
+    color: #c82828; border-radius: 8px; padding: 5px 8px; font-size: 14px; cursor: pointer; line-height: 1; }
+  .lb-remove:hover { background: rgba(200,40,40,.20); }
+  body.dark .lb-remove { color: #ff9b9b; border-color: rgba(255,120,120,.4); background: rgba(255,80,80,.12); }
 </style>
 </head>
 <body>
@@ -2942,6 +2952,7 @@ let poolChampion = '';
 let poolBoard    = null;    // last leaderboard payload from the Worker
 let poolSub      = 'bracket';
 let poolHelp     = false;     // bracket "how it works" panel toggle
+let poolAdmin    = localStorage.getItem('wc_pool_admin') || '';  // admin code word (server-verified)
 let poolJoinMode = 'login';  // 'login' (personal code only) | 'signup' (full form)
 let POOL_ADV     = null;    // advancedSets() cache, rebuilt each render
 let POOL_R32FX   = {};      // { matchNumber: {home, away} } resolved R32 fixtures
@@ -3070,9 +3081,24 @@ async function savePool(){
 }
 async function poolLoadBoard(){
   if(!poolMe) return;
-  try{ const r=await fetch(`${PROXY}?type=poolboard&me=${encodeURIComponent(poolMe)}&pool=${encodeURIComponent(poolPool)}`);
+  try{ const r=await fetch(`${PROXY}?type=poolboard&me=${encodeURIComponent(poolMe)}&pool=${encodeURIComponent(poolPool)}&admin=${encodeURIComponent(poolAdmin)}`);
     const d=await r.json(); if(d && d.players) poolBoard=d; }catch(e){}
   if(currentView==='pool' && poolSub==='leaderboard') renderPool();
+}
+function poolAdminUnlock(){
+  const c=prompt('Enter the admin code word to manage members:');
+  if(c==null) return;
+  poolAdmin=c.trim(); localStorage.setItem('wc_pool_admin', poolAdmin);
+  poolLoadBoard(); // board.admin in the response tells us if the code was accepted
+}
+function poolAdminExit(){ poolAdmin=''; localStorage.removeItem('wc_pool_admin'); poolLoadBoard(); }
+function poolRemove(btn){
+  const code=btn.dataset.code, name=btn.dataset.name;
+  if(!code) return;
+  if(!confirm('Remove "'+name+'" from the pool?\n\nThis permanently deletes their bracket and avatar. This cannot be undone.')) return;
+  fetch(`${PROXY}?type=pooldelete&admin=${encodeURIComponent(poolAdmin)}&target=${encodeURIComponent(code)}`)
+    .then(r=>r.json()).then(d=>{ if(d&&d.ok){ poolLoadBoard(); } else { alert('Could not remove member: '+((d&&d.error)||'error')); } })
+    .catch(()=>alert('Network error removing member.'));
 }
 function poolSetJoinMode(m){ poolJoinMode=m; renderPool(); }
 async function poolLoginSubmit(){
@@ -3507,22 +3533,29 @@ function poolLeaderboardHTML(){
   const adv=POOL_ADV||advancedSets();
   const actualChamp = adv.FINAL && adv.FINAL.size ? [...adv.FINAL][0] : '';
   let rows=[];
+  const isAdmin = !!(poolBoard && poolBoard.admin);
   if(poolBoard && poolBoard.players){
-    rows=poolBoard.players.map(p=>{ const s=poolScore(p,adv,actualChamp); return { name:p.name, champion:p.champion, avatar:p.avatar, ...s }; });
+    rows=poolBoard.players.map(p=>{ const s=poolScore(p,adv,actualChamp); return { name:p.name, champion:p.champion, avatar:p.avatar, code:p.code, ...s }; });
     rows.sort((a,b)=> b.pts-a.pts || b.correct-a.correct || a.name.localeCompare(b.name));
   }
+  const adminBtn = isAdmin
+    ? `<button class="pool-mini-btn" onclick="poolAdminExit()">🔓 Admin: exit</button>`
+    : `<button class="pool-mini-btn" onclick="poolAdminUnlock()">🔧 Admin</button>`;
   let html=`<div class="pool-board pool-board-redesign"><div class="pool-board-head"><h3>Leaderboard</h3>`
-    + `<button class="pool-mini-btn" onclick="poolLoadBoard()">↻ Refresh</button></div>`;
+    + `<div class="pool-board-actions">${adminBtn}<button class="pool-mini-btn" onclick="poolLoadBoard()">↻ Refresh</button></div></div>`;
+  if(poolAdmin && !isAdmin) html+=`<div class="pool-admin-note">Admin code not accepted. <a class="pool-link" onclick="poolAdminUnlock()">Try again</a></div>`;
+  if(isAdmin) html+=`<div class="pool-admin-note ok">Admin mode — you can remove members.</div>`;
   if(!rows.length){ return html+`<div class="pool-empty">No entries yet — be the first to lock in picks.</div></div>`; }
   html+=`<div class="lb-list">`;
   rows.forEach((r,i)=>{
     const me = r.name===poolName ? ' me' : '';
     const pos = i===0?'🥇':i===1?'🥈':i===2?'🥉':`<span class="lb-rank">${i+1}</span>`;
     const ch = r.champion ? `<span class="lb-champ">🏆 ${flag(r.champion)}</span>` : '';
+    const rm = (isAdmin && r.code) ? `<button class="lb-remove" title="Remove ${poolEsc(r.name)}" data-code="${poolEsc(r.code)}" data-name="${poolEsc(r.name)}" onclick="poolRemove(this)">🗑</button>` : '';
     html+=`<div class="lb-row${me}"><div class="lb-pos">${pos}</div>`
       + `<div class="lb-ava">${CAV.svg(r.avatar,{size:46})}</div>`
       + `<div class="lb-name">${poolEsc(r.name)}${ch}</div>`
-      + `<div class="lb-score"><span class="lb-pts">${r.pts}</span><small>pts · ${r.correct}✓</small></div></div>`;
+      + `<div class="lb-score"><span class="lb-pts">${r.pts}</span><small>pts · ${r.correct}✓</small></div>${rm}</div>`;
   });
   return html + `</div><div class="pool-hint">R32 1 · R16 2 · QF 4 · SF 8 · Final 16 · 3rd 4 · Champion +${POOL_CHAMP_BONUS}. Other players' picks reveal after each kickoff.</div></div>`;
 }

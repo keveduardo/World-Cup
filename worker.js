@@ -85,6 +85,12 @@ export default {
     const url = new URL(request.url);
     const type = url.searchParams.get('type') || 'matches';
     const POOL_CODE = (env.POOL_CODE || 'bubblers');
+    // Pool admin (remove members). Set as a Worker SECRET: `wrangler secret put
+    // POOL_ADMIN_CODE`. Never put it in this repo or index.html. If unset, all
+    // admin features are disabled (fail closed).
+    const ADMIN_CODE = (env.POOL_ADMIN_CODE || '');
+    const adminParam = (url.searchParams.get('admin') || '').trim();
+    const isAdmin = !!ADMIN_CODE && adminParam === ADMIN_CODE;
     let payload;
 
     try {
@@ -199,15 +205,32 @@ export default {
             for (const n of Object.keys(picks)) {
               if (now >= koKickoffMs(+n)) revealed[n] = picks[n];
             }
-            players.push({
+            const row = {
               name: e.name || 'Anon',
               picks: revealed,
               champion: (now >= champLock) ? (e.champion || '') : '',
               avatar: e.avatar || null,
               updatedAt: e.updatedAt || 0,
-            });
+            };
+            // Personal codes are private; only an authenticated admin sees them
+            // (needed to target a removal).
+            if (isAdmin) row.code = k.name.replace('pool_player_', '');
+            players.push(row);
           }
-          payload = { ok: true, now, championLock: champLock, players };
+          payload = { ok: true, now, championLock: champLock, players, admin: isAdmin };
+        }
+
+      } else if (type === 'pooldelete') {
+        // Admin-only: remove a member's entry. Auth enforced server-side against
+        // the POOL_ADMIN_CODE secret — a client flag alone can't delete anything.
+        const target = (url.searchParams.get('target') || '').trim();
+        if (!isAdmin) {
+          payload = { error: 'not authorized' };
+        } else if (!target) {
+          payload = { error: 'missing target' };
+        } else {
+          await env.WC_KV.delete('pool_player_' + target);
+          payload = { ok: true, deleted: target };
         }
 
       } else if (type === 'espnsummary') {
@@ -222,12 +245,12 @@ export default {
         payload = await edgeCachedFetch('wc2026_espn', ESPN_SB, 30, null);
 
       } else if (type === 'standings') {
-        payload = await cachedFetch(env, 'wc2026_standings',
+        payload = await edgeCachedFetch('wc2026_standings',
           BASE_URL + '/competitions/WC/standings?season=2026', 600,
           { 'X-Auth-Token': env.FOOTBALL_API_KEY });
 
       } else {
-        payload = await cachedFetch(env, 'wc2026_matches',
+        payload = await edgeCachedFetch('wc2026_matches',
           BASE_URL + '/competitions/WC/matches?season=2026', 600,
           { 'X-Auth-Token': env.FOOTBALL_API_KEY });
       }
@@ -238,28 +261,6 @@ export default {
     return new Response(JSON.stringify(payload), { headers: CORS });
   },
 };
-
-/**
- * Fetch a URL with KV caching. ttl in seconds. headers optional (for auth).
- * Writes to KV only on a miss; a longer ttl means fewer refresh-writes AND a
- * higher edge hit-rate. Live scores use edgeCachedFetch (ESPN), not this path,
- * so football-data fixtures/standings can cache for minutes.
- */
-async function cachedFetch(env, cacheKey, url, ttl, headers) {
-  const cached = await env.WC_KV.get(cacheKey);
-  if (cached) return JSON.parse(cached);
-
-  const resp = await fetch(url, headers ? { headers } : {});
-  const data = await resp.json();
-
-  try {
-    await env.WC_KV.put(cacheKey, JSON.stringify(data), {
-      expirationTtl: Math.max(60, ttl),
-    });
-  } catch (e) { /* too large or write failed — still return data */ }
-
-  return data;
-}
 
 /**
  * Fetch with Cloudflare's edge Cache API, which supports sub-60s TTLs.
