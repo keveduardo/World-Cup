@@ -3050,14 +3050,16 @@ function poolScore(p, adv, actualChamp){
 // ── actions ──
 function poolPick(n, team){ if(matchLocked(n)) return; poolPicks[n]=team; validateBracket(); renderPool(); savePoolSoon(); }
 function poolSetChampion(v){ if(championLocked()) return; poolChampion=v; renderPool(); savePoolSoon(); }
-function poolSetSub(s){ poolSub=s; renderPool(); if(s==='leaderboard') poolLoadBoard(); }
+function poolSetSub(s){ if(poolSub==='avatar' && s!=='avatar') flushPoolSave(); poolSub=s; renderPool(); if(s==='leaderboard') poolLoadBoard(); }
 function poolCopyCode(){ try{ navigator.clipboard.writeText(poolMe); }catch(e){} }
 function poolLeave(){
+  flushPoolSave();
   ['wc_pool_pool','wc_pool_me','wc_pool_name'].forEach(k=>localStorage.removeItem(k));
   poolPool=''; poolMe=''; poolName=''; poolPicks={}; poolChampion=''; poolBoard=null; poolSub='bracket'; poolJoinMode='login';
   renderPool();
 }
-function savePoolSoon(){ clearTimeout(_poolSaveT); _poolSaveT=setTimeout(savePool, 700); }
+function savePoolSoon(ms){ clearTimeout(_poolSaveT); _poolSaveT=setTimeout(savePool, ms||700); }
+function flushPoolSave(){ if(_poolSaveT){ clearTimeout(_poolSaveT); _poolSaveT=null; savePool(); } }
 function poolPicksStr(){ return Object.keys(poolPicks).filter(n=>poolPicks[n]).map(n=>n+':'+poolPicks[n]).join('|'); }
 async function savePool(){
   if(!poolMe) return;
@@ -3378,7 +3380,7 @@ if (typeof module !== "undefined") module.exports = CAV;
 // ── avatar state + customizer UI (pool) ──
 let poolAvatar = null;
 function caGet(){ if(!poolAvatar) poolAvatar = CAV.norm(CAV.DEFAULT); return poolAvatar; }
-function caRerender(){ renderPool(); savePoolSoon(); }
+function caRerender(){ renderPool(); savePoolSoon(2500); } // batch rapid avatar tweaks; flushed on leaving the Player tab
 function caSet(k,v){ caGet()[k] = +v; poolAvatar = CAV.norm(poolAvatar); caRerender(); }
 function caTeam(v){ caGet().team = v; poolAvatar = CAV.norm(poolAvatar); caRerender(); }
 function caVar(v){ caGet().variant = v; poolAvatar = CAV.norm(poolAvatar); caRerender(); }

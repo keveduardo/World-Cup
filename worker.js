@@ -223,12 +223,12 @@ export default {
 
       } else if (type === 'standings') {
         payload = await cachedFetch(env, 'wc2026_standings',
-          BASE_URL + '/competitions/WC/standings?season=2026', 60,
+          BASE_URL + '/competitions/WC/standings?season=2026', 600,
           { 'X-Auth-Token': env.FOOTBALL_API_KEY });
 
       } else {
         payload = await cachedFetch(env, 'wc2026_matches',
-          BASE_URL + '/competitions/WC/matches?season=2026', 60,
+          BASE_URL + '/competitions/WC/matches?season=2026', 600,
           { 'X-Auth-Token': env.FOOTBALL_API_KEY });
       }
     } catch (err) {
@@ -241,7 +241,9 @@ export default {
 
 /**
  * Fetch a URL with KV caching. ttl in seconds. headers optional (for auth).
- * Used for the slow football-data calls (60s is fine there).
+ * Writes to KV only on a miss; a longer ttl means fewer refresh-writes AND a
+ * higher edge hit-rate. Live scores use edgeCachedFetch (ESPN), not this path,
+ * so football-data fixtures/standings can cache for minutes.
  */
 async function cachedFetch(env, cacheKey, url, ttl, headers) {
   const cached = await env.WC_KV.get(cacheKey);
