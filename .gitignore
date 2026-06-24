@@ -1,0 +1,16 @@
+# Cloudflare / Wrangler
+.dev.vars
+.dev.vars.*
+.wrangler/
+wrangler.toml.bak
+
+# Node
+node_modules/
+npm-debug.log*
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/

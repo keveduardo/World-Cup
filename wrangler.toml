@@ -1,0 +1,21 @@
+name = "worldcup-proxy"
+main = "worker.js"
+compatibility_date = "2026-06-15"
+workers_dev = true
+preview_urls = false
+
+# If wrangler ever says it can't pick an account, uncomment and set this:
+# account_id = "your-cloudflare-account-id"
+
+# WC_KV holds the response cache, team favorites, and pool entries.
+# Get the id with:  wrangler kv namespace list
+# Then replace PASTE_ID_HERE below. The binding name MUST stay "WC_KV".
+[[kv_namespaces]]
+binding = "WC_KV"
+id = "cc1ac61acdd24cd08a43cea0af34729b"
+
+# Restore the Worker's observability/logging (was enabled before; a bare deploy
+# would otherwise disable it). Keeps `wrangler tail` and dashboard logs working.
+[observability]
+enabled = true
+head_sampling_rate = 1
