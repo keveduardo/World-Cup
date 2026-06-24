@@ -1047,6 +1047,9 @@
     color: #c82828; border-radius: 8px; padding: 5px 8px; font-size: 14px; cursor: pointer; line-height: 1; }
   .lb-remove:hover { background: rgba(200,40,40,.20); }
   body.dark .lb-remove { color: #ff9b9b; border-color: rgba(255,120,120,.4); background: rgba(255,80,80,.12); }
+  .pool-name-edit { background: none; border: none; cursor: pointer; font-size: 12px; padding: 0 2px;
+    opacity: .6; vertical-align: middle; line-height: 1; }
+  .pool-name-edit:hover { opacity: 1; }
 </style>
 </head>
 <body>
@@ -3063,6 +3066,17 @@ function poolPick(n, team){ if(matchLocked(n)) return; poolPicks[n]=team; valida
 function poolSetChampion(v){ if(championLocked()) return; poolChampion=v; renderPool(); savePoolSoon(); }
 function poolSetSub(s){ if(poolSub==='avatar' && s!=='avatar') flushPoolSave(); poolSub=s; renderPool(); if(s==='leaderboard') poolLoadBoard(); }
 function poolCopyCode(){ try{ navigator.clipboard.writeText(poolMe); }catch(e){} }
+function poolEditName(){
+  const v=prompt('Edit your display name:', poolName||'');
+  if(v==null) return;
+  const name=v.trim().slice(0,40);
+  if(!name){ alert('Your name can\'t be empty.'); return; }
+  if(name===poolName) return;
+  poolName=name; localStorage.setItem('wc_pool_name', poolName);
+  savePool();        // immediate upsert; worker updates the stored name
+  renderPool();      // refresh header
+  poolLoadBoard();   // refresh leaderboard so the new name shows there too
+}
 function poolLeave(){
   flushPoolSave();
   ['wc_pool_pool','wc_pool_me','wc_pool_name'].forEach(k=>localStorage.removeItem(k));
@@ -3563,7 +3577,7 @@ function poolHeaderHTML(){
   const a=caGet();
   return `<div class="pool-hdr pool-hdr-redesign">`
     + `<div class="pool-hdr-id"><button class="pool-hdr-ava" onclick="poolSetSub('avatar')" title="Edit your player" aria-label="Edit your player">${CAV.svg(a,{size:50})}<span class="pool-hdr-ava-edit">✏️</span></button>`
-      + `<div class="pool-hdr-l"><span class="pool-you">${poolEsc(poolName)}</span>`
+      + `<div class="pool-hdr-l"><span class="pool-you">${poolEsc(poolName)} <button class="pool-name-edit" onclick="poolEditName()" title="Edit your name" aria-label="Edit your name">✏️</button></span>`
       + `<span class="pool-code">code: <b>${poolEsc(poolMe)}</b> <button class="pool-mini-btn" onclick="poolCopyCode()">copy</button></span></div></div>`
     + `<div class="pool-subtabs">`
     + `<button class="pool-st ${poolSub==='bracket'?'active':''}" onclick="poolSetSub('bracket')">Bracket</button>`
