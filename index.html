@@ -949,6 +949,63 @@
   .group-teams-preview [data-team]:hover,
   .ko-poss [data-team]:hover,
   .pool-poss [data-team]:hover { text-decoration: underline; }
+
+  /* ── Pool redesign + player avatars ── */
+  .pool-hdr-redesign { background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 14px; padding: 12px 14px; box-shadow: 0 2px 10px rgba(0,0,0,.04); }
+  .pool-hdr-id { display: flex; align-items: center; gap: 11px; }
+  .pool-hdr-ava { width: 50px; flex: none; display: flex; align-items: flex-end; justify-content: center;
+    background: linear-gradient(160deg, var(--off-white), rgba(10,92,54,.07));
+    border: 1px solid var(--border); border-radius: 12px; padding: 3px 2px 0; overflow: hidden; }
+  .pool-hdr-ava svg { display: block; }
+  .pool-st { text-transform: none; }
+
+  .pool-join-wide { max-width: 620px; }
+  .pool-join-grid { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; margin: 6px 0 4px; }
+  .pool-join-ava { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: none; }
+  .pool-join-form { flex: 1; min-width: 240px; }
+  .pool-join-avahint { font-size: 11px; color: var(--muted); text-align: center; max-width: 160px; }
+
+  /* avatar customizer */
+  .ca-editor { display: flex; gap: 18px; flex-wrap: wrap; background: var(--card-bg);
+    border: 1px solid var(--border); border-radius: 14px; padding: 16px; box-shadow: 0 2px 10px rgba(0,0,0,.04); }
+  .ca-side { display: flex; flex-direction: column; align-items: center; gap: 10px; flex: none; }
+  .ca-stage { width: 200px; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(160deg, var(--off-white), rgba(10,92,54,.06));
+    border: 1px solid var(--border); border-radius: 12px; padding: 10px 8px 4px; }
+  .ca-stage.sm { width: 168px; }
+  .ca-stage svg { display: block; }
+  .ca-controls { flex: 1; min-width: 280px; }
+  .ca-row { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--border); }
+  .ca-row:first-child { border-top: none; }
+  .ca-lbl { width: 82px; flex: none; font-size: 11px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .3px; color: var(--muted); padding-top: 7px; }
+  .ca-opts { display: flex; gap: 7px; flex-wrap: wrap; }
+  .ca-chip { padding: 6px 11px; border-radius: 999px; font-size: 13px; font-weight: 700; cursor: pointer;
+    border: 1px solid var(--border); background: var(--card-bg); color: var(--text); text-transform: capitalize; font-family: inherit; }
+  .ca-chip.on { background: var(--pitch); color: var(--gold); border-color: var(--pitch); }
+  .ca-sw { width: 28px; height: 28px; border-radius: 999px; cursor: pointer; border: 2px solid var(--border); padding: 0; }
+  .ca-sw.on { border: 3px solid var(--pitch); }
+  .ca-select { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--card-bg); color: var(--text); font-family: inherit; font-size: 13px; }
+
+  /* leaderboard redesign */
+  .pool-board-redesign .lb-list { display: flex; flex-direction: column; gap: 8px; }
+  .lb-row { display: flex; align-items: center; gap: 12px; background: var(--off-white);
+    border: 1px solid var(--border); border-radius: 12px; padding: 7px 14px 7px 10px; }
+  .lb-row.me { background: rgba(245,197,24,.14); border-color: var(--gold); }
+  .lb-pos { width: 30px; flex: none; text-align: center; font-size: 20px; }
+  .lb-pos .lb-rank { font-size: 14px; font-weight: 800; color: var(--muted); }
+  .lb-ava { width: 46px; flex: none; display: flex; align-items: flex-end; justify-content: center;
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; padding-top: 3px; }
+  .lb-ava svg { display: block; }
+  .lb-name { flex: 1; font-weight: 700; min-width: 0; }
+  .lb-champ { font-size: 12px; font-weight: 500; margin-left: 6px; white-space: nowrap; }
+  .lb-score { text-align: right; flex: none; }
+  .lb-score .lb-pts { font-weight: 800; font-size: 19px; color: var(--pitch); }
+  body.dark .lb-score .lb-pts { color: var(--gold); }
+  .lb-score small { display: block; font-size: 10px; color: var(--muted); font-weight: 600; }
+  @media (max-width: 520px){ .ca-lbl { width: 100%; padding-top: 0; } .ca-row { flex-direction: column; gap: 4px; } }
 </style>
 </head>
 <body>
@@ -2973,7 +3030,8 @@ function poolPicksStr(){ return Object.keys(poolPicks).filter(n=>poolPicks[n]).m
 async function savePool(){
   if(!poolMe) return;
   const u=`${PROXY}?type=poolsave&pool=${encodeURIComponent(poolPool)}&me=${encodeURIComponent(poolMe)}`
-    +`&name=${encodeURIComponent(poolName)}&picks=${encodeURIComponent(poolPicksStr())}&champion=${encodeURIComponent(poolChampion)}`;
+    +`&name=${encodeURIComponent(poolName)}&picks=${encodeURIComponent(poolPicksStr())}&champion=${encodeURIComponent(poolChampion)}`
+    +`&avatar=${encodeURIComponent(JSON.stringify(poolAvatar||{}))}`;
   try{ await fetch(u); }catch(e){}
 }
 async function poolLoadBoard(){
@@ -2992,6 +3050,7 @@ async function poolLoginSubmit(){
   if(!d || !d.entry){ alert('No bracket found for that code. If you are new, tap “Sign up”.'); return; }
   poolMe=me; poolPool='';
   poolPicks=d.entry.picks||{}; poolChampion=d.entry.champion||''; poolName=d.entry.name||'';
+  poolAvatar=CAV.norm(d.entry.avatar);
   localStorage.setItem('wc_pool_me', poolMe);
   localStorage.setItem('wc_pool_name', poolName);
   localStorage.removeItem('wc_pool_pool');
@@ -3011,7 +3070,7 @@ async function poolSignupSubmit(){
   // create the entry (Worker requires the pool code for a new entry)
   let res;
   try{
-    const u=`${PROXY}?type=poolsave&pool=${encodeURIComponent(pool)}&me=${encodeURIComponent(me)}&name=${encodeURIComponent(name)}&picks=&champion=`;
+    const u=`${PROXY}?type=poolsave&pool=${encodeURIComponent(pool)}&me=${encodeURIComponent(me)}&name=${encodeURIComponent(name)}&picks=&champion=&avatar=${encodeURIComponent(JSON.stringify(CAV.norm(poolAvatar)))}`;
     res=await (await fetch(u)).json();
   }catch(e){ alert('Could not reach the pool. Try again.'); return; }
   if(!res || res.error){ alert('That pool code did not work. Double-check it with whoever set up the pool.'); return; }
@@ -3020,6 +3079,309 @@ async function poolSignupSubmit(){
   localStorage.setItem('wc_pool_name', poolName);
   localStorage.setItem('wc_pool_pool', poolPool);
   poolSub='bracket'; renderPool(); poolLoadBoard();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COPA POOL AVATARS — vanilla SVG player builder (copa-only).
+// Reuses the @brisaloca/player-avatar look + 48 World Cup kits (CA_KITS) without
+// touching the shared kids' package. Option arrays are APPEND-ONLY.
+// ═══════════════════════════════════════════════════════════════════════════
+const CA_KITS = {"usa":{"f":"🇺🇸","n":"USA","h":["solid","#FFFFFF","#0A2A5E","#0A2A5E","#FFFFFF","#BF0A30"],"a":["solid","#101C3A","#BF0A30","#101C3A","#101C3A","#BF0A30"]},"can":{"f":"🇨🇦","n":"Canada","h":["solid","#D52B1E","#FFFFFF","#D52B1E","#D52B1E","#FFFFFF"],"a":["solid","#1A1A1A","#D52B1E","#1A1A1A","#1A1A1A","#D52B1E"]},"mex":{"f":"🇲🇽","n":"Mexico","h":["solid","#0A7A3B","#FFFFFF","#FFFFFF","#C8102E","#FFFFFF"],"a":["solid","#111317","#0A7A3B","#111317","#111317","#0A7A3B"]},"aut":{"f":"🇦🇹","n":"Austria","h":["solid","#ED2939","#FFFFFF","#FFFFFF","#ED2939","#FFFFFF"],"a":["solid","#1A1A1A","#ED2939","#1A1A1A","#1A1A1A","#ED2939"]},"bel":{"f":"🇧🇪","n":"Belgium","h":["solid","#C8102E","#111317","#C8102E","#C8102E","#FFD100"],"a":["solid","#0E8C72","#FFD100","#0E8C72","#0E8C72","#FFD100"]},"bih":{"f":"🇧🇦","n":"Bosnia & Herz.","h":["solid","#0E2C8B","#FFD100","#0E2C8B","#0E2C8B","#FFD100"],"a":["solid","#FFFFFF","#0E2C8B","#FFFFFF","#FFFFFF","#FFD100"]},"cro":{"f":"🇭🇷","n":"Croatia","h":["checkers","#FFFFFF","#E1001A","#15244F","#15244F","#15244F"],"a":["solid","#15244F","#E1001A","#15244F","#15244F","#FFFFFF"]},"cze":{"f":"🇨🇿","n":"Czechia","h":["solid","#D7141A","#FFFFFF","#FFFFFF","#11457E","#11457E"],"a":["solid","#11457E","#FFFFFF","#11457E","#11457E","#D7141A"]},"eng":{"f":"🏴󠁧󠁢󠁥󠁮󠁧󠁿","n":"England","h":["solid","#FFFFFF","#0A2A5E","#0A2A5E","#FFFFFF","#CE1124"],"a":["solid","#C81E2C","#FFFFFF","#FFFFFF","#C81E2C","#FFFFFF"]},"fra":{"f":"🇫🇷","n":"France","h":["solid","#1A2A6C","#FFFFFF","#FFFFFF","#CE1126","#CE1126"],"a":["solid","#FFFFFF","#1A2A6C","#1A2A6C","#FFFFFF","#CE1126"]},"ger":{"f":"🇩🇪","n":"Germany","h":["solid","#FFFFFF","#111317","#111317","#FFFFFF","#D7141A"],"a":["solid","#0B6B3A","#111317","#FFFFFF","#0B6B3A","#111317"]},"ned":{"f":"🇳🇱","n":"Netherlands","h":["solid","#EC8B00","#111317","#FFFFFF","#EC8B00","#111317"],"a":["solid","#16245A","#EC8B00","#16245A","#16245A","#EC8B00"]},"nor":{"f":"🇳🇴","n":"Norway","h":["solid","#BA0C2F","#00205B","#00205B","#BA0C2F","#FFFFFF"],"a":["solid","#122A55","#BA0C2F","#122A55","#122A55","#FFFFFF"]},"por":{"f":"🇵🇹","n":"Portugal","h":["solid","#A6093D","#0A5A38","#0A5A38","#A6093D","#0A5A38"],"a":["solid","#1E8F7E","#A6093D","#1E8F7E","#1E8F7E","#A6093D"]},"sco":{"f":"🏴󠁧󠁢󠁳󠁣󠁴󠁿","n":"Scotland","h":["solid","#13294B","#FFFFFF","#13294B","#E03A3E","#FFFFFF"],"a":["solid","#D98AB0","#13294B","#13294B","#13294B","#FFFFFF"]},"esp":{"f":"🇪🇸","n":"Spain","h":["solid","#C60B1E","#1A2A5E","#1A2A5E","#1A2A5E","#C9A227"],"a":["solid","#1FAE9C","#11294F","#11294F","#11294F","#11294F"]},"swe":{"f":"🇸🇪","n":"Sweden","h":["solid","#FECC02","#006AA7","#006AA7","#FECC02","#006AA7"],"a":["solid","#0A4F7A","#FECC02","#0A4F7A","#0A4F7A","#FECC02"]},"sui":{"f":"🇨🇭","n":"Switzerland","h":["solid","#D52B1E","#FFFFFF","#FFFFFF","#D52B1E","#FFFFFF"],"a":["solid","#15171A","#D52B1E","#15171A","#15171A","#D52B1E"]},"tur":{"f":"🇹🇷","n":"Türkiye","h":["solid","#E30A17","#FFFFFF","#FFFFFF","#E30A17","#FFFFFF"],"a":["solid","#EAE3D2","#E30A17","#E30A17","#E30A17","#E30A17"]},"arg":{"f":"🇦🇷","n":"Argentina","h":["vstripes","#74ACDF","#FFFFFF","#14213D","#FFFFFF","#14213D"],"a":["solid","#1E1A3A","#74ACDF","#1E1A3A","#1E1A3A","#74ACDF"]},"bra":{"f":"🇧🇷","n":"Brazil","h":["solid","#FFDF00","#009C3B","#002776","#FFFFFF","#009C3B"],"a":["solid","#002776","#FFDF00","#FFFFFF","#002776","#FFDF00"]},"col":{"f":"🇨🇴","n":"Colombia","h":["solid","#FCD116","#003893","#003893","#CE1126","#003893"],"a":["solid","#16224F","#D6FF00","#16224F","#16224F","#D6FF00"]},"ecu":{"f":"🇪🇨","n":"Ecuador","h":["solid","#FFD100","#14215C","#14215C","#FFFFFF","#CE1126"],"a":["solid","#14215C","#B87333","#14215C","#14215C","#B87333"]},"par":{"f":"🇵🇾","n":"Paraguay","h":["vstripes","#D52B1E","#FFFFFF","#0038A8","#0038A8","#0038A8"],"a":["solid","#0038A8","#FFFFFF","#0038A8","#FFFFFF","#FFFFFF"]},"uru":{"f":"🇺🇾","n":"Uruguay","h":["solid","#58A5DC","#111317","#111317","#111317","#111317"],"a":["solid","#FFFFFF","#58A5DC","#111317","#FFFFFF","#58A5DC"]},"cuw":{"f":"🇨🇼","n":"Curaçao","h":["solid","#003DA5","#FFD100","#003DA5","#003DA5","#FFD100"],"a":["solid","#FFFFFF","#003DA5","#FFFFFF","#FFFFFF","#FFD100"]},"hai":{"f":"🇭🇹","n":"Haiti","h":["solid","#00209F","#D21034","#111317","#00209F","#D21034"],"a":["solid","#D21034","#00209F","#111317","#D21034","#00209F"]},"pan":{"f":"🇵🇦","n":"Panama","h":["solid","#DA121A","#005293","#005293","#DA121A","#FFFFFF"],"a":["solid","#FFFFFF","#DA121A","#005293","#FFFFFF","#DA121A"]},"alg":{"f":"🇩🇿","n":"Algeria","h":["solid","#FFFFFF","#006233","#FFFFFF","#006233","#D21034"],"a":["solid","#006233","#FFFFFF","#006233","#006233","#D21034"]},"cpv":{"f":"🇨🇻","n":"Cabo Verde","h":["solid","#003893","#FFFFFF","#FFFFFF","#003893","#CF2027"],"a":["solid","#0A2A5E","#FFFFFF","#0A2A5E","#0A2A5E","#CF2027"]},"cod":{"f":"🇨🇩","n":"DR Congo","h":["solid","#1295D8","#F7D618","#1295D8","#1295D8","#CE1021"],"a":["solid","#CE1021","#F7D618","#CE1021","#CE1021","#1295D8"]},"civ":{"f":"🇨🇮","n":"Côte d'Ivoire","h":["solid","#FF8200","#FFFFFF","#FFFFFF","#009A44","#009A44"],"a":["solid","#009A44","#FF8200","#009A44","#009A44","#FF8200"]},"egy":{"f":"🇪🇬","n":"Egypt","h":["solid","#CE1126","#FFFFFF","#FFFFFF","#111317","#111317"],"a":["solid","#15171A","#CE1126","#15171A","#15171A","#FFFFFF"]},"gha":{"f":"🇬🇭","n":"Ghana","h":["solid","#FFFFFF","#006B3F","#006B3F","#CE1126","#CE1126"],"a":["solid","#CE1126","#111317","#111317","#CE1126","#FCD116"]},"mar":{"f":"🇲🇦","n":"Morocco","h":["solid","#C1272D","#006233","#006233","#C1272D","#006233"],"a":["solid","#0A6B3A","#C1272D","#0A6B3A","#0A6B3A","#FFFFFF"]},"sen":{"f":"🇸🇳","n":"Senegal","h":["solid","#FFFFFF","#00853F","#00853F","#E31B23","#00853F"],"a":["solid","#00853F","#FFFFFF","#00853F","#00853F","#E31B23"]},"rsa":{"f":"🇿🇦","n":"South Africa","h":["solid","#FFB81C","#007A4D","#007A4D","#FFFFFF","#007A4D"],"a":["solid","#007A4D","#FFB81C","#007A4D","#007A4D","#FFB81C"]},"tun":{"f":"🇹🇳","n":"Tunisia","h":["solid","#E70013","#FFFFFF","#E70013","#E70013","#FFFFFF"],"a":["solid","#FFFFFF","#E70013","#FFFFFF","#FFFFFF","#E70013"]},"aus":{"f":"🇦🇺","n":"Australia","h":["solid","#FFCD00","#00843D","#00843D","#FFCD00","#00843D"],"a":["solid","#15244F","#FFCD00","#15244F","#15244F","#FFCD00"]},"irn":{"f":"🇮🇷","n":"Iran","h":["solid","#FFFFFF","#239F40","#FFFFFF","#FFFFFF","#DA0000"],"a":["solid","#DA0000","#FFFFFF","#DA0000","#DA0000","#FFFFFF"]},"irq":{"f":"🇮🇶","n":"Iraq","h":["solid","#0A7A3B","#FFFFFF","#FFFFFF","#0A7A3B","#FFFFFF"],"a":["solid","#FFFFFF","#0A7A3B","#FFFFFF","#FFFFFF","#0A7A3B"]},"jpn":{"f":"🇯🇵","n":"Japan","h":["solid","#0A2472","#FFFFFF","#0A2472","#0A2472","#FFFFFF"],"a":["solid","#FFFFFF","#0A2472","#FFFFFF","#FFFFFF","#C8102E"]},"jor":{"f":"🇯🇴","n":"Jordan","h":["solid","#CE1126","#111317","#FFFFFF","#CE1126","#111317"],"a":["solid","#1A1A1A","#CE1126","#1A1A1A","#1A1A1A","#CE1126"]},"kor":{"f":"🇰🇷","n":"South Korea","h":["solid","#C8102E","#16245A","#16245A","#C8102E","#16245A"],"a":["solid","#16245A","#C8102E","#16245A","#16245A","#C8102E"]},"qat":{"f":"🇶🇦","n":"Qatar","h":["solid","#8A1538","#FFFFFF","#FFFFFF","#8A1538","#FFFFFF"],"a":["solid","#FFFFFF","#8A1538","#FFFFFF","#FFFFFF","#8A1538"]},"ksa":{"f":"🇸🇦","n":"Saudi Arabia","h":["solid","#FFFFFF","#0A7A3B","#FFFFFF","#FFFFFF","#0A7A3B"],"a":["solid","#0A7A3B","#FFFFFF","#0A7A3B","#0A7A3B","#FFFFFF"]},"uzb":{"f":"🇺🇿","n":"Uzbekistan","h":["solid","#FFFFFF","#0099B5","#0099B5","#FFFFFF","#1EB53A"],"a":["solid","#0E7C8B","#FFFFFF","#0E7C8B","#0E7C8B","#FFFFFF"]},"nzl":{"f":"🇳🇿","n":"New Zealand","h":["solid","#FFFFFF","#111317","#111317","#FFFFFF","#111317"],"a":["solid","#111317","#FFFFFF","#111317","#111317","#FFFFFF"]}};
+/* Copa avatar engine — vanilla SVG, copa-only.
+ * Ports the @brisaloca/player-avatar look (same 120x170 coordinate system + the
+ * 48 World Cup kits via CA_KITS) and adds grown-up / party / build axes for the
+ * adult prediction pool. No React, no dependency on the shared kids' package.
+ * Option arrays are APPEND-ONLY (saved avatars store indices). */
+const CAV = (function () {
+  const SKIN   = ["#F8D7C0", "#F1C39E", "#D99E73", "#B97A4E", "#8C5A33", "#5E3A1E"];
+  const HAIRC  = ["#2B2620", "#5B3A1E", "#A6662E", "#E0B23C", "#BFC2C7", "#EDE6D6"];
+  const HAIR   = ["bald", "buzz", "short", "receding", "mop", "manbun", "long", "mohawk"];
+  const BEARD  = ["none", "stubble", "mustache", "goatee", "full"];
+  const FACE   = ["smile", "grin", "cool", "shout"];
+  const BUILD  = ["slim", "average", "beefy"];
+  const HEIGHT = ["short", "average", "tall"];
+  const OUTFIT = ["kit", "tee", "suit", "barechest", "boxers", "briefs", "speedo"];
+  const FLAIR  = ["facepaint", "shades", "scarf", "buckethat", "pint", "foamfinger", "cape"];
+  const LABEL = {
+    hair: { bald: "Bald", buzz: "Buzz", short: "Short", receding: "Receding", mop: "Mop", manbun: "Man-bun", long: "Long", mohawk: "Mohawk" },
+    beard: { none: "Clean", stubble: "Stubble", mustache: "Mustache", goatee: "Goatee", full: "Full beard" },
+    face: { smile: "Smile", grin: "Grin", cool: "Cool", shout: "Shout" },
+    build: { slim: "Slim", average: "Average", beefy: "Beefy" },
+    height: { short: "Short", average: "Average", tall: "Tall" },
+    outfit: { kit: "Team kit", tee: "T-shirt", suit: "Suit", barechest: "Bare chest", boxers: "Boxer briefs", briefs: "Briefs", speedo: "Speedo" },
+    flair: { facepaint: "Face paint", shades: "Sunglasses", scarf: "Scarf", buckethat: "Bucket hat", pint: "Pint", foamfinger: "Foam finger", cape: "Flag cape" },
+  };
+  const OPTS = { SKIN, HAIRC, HAIR, BEARD, FACE, BUILD, HEIGHT, OUTFIT, FLAIR, LABEL };
+
+  const DEFAULT = { v: 1, skin: 1, hairC: 0, hair: 2, beard: 0, face: 0, build: 1, height: 1, outfit: 0, team: "bra", variant: "home", flair: [] };
+  const teamIds = () => Object.keys(CA_KITS);
+
+  function norm(a) {
+    a = a && typeof a === "object" ? a : {};
+    const cl = (v, arr) => { v = +v || 0; return v < 0 || v >= arr.length ? 0 : v; };
+    const o = {
+      v: 1,
+      skin: cl(a.skin, SKIN), hairC: cl(a.hairC, HAIRC), hair: cl(a.hair, HAIR),
+      beard: cl(a.beard, BEARD), face: cl(a.face, FACE), build: cl(a.build, BUILD),
+      height: cl(a.height, HEIGHT), outfit: cl(a.outfit, OUTFIT),
+      team: CA_KITS[a.team] ? a.team : DEFAULT.team,
+      variant: a.variant === "away" ? "away" : "home",
+      flair: Array.isArray(a.flair) ? [...new Set(a.flair.filter(i => i >= 0 && i < FLAIR.length))] : [],
+    };
+    return o;
+  }
+
+  function kitOf(av) {
+    const k = CA_KITS[av.team] || CA_KITS[DEFAULT.team];
+    const arr = av.variant === "away" ? k.a : k.h;
+    return { pattern: arr[0], primary: arr[1], secondary: arr[2], shorts: arr[3], socks: arr[4], trim: arr[5], flag: k.f, name: k.n };
+  }
+
+  function patternFills(p, primary, secondary) {
+    if (p === "vstripes") {
+      let s = `<rect x="36" y="70" width="48" height="46" fill="${primary}"/>`;
+      [42, 54, 66, 78].forEach(x => (s += `<rect x="${x}" y="70" width="6" height="46" fill="${secondary}"/>`));
+      return s;
+    }
+    if (p === "checkers") {
+      let s = `<rect x="36" y="70" width="48" height="46" fill="${primary}"/>`;
+      for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) if ((i + j) % 2) s += `<rect x="${36 + i * 8}" y="${70 + j * 8}" width="8" height="8" fill="${secondary}"/>`;
+      return s;
+    }
+    if (p === "halves") return `<rect x="36" y="70" width="24" height="46" fill="${primary}"/><rect x="60" y="70" width="24" height="46" fill="${secondary}"/>`;
+    if (p === "sash") return `<rect x="36" y="70" width="48" height="46" fill="${primary}"/><path d="M36 100 L66 70 L80 70 L80 78 L48 116 L36 116 Z" fill="${secondary}"/>`;
+    return `<rect x="36" y="70" width="48" height="46" fill="${primary}"/>`;
+  }
+
+  // hair drawn on top of head; `back` = strands behind head (long/mop)
+  function hairBack(style, c) {
+    if (style === "long") return `<g fill="${c}"><path d="M32 42 q-3 22 0 38 q1 6 7 5 q4 -1 3 -7 q-3 -16 1 -32 z"/><path d="M88 42 q3 22 0 38 q-1 6 -7 5 q-4 -1 -3 -7 q3 -16 -1 -32 z"/></g>`;
+    if (style === "mop") return `<g fill="${c}"><path d="M31 40 q-3 16 -1 28 q3 3 6 0 q-2 -14 0 -26 z"/><path d="M89 40 q3 16 1 28 q-3 3 -6 0 q2 -14 0 -26 z"/></g>`;
+    return "";
+  }
+  function hairTop(style, c) {
+    switch (style) {
+      case "bald":     return `<path d="M40 26 q6 -10 20 -10 q14 0 20 10 q-10 -6 -20 -6 q-10 0 -20 6 z" fill="rgba(255,255,255,.16)"/>`;
+      case "buzz":     return `<path d="M36 36 q0 -26 24 -26 q24 0 24 26 q-12 -8 -24 -8 q-12 0 -24 8 z" fill="${c}" opacity="0.9"/>`;
+      case "short":    return `<path d="M34 38 q0 -28 26 -28 q26 0 26 28 q-10 -12 -26 -12 q-16 0 -26 12 z" fill="${c}"/>`;
+      case "receding": return `<path d="M36 33 q5 -21 24 -21 q19 0 24 21 q-7 -7 -15 -7 q-3 5 -9 5 q-6 0 -9 -5 q-8 0 -15 7 z" fill="${c}"/>`;
+      case "mop":      return `<path d="M30 41 q-3 -35 30 -35 q33 0 30 35 q-8 -13 -15 -11 q-6 -7 -15 -3 q-9 -4 -15 3 q-7 -2 -15 11 z" fill="${c}"/>`;
+      case "manbun":   return `<g fill="${c}"><circle cx="60" cy="8" r="8"/><path d="M34 38 q0 -30 26 -30 q26 0 26 30 q-10 -12 -26 -12 q-16 0 -26 12 z"/></g>`;
+      case "long":     return `<path d="M33 41 q0 -33 27 -33 q27 0 27 33 q-11 -13 -27 -13 q-16 0 -27 13 z" fill="${c}"/>`;
+      case "mohawk":   return `<g fill="${c}"><path d="M40 24 q4 -6 20 -6 q16 0 20 6 q-10 -3 -20 -3 q-10 0 -20 3 z" opacity="0.35"/><path d="M53 4 q7 -4 14 0 l-2 26 h-10 z"/></g>`;
+      default:         return "";
+    }
+  }
+
+  function faceFeatures(face, isShades) {
+    let eyes, mouth;
+    if (face === "cool" || isShades) {
+      eyes = `<g><rect x="42" y="38" width="36" height="9" rx="4" fill="#23272B"/><rect x="42" y="40" width="36" height="2" fill="#3a4a52" opacity=".6"/></g>`;
+    } else if (face === "shout") {
+      eyes = `<g><circle cx="50" cy="42" r="3.2" fill="#3A2A22"/><circle cx="70" cy="42" r="3.2" fill="#3A2A22"/><path d="M45 36 q5 -3 10 -1" stroke="#3A2A22" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M65 35 q5 -2 10 1" stroke="#3A2A22" stroke-width="2" fill="none" stroke-linecap="round"/></g>`;
+    } else {
+      eyes = `<g><circle cx="50" cy="43" r="3" fill="#3A2A22"/><circle cx="70" cy="43" r="3" fill="#3A2A22"/></g>`;
+    }
+    if (face === "grin") mouth = `<path d="M48 52 q12 12 24 0 q-12 4 -24 0 z" fill="#7A2E22"/><rect x="50" y="52" width="20" height="3" fill="#fff"/>`;
+    else if (face === "shout") mouth = `<ellipse cx="60" cy="56" rx="8" ry="7" fill="#6e241b"/><ellipse cx="60" cy="53" rx="6" ry="2.5" fill="#fff"/>`;
+    else mouth = `<path d="M50 53 q10 7 20 0" fill="none" stroke="#7A4A39" stroke-width="2.6" stroke-linecap="round"/>`;
+    return eyes + mouth;
+  }
+
+  function beardLayer(style, c) {
+    if (style === "none") return "";
+    if (style === "stubble") return `<path d="M37 43 q23 27 46 0 q-3 19 -23 19 q-20 0 -23 -19 z" fill="${c}" opacity="0.26"/>`;
+    if (style === "mustache") return `<path d="M49 51 q11 6 22 0 q-3 5 -11 5 q-8 0 -11 -5 z" fill="${c}"/>`;
+    if (style === "goatee") return `<g fill="${c}"><path d="M49 51 q11 6 22 0 q-3 5 -11 5 q-8 0 -11 -5 z"/><path d="M53 58 q7 4 14 0 q-1 8 -7 9 q-6 -1 -7 -9 z"/></g>`;
+    // full
+    return `<g fill="${c}"><path d="M36 42 q24 30 48 0 q-3 23 -24 23 q-21 0 -24 -23 z"/><path d="M49 51 q11 6 22 0 q-3 5 -11 5 q-8 0 -11 -5 z" fill="#0000001a"/></g>`;
+  }
+
+  // arms: upper sleeve color depends on outfit; forearm + hand always skin
+  function arms(outfit, skin, sleeveColor) {
+    const clothed = outfit === "kit" || outfit === "tee" || outfit === "suit";
+    let s = "";
+    // upper + lower arm (skin base)
+    s += `<rect x="26" y="74" width="10" height="34" rx="5" fill="${skin}"/><rect x="84" y="74" width="10" height="34" rx="5" fill="${skin}"/>`;
+    if (clothed) {
+      const len = outfit === "suit" ? 30 : 22;
+      s += `<rect x="24" y="72" width="14" height="${len}" rx="6" fill="${sleeveColor}"/><rect x="82" y="72" width="14" height="${len}" rx="6" fill="${sleeveColor}"/>`;
+    }
+    s += `<circle cx="31" cy="110" r="6" fill="${skin}"/><circle cx="89" cy="110" r="6" fill="${skin}"/>`;
+    return s;
+  }
+
+  function legs(outfit, skin, sockCol) {
+    const clothed = outfit === "kit" || outfit === "tee" || outfit === "suit";
+    let s = `<rect x="46" y="118" width="12" height="30" rx="5" fill="${skin}"/><rect x="62" y="118" width="12" height="30" rx="5" fill="${skin}"/>`;
+    if (outfit === "suit") {
+      s += `<rect x="45" y="118" width="14" height="34" rx="5" fill="#23262e"/><rect x="61" y="118" width="14" height="34" rx="5" fill="#23262e"/>`;
+      s += `<path d="M44 150 h16 a4 4 0 0 1 4 4 v3 h-22 a2 2 0 0 1 -2 -2 z" fill="#1a1a1a"/><path d="M60 150 h16 a4 4 0 0 1 4 4 v3 h-22 a2 2 0 0 1 -2 -2 z" fill="#1a1a1a"/>`;
+      return s;
+    }
+    if (clothed) {
+      s += `<rect x="45" y="138" width="14" height="14" rx="4" fill="${sockCol}"/><rect x="61" y="138" width="14" height="14" rx="4" fill="${sockCol}"/>`;
+      s += `<path d="M44 150 h16 a4 4 0 0 1 4 4 v3 h-22 a2 2 0 0 1 -2 -2 z" fill="#23272B"/><path d="M60 150 h16 a4 4 0 0 1 4 4 v3 h-22 a2 2 0 0 1 -2 -2 z" fill="#23272B"/>`;
+    } else {
+      // bare feet
+      s += `<ellipse cx="52" cy="150" rx="8" ry="3.5" fill="${skin}"/><ellipse cx="68" cy="150" rx="8" ry="3.5" fill="${skin}"/>`;
+    }
+    return s;
+  }
+
+  function torso(outfit, kit, skin, uid) {
+    const jerseyTorso = (primary, secondary, pattern, trim, withCrest) => {
+      let s = `<rect x="36" y="70" width="48" height="46" rx="11" fill="${primary}"/>`;
+      s += `<clipPath id="t${uid}"><rect x="36" y="70" width="48" height="46" rx="11"/></clipPath>`;
+      s += `<g clip-path="url(#t${uid})">${patternFills(pattern, primary, secondary)}<rect x="36" y="109" width="48" height="7" fill="${trim}"/></g>`;
+      s += `<path d="M50 70 q10 9 20 0 l-2 5 q-8 5 -16 0 z" fill="${trim}"/>`;
+      if (withCrest) {
+        s += `<rect x="62.5" y="80" width="13" height="13" rx="3" fill="#fff" opacity="0.94" stroke="${trim}" stroke-width="0.7"/><text x="69" y="90.6" font-size="10" text-anchor="middle">${kit.flag}</text>`;
+        s += `<text x="60" y="107" font-size="12" font-weight="700" text-anchor="middle" fill="${trim}" font-family="sans-serif">10</text>`;
+      }
+      return s;
+    };
+    if (outfit === "kit") return jerseyTorso(kit.primary, kit.secondary, kit.pattern, kit.trim, true);
+    if (outfit === "tee") return `<rect x="36" y="70" width="48" height="46" rx="11" fill="${kit.primary}"/><path d="M50 70 q10 9 20 0 l-2 5 q-8 5 -16 0 z" fill="${kit.trim}"/>`;
+    if (outfit === "suit") {
+      let s = `<rect x="36" y="70" width="48" height="46" rx="11" fill="#fff"/>`; // shirt
+      s += `<path d="M58 70 L62 70 L61 96 L59 96 Z" fill="${kit.primary}"/>`; // tie
+      s += `<path d="M36 70 h18 L60 92 L44 116 L36 116 Z" fill="#222630"/><path d="M84 70 h-18 L60 92 L76 116 L84 116 Z" fill="#222630"/>`; // jacket
+      s += `<path d="M54 70 L60 90 L52 78 Z" fill="#2c313d"/><path d="M66 70 L60 90 L68 78 Z" fill="#2c313d"/>`; // lapels
+      return s;
+    }
+    // bare chest / underwear: skin torso + subtle definition
+    let s = `<rect x="36" y="70" width="48" height="46" rx="13" fill="${skin}"/>`;
+    s += `<path d="M48 82 q12 6 24 0" stroke="#0000001a" stroke-width="2" fill="none"/>`; // pec line
+    s += `<path d="M60 88 v22" stroke="#0000001a" stroke-width="1.5"/>`; // center line
+    return s;
+  }
+
+  function lum(hex) {
+    const m = (hex || "#000").replace("#", "");
+    const r = parseInt(m.slice(0, 2), 16), g = parseInt(m.slice(2, 4), 16), b = parseInt(m.slice(4, 6), 16);
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  }
+  // a guaranteed-visible underwear color (skin-tone whites would vanish)
+  function vivid(kit) {
+    if (lum(kit.primary) < 0.78) return kit.primary;
+    if (lum(kit.secondary) < 0.78) return kit.secondary;
+    return "#3a3f52";
+  }
+  function bottoms(outfit, kit, skin) {
+    const shortsPath = `M40 110 h40 v14 q0 4 -4 4 h-12 l-4 -8 -4 8 h-12 q-4 0 -4 -4 z`;
+    if (outfit === "kit" || outfit === "tee") return `<path d="${shortsPath}" fill="${kit.shorts}"/>`;
+    if (outfit === "suit") return `<path d="${shortsPath}" fill="#23262e"/>`; // trouser top
+    if (outfit === "barechest") return `<path d="${shortsPath}" fill="${kit.primary}" stroke="rgba(0,0,0,.18)" stroke-width="0.8"/>`;
+    const c = vivid(kit), st = `stroke="rgba(0,0,0,.28)" stroke-width="0.9"`;
+    if (outfit === "boxers") return `<path d="M41 110 h38 v9 q0 3 -3 3 h-11 v-1 h-9 v1 h-11 q-3 0 -3 -3 z" fill="${c}" ${st}/><rect x="41" y="110" width="38" height="3" fill="#ffffff" opacity=".55"/>`;
+    if (outfit === "briefs") return `<path d="M43 110 h34 l-3 9 q-1 3 -5 3 h-2 l-4 -6 -4 6 h-2 q-4 0 -5 -3 z" fill="${c}" ${st}/><rect x="43" y="110" width="34" height="2.6" fill="#ffffff" opacity=".5"/>`;
+    if (outfit === "speedo") return `<path d="M47 110 h26 l-2 7 q-1 3 -4 3 h-2 l-4 -5 -4 5 h-2 q-3 0 -4 -3 z" fill="${c}" ${st}/>`;
+    return "";
+  }
+
+  function flairBack(av, kit) {
+    if (!av.flair.includes(FLAIR.indexOf("cape"))) return "";
+    return `<path d="M30 72 q30 -10 60 0 l-6 78 q-24 8 -48 0 z" fill="${kit.primary}" opacity="0.9"/><path d="M30 72 q30 -10 60 0 l-2 26 q-28 -8 -56 0 z" fill="${kit.secondary}" opacity="0.55"/>`;
+  }
+  function flairFront(av, kit, skin) {
+    let s = "";
+    const has = id => av.flair.includes(FLAIR.indexOf(id));
+    if (has("facepaint")) s += `<rect x="34" y="40" width="12" height="3.4" rx="1.7" fill="${kit.primary}" opacity=".85" transform="rotate(-12 40 41)"/><rect x="74" y="40" width="12" height="3.4" rx="1.7" fill="${kit.primary}" opacity=".85" transform="rotate(12 80 41)"/><rect x="34" y="46" width="12" height="3.4" rx="1.7" fill="${kit.secondary}" opacity=".8" transform="rotate(-12 40 47)"/><rect x="74" y="46" width="12" height="3.4" rx="1.7" fill="${kit.secondary}" opacity=".8" transform="rotate(12 80 47)"/>`;
+    if (has("scarf")) s += `<path d="M44 64 q16 8 32 0 l2 7 q-18 8 -36 0 z" fill="${kit.primary}"/><rect x="44" y="69" width="34" height="3" fill="${kit.secondary}"/><path d="M72 70 l8 22 l-7 2 l-6 -20 z" fill="${kit.primary}"/><rect x="71" y="86" width="9" height="4" fill="${kit.secondary}" transform="rotate(12 75 88)"/>`;
+    if (has("shades") && av.face !== "cool") s += `<g><rect x="42" y="38" width="36" height="9" rx="4" fill="#23272B"/><rect x="42" y="40" width="36" height="2" fill="#3a4a52" opacity=".6"/></g>`;
+    if (has("buckethat")) s += `<path d="M34 26 q26 -12 52 0 l3 5 q-29 -8 -58 0 z" fill="${kit.primary}"/><path d="M31 30 q29 -7 58 0 l-2 5 q-27 -6 -54 0 z" fill="${kit.secondary}"/>`;
+    if (has("pint")) s += `<g transform="translate(86 96)"><rect x="0" y="0" width="13" height="20" rx="2" fill="#f6c945" opacity=".92" stroke="#caa01f" stroke-width="1"/><rect x="0" y="0" width="13" height="6" rx="2" fill="#fff8e6"/><rect x="13" y="5" width="4" height="11" rx="2" fill="none" stroke="#caa01f" stroke-width="1.6"/></g>`;
+    if (has("foamfinger")) s += `<g transform="translate(20 92)"><path d="M0 18 h12 v-16 a3 3 0 0 1 6 0 v16 h2 v6 h-20 z" fill="#e23b3b"/><text x="9" y="15" font-size="6" text-anchor="middle" fill="#fff" font-family="sans-serif">#1</text></g>`;
+    return s;
+  }
+
+  function svg(avatar, opts) {
+    opts = opts || {};
+    const av = norm(avatar);
+    const size = opts.size || 120;
+    const uid = Math.random().toString(36).slice(2, 7);
+    const skin = SKIN[av.skin];
+    const hairC = HAIRC[av.hairC];
+    const kit = kitOf(av);
+    // resolve numeric indices -> string names the draw helpers expect
+    const outfit = OUTFIT[av.outfit], hair = HAIR[av.hair], beard = BEARD[av.beard], face = FACE[av.face];
+    const sleeve = outfit === "suit" ? "#222630" : kit.primary;
+
+    const sx = av.build === 0 ? 0.92 : av.build === 2 ? 1.1 : 1;   // slim/avg/beefy
+    const sy = av.height === 0 ? 0.92 : av.height === 2 ? 1.08 : 1; // short/avg/tall
+    const bellyFill = (outfit === "kit" || outfit === "tee") ? kit.primary : (outfit === "suit" ? "#fff" : skin);
+    const belly = av.build === 2 ? `<ellipse cx="60" cy="106" rx="25" ry="12" fill="${bellyFill}"/>` : "";
+
+    // body group (build scales X about 60); head/face/hair/flair stay normal width
+    const body =
+      flairBack(av, kit) +
+      `<g transform="translate(60 0) scale(${sx} 1) translate(-60 0)">` +
+        legs(outfit, skin, kit.socks) +
+        bottoms(outfit, kit, skin) +
+        arms(outfit, skin, sleeve) +
+        torso(outfit, kit, skin, uid) +
+        belly +
+      `</g>`;
+
+    const head =
+      `<rect x="54" y="60" width="12" height="12" rx="4" fill="${skin}"/>` +
+      hairBack(hair, hairC) +
+      `<ellipse cx="60" cy="40" rx="26" ry="27" fill="${skin}"/>` +
+      `<ellipse cx="34" cy="42" rx="4" ry="6" fill="${skin}"/><ellipse cx="86" cy="42" rx="4" ry="6" fill="${skin}"/>` +
+      beardLayer(beard, hairC) +
+      faceFeatures(face, false) +
+      hairTop(hair, hairC) +
+      flairFront(av, kit, skin);
+
+    const inner = `<g transform="translate(60 165) scale(1 ${sy}) translate(-60 -165)">${body}${head}</g>`;
+
+    return `<svg viewBox="-12 -20 144 204" width="${size}" height="${size * 204 / 144}" style="display:block;overflow:visible" role="img" aria-label="player avatar">` +
+      `<ellipse cx="60" cy="163" rx="30" ry="5" fill="rgba(16,42,48,.10)"/>${inner}</svg>`;
+  }
+
+  return { svg, norm, kitOf, OPTS, DEFAULT, teamIds };
+})();
+if (typeof module !== "undefined") module.exports = CAV;
+// ── avatar state + customizer UI (pool) ──
+let poolAvatar = null;
+function caGet(){ if(!poolAvatar) poolAvatar = CAV.norm(CAV.DEFAULT); return poolAvatar; }
+function caRerender(){ renderPool(); savePoolSoon(); }
+function caSet(k,v){ caGet()[k] = +v; poolAvatar = CAV.norm(poolAvatar); caRerender(); }
+function caTeam(v){ caGet().team = v; poolAvatar = CAV.norm(poolAvatar); caRerender(); }
+function caVar(v){ caGet().variant = v; poolAvatar = CAV.norm(poolAvatar); caRerender(); }
+function caFlair(i){ const f = caGet().flair; const k = f.indexOf(+i); if(k>=0) f.splice(k,1); else f.push(+i); poolAvatar = CAV.norm(poolAvatar); caRerender(); }
+function caRandom(){
+  const O = CAV.OPTS, ri = a => Math.floor(Math.random()*a.length), ids = CAV.teamIds();
+  poolAvatar = CAV.norm({ skin:ri(O.SKIN), hairC:ri(O.HAIRC), hair:ri(O.HAIR), beard:ri(O.BEARD), face:ri(O.FACE),
+    build:ri(O.BUILD), height:ri(O.HEIGHT), outfit:ri(O.OUTFIT), team:ids[ri(ids)],
+    variant: Math.random()<0.5?'home':'away', flair: O.FLAIR.map((_,i)=>i).filter(()=>Math.random()<0.3) });
+  caRerender();
+}
+function caChips(key,arr,cur,lm){ return arr.map((v,i)=>`<button class="ca-chip${i===cur?' on':''}" onclick="caSet('${key}',${i})">${lm?lm[v]:v}</button>`).join(''); }
+function caSwatch(key,arr,cur){ return arr.map((c,i)=>`<button class="ca-sw${i===cur?' on':''}" style="background:${c}" onclick="caSet('${key}',${i})" aria-label="${key} ${i+1}"></button>`).join(''); }
+function caFlairChips(){ const f=caGet().flair; return CAV.OPTS.FLAIR.map((v,i)=>`<button class="ca-chip${f.includes(i)?' on':''}" onclick="caFlair(${i})">${CAV.OPTS.LABEL.flair[v]}</button>`).join(''); }
+function caTeamOpts(){ const t=caGet().team; return CAV.teamIds().map(id=>{const k=CA_KITS[id]; return `<option value="${id}"${id===t?' selected':''}>${k.f} ${k.n}</option>`;}).join(''); }
+function caCustomizerHTML(){
+  const a=caGet(), O=CAV.OPTS;
+  const row=(l,inner)=>`<div class="ca-row"><span class="ca-lbl">${l}</span><div class="ca-opts">${inner}</div></div>`;
+  return `<div class="ca-editor">`
+    + `<div class="ca-side"><div class="ca-stage">${CAV.svg(a,{size:180})}</div>`
+    + `<button class="pool-mini-btn" onclick="caRandom()">🎲 Randomize</button></div>`
+    + `<div class="ca-controls">`
+      + row('Build', caChips('build',O.BUILD,a.build,O.LABEL.build))
+      + row('Height', caChips('height',O.HEIGHT,a.height,O.LABEL.height))
+      + row('Skin', caSwatch('skin',O.SKIN,a.skin))
+      + row('Hair', caChips('hair',O.HAIR,a.hair,O.LABEL.hair))
+      + row('Hair color', caSwatch('hairC',O.HAIRC,a.hairC))
+      + row('Beard', caChips('beard',O.BEARD,a.beard,O.LABEL.beard))
+      + row('Face', caChips('face',O.FACE,a.face,O.LABEL.face))
+      + row('Outfit', caChips('outfit',O.OUTFIT,a.outfit,O.LABEL.outfit))
+      + row('Team', `<select class="ca-select" onchange="caTeam(this.value)">${caTeamOpts()}</select>`
+          + `<button class="ca-chip${a.variant==='home'?' on':''}" onclick="caVar('home')">Home</button>`
+          + `<button class="ca-chip${a.variant==='away'?' on':''}" onclick="caVar('away')">Away</button>`)
+      + row('Flair', caFlairChips())
+    + `</div></div>`;
 }
 
 // ── render ──
@@ -3097,37 +3459,51 @@ function poolLeaderboardHTML(){
   const actualChamp = adv.FINAL && adv.FINAL.size ? [...adv.FINAL][0] : '';
   let rows=[];
   if(poolBoard && poolBoard.players){
-    rows=poolBoard.players.map(p=>{ const s=poolScore(p,adv,actualChamp); return { name:p.name, champion:p.champion, ...s }; });
+    rows=poolBoard.players.map(p=>{ const s=poolScore(p,adv,actualChamp); return { name:p.name, champion:p.champion, avatar:p.avatar, ...s }; });
     rows.sort((a,b)=> b.pts-a.pts || b.correct-a.correct || a.name.localeCompare(b.name));
   }
-  let html=`<div class="pool-board"><div class="pool-board-head"><h3>Leaderboard</h3>`
+  let html=`<div class="pool-board pool-board-redesign"><div class="pool-board-head"><h3>Leaderboard</h3>`
     + `<button class="pool-mini-btn" onclick="poolLoadBoard()">↻ Refresh</button></div>`;
   if(!rows.length){ return html+`<div class="pool-empty">No entries yet — be the first to lock in picks.</div></div>`; }
-  html+=`<table class="pool-lb"><thead><tr><th>#</th><th>Player</th><th>Pts</th><th>✓</th></tr></thead><tbody>`;
+  html+=`<div class="lb-list">`;
   rows.forEach((r,i)=>{
-    const me = r.name===poolName ? 'me' : '';
-    const ch = r.champion ? ` <span class="lb-champ">🏆 ${flag(r.champion)}</span>` : '';
-    html+=`<tr class="${me}"><td>${i+1}</td><td>${poolEsc(r.name)}${ch}</td><td class="lb-pts">${r.pts}</td><td>${r.correct}</td></tr>`;
+    const me = r.name===poolName ? ' me' : '';
+    const pos = i===0?'🥇':i===1?'🥈':i===2?'🥉':`<span class="lb-rank">${i+1}</span>`;
+    const ch = r.champion ? `<span class="lb-champ">🏆 ${flag(r.champion)}</span>` : '';
+    html+=`<div class="lb-row${me}"><div class="lb-pos">${pos}</div>`
+      + `<div class="lb-ava">${CAV.svg(r.avatar,{size:46})}</div>`
+      + `<div class="lb-name">${poolEsc(r.name)}${ch}</div>`
+      + `<div class="lb-score"><span class="lb-pts">${r.pts}</span><small>pts · ${r.correct}✓</small></div></div>`;
   });
-  return html + `</tbody></table><div class="pool-hint">R32 1 · R16 2 · QF 4 · SF 8 · Final 16 · 3rd 4 · Champion +${POOL_CHAMP_BONUS}. Other players' picks reveal after each kickoff.</div></div>`;
+  return html + `</div><div class="pool-hint">R32 1 · R16 2 · QF 4 · SF 8 · Final 16 · 3rd 4 · Champion +${POOL_CHAMP_BONUS}. Other players' picks reveal after each kickoff.</div></div>`;
 }
 function poolHeaderHTML(){
-  return `<div class="pool-hdr"><div class="pool-hdr-l">`
-    + `<span class="pool-you">👤 ${poolEsc(poolName)}</span>`
-    + `<span class="pool-code">code: <b>${poolEsc(poolMe)}</b> <button class="pool-mini-btn" onclick="poolCopyCode()">copy</button></span></div>`
+  const a=caGet();
+  return `<div class="pool-hdr pool-hdr-redesign">`
+    + `<div class="pool-hdr-id"><div class="pool-hdr-ava">${CAV.svg(a,{size:50})}</div>`
+      + `<div class="pool-hdr-l"><span class="pool-you">${poolEsc(poolName)}</span>`
+      + `<span class="pool-code">code: <b>${poolEsc(poolMe)}</b> <button class="pool-mini-btn" onclick="poolCopyCode()">copy</button></span></div></div>`
     + `<div class="pool-subtabs">`
-    + `<button class="pool-st ${poolSub==='bracket'?'active':''}" onclick="poolSetSub('bracket')">My Bracket</button>`
-    + `<button class="pool-st ${poolSub==='leaderboard'?'active':''}" onclick="poolSetSub('leaderboard')">Leaderboard</button></div>`
+    + `<button class="pool-st ${poolSub==='bracket'?'active':''}" onclick="poolSetSub('bracket')">Bracket</button>`
+    + `<button class="pool-st ${poolSub==='leaderboard'?'active':''}" onclick="poolSetSub('leaderboard')">Leaderboard</button>`
+    + `<button class="pool-st ${poolSub==='avatar'?'active':''}" onclick="poolSetSub('avatar')">Player</button></div>`
     + `<button class="pool-leave" onclick="poolLeave()">leave</button></div>`;
 }
 function poolJoinHTML(){
   if(poolJoinMode==='signup'){
-    return `<div class="pool-join"><h3>🔮 Join the Pool</h3>`
-      + `<p class="pool-join-sub">First time here? Enter the shared pool code, your name, and choose a personal code — that code is all you'll need to get back in later, even on a new device.</p>`
-      + `<label class="pool-field"><span>Pool code</span><input id="poolCodeInput" placeholder="shared family code" value="${poolEsc(poolPool)}"></label>`
-      + `<label class="pool-field"><span>Your name</span><input id="poolNameInput" placeholder="e.g. Kevin" value="${poolEsc(poolName)}"></label>`
-      + `<label class="pool-field"><span>Personal code <small>(your login — leave blank to auto-generate)</small></span><input id="poolMeInput" placeholder="optional" value="${poolEsc(poolMe)}"></label>`
-      + `<button class="pool-go" onclick="poolSignupSubmit()">Create my bracket</button>`
+    const a=caGet();
+    return `<div class="pool-join pool-join-wide"><h3>🔮 Join the Pool</h3>`
+      + `<p class="pool-join-sub">First time here? Enter the shared pool code, your name, and a personal code — that code is all you'll need to get back in later, even on a new device. Then build your player.</p>`
+      + `<div class="pool-join-grid">`
+        + `<div class="pool-join-ava"><div class="ca-stage sm">${CAV.svg(a,{size:150})}</div>`
+          + `<button class="pool-mini-btn" onclick="caRandom()">🎲 Randomize</button>`
+          + `<div class="pool-join-avahint">Fine-tune your player after you join.</div></div>`
+        + `<div class="pool-join-form">`
+          + `<label class="pool-field"><span>Pool code</span><input id="poolCodeInput" placeholder="shared family code" value="${poolEsc(poolPool)}"></label>`
+          + `<label class="pool-field"><span>Your name</span><input id="poolNameInput" placeholder="e.g. Kevin" value="${poolEsc(poolName)}"></label>`
+          + `<label class="pool-field"><span>Personal code <small>(your login — leave blank to auto-generate)</small></span><input id="poolMeInput" placeholder="optional" value="${poolEsc(poolMe)}"></label>`
+          + `<button class="pool-go" onclick="poolSignupSubmit()">Create my bracket</button>`
+        + `</div></div>`
       + `<div class="pool-join-note">Already signed up? <a class="pool-link" onclick="poolSetJoinMode('login')">Log in with your personal code</a></div></div>`;
   }
   return `<div class="pool-join"><h3>🔮 Knockout Prediction Pool</h3>`
@@ -3143,13 +3519,17 @@ function renderPool(){
   POOL_ADV=advancedSets();
   POOL_R32FX=r32Fixtures();
   validateBracket();
-  c.innerHTML = poolHeaderHTML() + (poolSub==='leaderboard' ? poolLeaderboardHTML() : poolBracketHTML());
+  let mid;
+  if(poolSub==='leaderboard') mid=poolLeaderboardHTML();
+  else if(poolSub==='avatar') mid=caCustomizerHTML();
+  else mid=poolBracketHTML();
+  c.innerHTML = poolHeaderHTML() + mid;
 }
 async function poolInit(){
   if(poolMe){
     try{ const r=await fetch(`${PROXY}?type=poolload&me=${encodeURIComponent(poolMe)}`);
       const d=await r.json();
-      if(d && d.entry){ poolPicks=d.entry.picks||{}; poolChampion=d.entry.champion||''; if(d.entry.name) poolName=d.entry.name; }
+      if(d && d.entry){ poolPicks=d.entry.picks||{}; poolChampion=d.entry.champion||''; if(d.entry.name) poolName=d.entry.name; poolAvatar=CAV.norm(d.entry.avatar); }
     }catch(e){}
   }
   if(typeof currentView!=='undefined' && currentView==='pool') renderPool();

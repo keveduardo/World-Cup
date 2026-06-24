@@ -133,6 +133,7 @@ export default {
           const now      = Date.now();
           const incoming = parsePicks(url.searchParams.get('picks') || '');
           const champIn  = (url.searchParams.get('champion') || '').trim();
+          const avatarRaw = url.searchParams.get('avatar');
 
           let cur = { name: '', picks: {}, champion: '' };
           let existed = false;
@@ -159,6 +160,10 @@ export default {
             // Champion is editable until the first R32 kickoff.
             if (champIn && now < championLockMs()) cur.champion = champIn.slice(0, 40);
             if (name) cur.name = name;
+            // Avatar cosmetics (not secret; small JSON of option indices).
+            if (avatarRaw && avatarRaw.length < 800) {
+              try { const av = JSON.parse(avatarRaw); if (av && typeof av === 'object' && !Array.isArray(av)) cur.avatar = av; } catch (e) {}
+            }
             cur.updatedAt = now;
 
             await env.WC_KV.put('pool_player_' + me, JSON.stringify(cur));
@@ -198,6 +203,7 @@ export default {
               name: e.name || 'Anon',
               picks: revealed,
               champion: (now >= champLock) ? (e.champion || '') : '',
+              avatar: e.avatar || null,
               updatedAt: e.updatedAt || 0,
             });
           }
