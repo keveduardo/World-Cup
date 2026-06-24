@@ -1050,6 +1050,8 @@
   .pool-name-edit { background: none; border: none; cursor: pointer; font-size: 12px; padding: 0 2px;
     opacity: .6; vertical-align: middle; line-height: 1; }
   .pool-name-edit:hover { opacity: 1; }
+  .pool-remember { background: rgba(245,197,24,.14); border: 1px solid var(--gold); border-radius: 8px;
+    padding: 8px 11px; font-size: 12.5px; line-height: 1.5; color: var(--text); margin: -4px 0 12px; }
 </style>
 </head>
 <body>
@@ -3133,9 +3135,8 @@ async function poolLoginSubmit(){
 async function poolSignupSubmit(){
   const pool=document.getElementById('poolCodeInput').value.trim();
   const name=document.getElementById('poolNameInput').value.trim();
-  let me=document.getElementById('poolMeInput').value.trim();
-  if(!pool || !name){ alert('Enter the pool code and your name.'); return; }
-  if(!me) me = name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') + '-' + Math.random().toString(36).slice(2,6);
+  const me=document.getElementById('poolMeInput').value.trim();
+  if(!pool || !name || !me){ alert('Please fill in the pool code, your name, and a personal code.'); return; }
   // make sure the personal code isn't already taken
   let chk;
   try{ const r=await fetch(`${PROXY}?type=poolload&me=${encodeURIComponent(me)}`); chk=await r.json(); }
@@ -3597,7 +3598,8 @@ function poolJoinHTML(){
         + `<div class="pool-join-form">`
           + `<label class="pool-field"><span>Pool code</span><input id="poolCodeInput" placeholder="shared family code" value="${poolEsc(poolPool)}"></label>`
           + `<label class="pool-field"><span>Your name</span><input id="poolNameInput" placeholder="e.g. Kevin" value="${poolEsc(poolName)}"></label>`
-          + `<label class="pool-field"><span>Personal code <small>(your login — leave blank to auto-generate)</small></span><input id="poolMeInput" placeholder="optional" value="${poolEsc(poolMe)}"></label>`
+          + `<label class="pool-field"><span>Personal code <small>(required — this is your login)</small></span><input id="poolMeInput" placeholder="choose a code you'll remember" value="${poolEsc(poolMe)}"></label>`
+          + `<div class="pool-remember">⚠️ <b>Write this down.</b> Your personal code is the only way back into your bracket — there's no password reset.</div>`
           + `<button class="pool-go" onclick="poolSignupSubmit()">Create my bracket</button>`
         + `</div></div>`
       + `<div class="pool-join-note">Already signed up? <a class="pool-link" onclick="poolSetJoinMode('login')">Log in with your personal code</a></div></div>`;
