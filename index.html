@@ -3221,25 +3221,28 @@ const CA_KITS = {"usa":{"f":"🇺🇸","n":"USA","h":["solid","#FFFFFF","#0A2A5E
 const CAV = (function () {
   const SKIN   = ["#F8D7C0", "#F1C39E", "#D99E73", "#B97A4E", "#8C5A33", "#5E3A1E"];
   const HAIRC  = ["#2B2620", "#5B3A1E", "#A6662E", "#E0B23C", "#BFC2C7", "#EDE6D6"];
-  const HAIR   = ["bald", "buzz", "short", "receding", "mop", "manbun", "long", "mohawk"];
+  // APPEND-ONLY (saved avatars store indices — never reorder/remove).
+  const HAIR   = ["bald", "buzz", "short", "receding", "mop", "manbun", "long", "mohawk", "ponytail", "pigtails", "bun", "afro"];
   const BEARD  = ["none", "stubble", "mustache", "goatee", "full"];
   const FACE   = ["smile", "grin", "cool", "shout"];
   const BUILD  = ["slim", "average", "beefy"];
   const HEIGHT = ["short", "average", "tall"];
-  const OUTFIT = ["kit", "tee", "suit", "barechest", "boxers", "briefs", "speedo"];
-  const FLAIR  = ["facepaint", "shades", "scarf", "buckethat", "pint", "foamfinger", "cape"];
+  const OUTFIT = ["kit", "tee", "suit", "barechest", "boxers", "briefs", "speedo", "dress", "banana", "dino", "hero", "hotdog"];
+  const BODY   = ["masc", "fem"];
+  const FLAIR  = ["facepaint", "shades", "scarf", "buckethat", "pint", "foamfinger", "cape", "partyhat", "flowercrown", "propeller", "devilhalo", "jester", "vuvuzela", "flamingo", "churro", "maracas"];
   const LABEL = {
-    hair: { bald: "Bald", buzz: "Buzz", short: "Short", receding: "Receding", mop: "Mop", manbun: "Man-bun", long: "Long", mohawk: "Mohawk" },
+    hair: { bald: "Bald", buzz: "Buzz", short: "Short", receding: "Receding", mop: "Mop", manbun: "Man-bun", long: "Long", mohawk: "Mohawk", ponytail: "Ponytail", pigtails: "Pigtails", bun: "Top bun", afro: "Afro" },
     beard: { none: "Clean", stubble: "Stubble", mustache: "Mustache", goatee: "Goatee", full: "Full beard" },
     face: { smile: "Smile", grin: "Grin", cool: "Cool", shout: "Shout" },
     build: { slim: "Slim", average: "Average", beefy: "Beefy" },
     height: { short: "Short", average: "Average", tall: "Tall" },
-    outfit: { kit: "Team kit", tee: "T-shirt", suit: "Suit", barechest: "Bare chest", boxers: "Boxer briefs", briefs: "Briefs", speedo: "Speedo" },
-    flair: { facepaint: "Face paint", shades: "Sunglasses", scarf: "Scarf", buckethat: "Bucket hat", pint: "Pint", foamfinger: "Foam finger", cape: "Flag cape" },
+    outfit: { kit: "Team kit", tee: "T-shirt", suit: "Suit", barechest: "Bare chest", boxers: "Boxer briefs", briefs: "Briefs", speedo: "Speedo", dress: "Dress", banana: "Banana suit", dino: "Dino onesie", hero: "Superhero", hotdog: "Hot dog" },
+    body: { masc: "Masc", fem: "Fem" },
+    flair: { facepaint: "Face paint", shades: "Sunglasses", scarf: "Scarf", buckethat: "Bucket hat", pint: "Pint", foamfinger: "Foam finger", cape: "Flag cape", partyhat: "Party hat", flowercrown: "Flower crown", propeller: "Propeller cap", devilhalo: "Horns & halo", jester: "Jester hat", vuvuzela: "Vuvuzela", flamingo: "Floaty flamingo", churro: "Churro", maracas: "Maracas" },
   };
-  const OPTS = { SKIN, HAIRC, HAIR, BEARD, FACE, BUILD, HEIGHT, OUTFIT, FLAIR, LABEL };
+  const OPTS = { SKIN, HAIRC, HAIR, BEARD, FACE, BUILD, HEIGHT, OUTFIT, BODY, FLAIR, LABEL };
 
-  const DEFAULT = { v: 1, skin: 1, hairC: 0, hair: 2, beard: 0, face: 0, build: 1, height: 1, outfit: 0, team: "bra", variant: "home", flair: [] };
+  const DEFAULT = { v: 1, skin: 1, hairC: 0, hair: 2, beard: 0, face: 0, build: 1, height: 1, outfit: 0, body: 0, team: "bra", variant: "home", flair: [] };
   const teamIds = () => Object.keys(CA_KITS);
 
   function norm(a) {
@@ -3249,7 +3252,7 @@ const CAV = (function () {
       v: 1,
       skin: cl(a.skin, SKIN), hairC: cl(a.hairC, HAIRC), hair: cl(a.hair, HAIR),
       beard: cl(a.beard, BEARD), face: cl(a.face, FACE), build: cl(a.build, BUILD),
-      height: cl(a.height, HEIGHT), outfit: cl(a.outfit, OUTFIT),
+      height: cl(a.height, HEIGHT), outfit: cl(a.outfit, OUTFIT), body: cl(a.body, BODY),
       team: CA_KITS[a.team] ? a.team : DEFAULT.team,
       variant: a.variant === "away" ? "away" : "home",
       flair: Array.isArray(a.flair) ? [...new Set(a.flair.filter(i => i >= 0 && i < FLAIR.length))] : [],
@@ -3283,6 +3286,9 @@ const CAV = (function () {
   function hairBack(style, c) {
     if (style === "long") return `<g fill="${c}"><path d="M32 42 q-3 22 0 38 q1 6 7 5 q4 -1 3 -7 q-3 -16 1 -32 z"/><path d="M88 42 q3 22 0 38 q-1 6 -7 5 q-4 -1 -3 -7 q3 -16 -1 -32 z"/></g>`;
     if (style === "mop") return `<g fill="${c}"><path d="M31 40 q-3 16 -1 28 q3 3 6 0 q-2 -14 0 -26 z"/><path d="M89 40 q3 16 1 28 q-3 3 -6 0 q2 -14 0 -26 z"/></g>`;
+    if (style === "ponytail") return `<g fill="${c}"><path d="M72 22 q18 6 16 40 q-1 14 -9 18 q-6 -2 -3 -11 q7 -22 -10 -41 z"/><ellipse cx="74" cy="22" rx="7" ry="5"/></g>`;
+    if (style === "pigtails") return `<g fill="${c}"><ellipse cx="26" cy="58" rx="9" ry="16"/><ellipse cx="94" cy="58" rx="9" ry="16"/><circle cx="30" cy="40" r="5"/><circle cx="90" cy="40" r="5"/></g>`;
+    if (style === "afro") return `<circle cx="60" cy="38" r="33" fill="${c}"/>`;
     return "";
   }
   function hairTop(style, c) {
@@ -3295,6 +3301,10 @@ const CAV = (function () {
       case "manbun":   return `<g fill="${c}"><circle cx="60" cy="8" r="8"/><path d="M34 38 q0 -30 26 -30 q26 0 26 30 q-10 -12 -26 -12 q-16 0 -26 12 z"/></g>`;
       case "long":     return `<path d="M33 41 q0 -33 27 -33 q27 0 27 33 q-11 -13 -27 -13 q-16 0 -27 13 z" fill="${c}"/>`;
       case "mohawk":   return `<g fill="${c}"><path d="M40 24 q4 -6 20 -6 q16 0 20 6 q-10 -3 -20 -3 q-10 0 -20 3 z" opacity="0.35"/><path d="M53 4 q7 -4 14 0 l-2 26 h-10 z"/></g>`;
+      case "ponytail": return `<g fill="${c}"><path d="M33 40 q0 -32 27 -32 q27 0 27 32 q-11 -12 -27 -12 q-16 0 -27 12 z"/><ellipse cx="73" cy="22" rx="6" ry="4" fill="#0003"/></g>`;
+      case "pigtails": return `<path d="M33 39 q0 -31 27 -31 q27 0 27 31 q-11 -12 -27 -12 q-16 0 -27 12 z" fill="${c}"/><path d="M60 8 v22" stroke="#0003" stroke-width="2"/>`;
+      case "bun":      return `<g fill="${c}"><circle cx="60" cy="5" r="10"/><circle cx="60" cy="5" r="10" fill="#0002"/><circle cx="60" cy="5" r="6" fill="${c}"/><path d="M34 38 q0 -31 26 -31 q26 0 26 31 q-10 -12 -26 -12 q-16 0 -26 12 z"/></g>`;
+      case "afro":     return `<g fill="${c}"><circle cx="42" cy="20" r="14"/><circle cx="60" cy="11" r="16"/><circle cx="78" cy="20" r="14"/><circle cx="33" cy="34" r="12"/><circle cx="87" cy="34" r="12"/></g>`;
       default:         return "";
     }
   }
@@ -3324,32 +3334,39 @@ const CAV = (function () {
   }
 
   // arms: upper sleeve color depends on outfit; forearm + hand always skin
+  const SLEEVED = ["kit", "tee", "suit", "banana", "dino", "hero"];   // colored sleeves
   function arms(outfit, skin, sleeveColor) {
-    const clothed = outfit === "kit" || outfit === "tee" || outfit === "suit";
+    const clothed = SLEEVED.includes(outfit);
     let s = "";
     // upper + lower arm (skin base)
     s += `<rect x="26" y="74" width="10" height="34" rx="5" fill="${skin}"/><rect x="84" y="74" width="10" height="34" rx="5" fill="${skin}"/>`;
     if (clothed) {
-      const len = outfit === "suit" ? 30 : 22;
+      const longSleeve = outfit === "suit" || outfit === "banana" || outfit === "dino" || outfit === "hero";
+      const len = longSleeve ? 30 : 22;
       s += `<rect x="24" y="72" width="14" height="${len}" rx="6" fill="${sleeveColor}"/><rect x="82" y="72" width="14" height="${len}" rx="6" fill="${sleeveColor}"/>`;
     }
     s += `<circle cx="31" cy="110" r="6" fill="${skin}"/><circle cx="89" cy="110" r="6" fill="${skin}"/>`;
     return s;
   }
 
-  function legs(outfit, skin, sockCol) {
-    const clothed = outfit === "kit" || outfit === "tee" || outfit === "suit";
+  function legs(outfit, skin, sockCol, kit) {
+    const shoe = (col) => `<path d="M44 150 h16 a4 4 0 0 1 4 4 v3 h-22 a2 2 0 0 1 -2 -2 z" fill="${col}"/><path d="M60 150 h16 a4 4 0 0 1 4 4 v3 h-22 a2 2 0 0 1 -2 -2 z" fill="${col}"/>`;
     let s = `<rect x="46" y="118" width="12" height="30" rx="5" fill="${skin}"/><rect x="62" y="118" width="12" height="30" rx="5" fill="${skin}"/>`;
-    if (outfit === "suit") {
-      s += `<rect x="45" y="118" width="14" height="34" rx="5" fill="#23262e"/><rect x="61" y="118" width="14" height="34" rx="5" fill="#23262e"/>`;
-      s += `<path d="M44 150 h16 a4 4 0 0 1 4 4 v3 h-22 a2 2 0 0 1 -2 -2 z" fill="#1a1a1a"/><path d="M60 150 h16 a4 4 0 0 1 4 4 v3 h-22 a2 2 0 0 1 -2 -2 z" fill="#1a1a1a"/>`;
+    // full-length legwear (trousers / onesie legs / hero tights)
+    const legCol = outfit === "suit" ? "#23262e" : outfit === "banana" ? "#F6D33C"
+                 : outfit === "dino" ? "#4CAF50" : outfit === "hero" ? (kit ? kit.primary : "#23262e") : null;
+    if (legCol) {
+      s += `<rect x="45" y="118" width="14" height="34" rx="5" fill="${legCol}"/><rect x="61" y="118" width="14" height="34" rx="5" fill="${legCol}"/>`;
+      s += shoe(outfit === "hero" ? (kit ? kit.secondary : "#1a1a1a") : "#1a1a1a");
       return s;
     }
-    if (clothed) {
+    if (outfit === "kit" || outfit === "tee") {
       s += `<rect x="45" y="138" width="14" height="14" rx="4" fill="${sockCol}"/><rect x="61" y="138" width="14" height="14" rx="4" fill="${sockCol}"/>`;
-      s += `<path d="M44 150 h16 a4 4 0 0 1 4 4 v3 h-22 a2 2 0 0 1 -2 -2 z" fill="#23272B"/><path d="M60 150 h16 a4 4 0 0 1 4 4 v3 h-22 a2 2 0 0 1 -2 -2 z" fill="#23272B"/>`;
+      s += shoe("#23272B");
+    } else if (outfit === "dress") {
+      s += shoe("#23272B");   // bare legs, simple flats
     } else {
-      // bare feet
+      // bare feet (bare chest, underwear, hot dog)
       s += `<ellipse cx="52" cy="150" rx="8" ry="3.5" fill="${skin}"/><ellipse cx="68" cy="150" rx="8" ry="3.5" fill="${skin}"/>`;
     }
     return s;
@@ -3376,6 +3393,37 @@ const CAV = (function () {
       s += `<path d="M54 70 L60 90 L52 78 Z" fill="#2c313d"/><path d="M66 70 L60 90 L68 78 Z" fill="#2c313d"/>`; // lapels
       return s;
     }
+    if (outfit === "dress") {
+      let s = `<rect x="36" y="70" width="48" height="46" rx="11" fill="${kit.primary}"/>`;
+      s += `<path d="M50 70 q10 9 20 0 l-2 6 q-8 5 -16 0 z" fill="${kit.trim}"/>`;              // neckline
+      s += `<rect x="36" y="103" width="48" height="4" fill="${kit.secondary}" opacity=".6"/>`;  // waist band
+      return s;
+    }
+    if (outfit === "banana") {
+      let s = `<rect x="33" y="68" width="54" height="50" rx="24" fill="#F6D33C"/>`;
+      s += `<path d="M42 74 q18 -7 36 0" stroke="#e3bb1e" stroke-width="2.4" fill="none"/>`;
+      s += `<path d="M40 96 q20 10 40 0" stroke="#cf9f16" stroke-width="2" fill="none" opacity=".5"/>`;
+      return s;
+    }
+    if (outfit === "dino") {
+      let s = `<rect x="35" y="70" width="50" height="46" rx="13" fill="#4CAF50"/>`;
+      s += `<ellipse cx="60" cy="99" rx="15" ry="13" fill="#A5D6A7"/>`;                          // belly patch
+      s += `<path d="M48 84 q12 5 24 0" stroke="#2e7d32" stroke-width="1.6" fill="none" opacity=".6"/>`;
+      return s;
+    }
+    if (outfit === "hero") {
+      let s = `<rect x="36" y="70" width="48" height="46" rx="11" fill="${kit.primary}"/>`;
+      s += `<path d="M50 70 q10 9 20 0 l-2 5 q-8 5 -16 0 z" fill="${kit.secondary}"/>`;
+      s += `<path d="M60 80 l9 7 -9 7 -9 -7 z" fill="${kit.secondary}"/>`;                        // chest emblem
+      s += `<rect x="36" y="108" width="48" height="6" fill="${kit.trim}"/>`;                     // belt
+      return s;
+    }
+    if (outfit === "hotdog") {
+      let s = `<rect x="34" y="70" width="52" height="46" rx="20" fill="#E8C27A"/>`;              // bun
+      s += `<rect x="44" y="74" width="32" height="38" rx="15" fill="#C0431F"/>`;                 // sausage
+      s += `<path d="M50 80 q10 6 20 0 M50 90 q10 6 20 0 M50 100 q10 6 20 0" stroke="#F4C430" stroke-width="3" fill="none" stroke-linecap="round"/>`; // mustard
+      return s;
+    }
     // bare chest / underwear: skin torso + subtle definition
     let s = `<rect x="36" y="70" width="48" height="46" rx="13" fill="${skin}"/>`;
     s += `<path d="M48 82 q12 6 24 0" stroke="#0000001a" stroke-width="2" fill="none"/>`; // pec line
@@ -3399,6 +3447,11 @@ const CAV = (function () {
     if (outfit === "kit" || outfit === "tee") return `<path d="${shortsPath}" fill="${kit.shorts}"/>`;
     if (outfit === "suit") return `<path d="${shortsPath}" fill="#23262e"/>`; // trouser top
     if (outfit === "barechest") return `<path d="${shortsPath}" fill="${kit.primary}" stroke="rgba(0,0,0,.18)" stroke-width="0.8"/>`;
+    if (outfit === "banana") return `<path d="${shortsPath}" fill="#F6D33C"/>`;
+    if (outfit === "dino")   return `<path d="${shortsPath}" fill="#4CAF50"/>`;
+    if (outfit === "hero")   return `<path d="${shortsPath}" fill="${kit.secondary}"/>`;
+    if (outfit === "hotdog") return `<path d="${shortsPath}" fill="#E8C27A"/>`;
+    if (outfit === "dress")  return `<path d="M38 108 L82 108 L94 150 q-34 10 -68 0 z" fill="${kit.primary}"/><path d="M40 108 L80 108 L84 122 q-24 6 -48 0 z" fill="${kit.secondary}" opacity=".4"/>`; // skirt flare
     const c = vivid(kit), st = `stroke="rgba(0,0,0,.28)" stroke-width="0.9"`;
     if (outfit === "boxers") return `<path d="M41 110 h38 v9 q0 3 -3 3 h-11 v-1 h-9 v1 h-11 q-3 0 -3 -3 z" fill="${c}" ${st}/><rect x="41" y="110" width="38" height="3" fill="#ffffff" opacity=".55"/>`;
     if (outfit === "briefs") return `<path d="M43 110 h34 l-3 9 q-1 3 -5 3 h-2 l-4 -6 -4 6 h-2 q-4 0 -5 -3 z" fill="${c}" ${st}/><rect x="43" y="110" width="34" height="2.6" fill="#ffffff" opacity=".5"/>`;
@@ -3419,6 +3472,43 @@ const CAV = (function () {
     if (has("buckethat")) s += `<path d="M34 26 q26 -12 52 0 l3 5 q-29 -8 -58 0 z" fill="${kit.primary}"/><path d="M31 30 q29 -7 58 0 l-2 5 q-27 -6 -54 0 z" fill="${kit.secondary}"/>`;
     if (has("pint")) s += `<g transform="translate(86 96)"><rect x="0" y="0" width="13" height="20" rx="2" fill="#f6c945" opacity=".92" stroke="#caa01f" stroke-width="1"/><rect x="0" y="0" width="13" height="6" rx="2" fill="#fff8e6"/><rect x="13" y="5" width="4" height="11" rx="2" fill="none" stroke="#caa01f" stroke-width="1.6"/></g>`;
     if (has("foamfinger")) s += `<g transform="translate(20 92)"><path d="M0 18 h12 v-16 a3 3 0 0 1 6 0 v16 h2 v6 h-20 z" fill="#e23b3b"/><text x="9" y="15" font-size="6" text-anchor="middle" fill="#fff" font-family="sans-serif">#1</text></g>`;
+    // ── silly headwear ──
+    if (has("partyhat")) s += `<g><path d="M60 -20 L50 14 H70 Z" fill="${kit.primary}"/><path d="M55 -2 H67 M52 8 H70" stroke="${kit.secondary}" stroke-width="2.4"/><circle cx="60" cy="-20" r="4" fill="${kit.secondary}"/></g>`;
+    if (has("flowercrown")) { const fc = ["#FF6FA5","#FFD23F","#7ED957","#5BC0EB","#C77DFF"]; let g = "<g>"; for (let i = 0; i < 5; i++){ const x = 38 + i * 11; g += `<circle cx="${x}" cy="13" r="4.6" fill="${fc[i % 5]}"/><circle cx="${x}" cy="13" r="1.7" fill="#fff"/>`; } s += g + "</g>"; }
+    if (has("propeller")) s += `<g><path d="M40 18 q20 -10 40 0 l-2 6 q-18 -8 -36 0 z" fill="${kit.primary}"/><rect x="58" y="0" width="4" height="9" fill="#888"/><path d="M60 1 l-17 -4 17 -2 z" fill="#e23b3b"/><path d="M60 1 l17 4 -17 2 z" fill="#3b7be2"/><circle cx="60" cy="1" r="2.6" fill="#444"/></g>`;
+    if (has("devilhalo")) s += `<g><path d="M41 16 q-7 -9 -3 -19 q7 6 9 17 z" fill="#c0392b"/><path d="M79 16 q7 -9 3 -19 q-7 6 -9 17 z" fill="#c0392b"/><ellipse cx="60" cy="-14" rx="14" ry="4" fill="none" stroke="#FFD23F" stroke-width="3"/></g>`;
+    if (has("jester")) s += `<g><path d="M40 18 q20 -10 40 0 l-1 5 q-19 -8 -38 0 z" fill="${kit.primary}"/><path d="M43 14 q-13 -9 -23 -4 q9 3 13 12 z" fill="${kit.secondary}"/><path d="M77 14 q13 -9 23 -4 q-9 3 -13 12 z" fill="${kit.secondary}"/><path d="M60 11 q-2 -14 0 -19 q5 9 3 17 z" fill="${kit.secondary}"/><circle cx="19" cy="11" r="3" fill="#FFD23F"/><circle cx="101" cy="11" r="3" fill="#FFD23F"/><circle cx="62" cy="-7" r="3" fill="#FFD23F"/></g>`;
+    // ── props ──
+    if (has("vuvuzela")) s += `<g transform="rotate(20 76 60)"><rect x="76" y="56" width="24" height="6" rx="2" fill="#1f9e57"/><path d="M98 64 l16 -9 0 20 z" fill="#16a34a"/></g>`;
+    if (has("flamingo")) s += `<g><ellipse cx="60" cy="119" rx="34" ry="11" fill="none" stroke="#FF6FA5" stroke-width="9"/><ellipse cx="60" cy="119" rx="34" ry="11" fill="none" stroke="#ff9cc2" stroke-width="3.5"/><g transform="translate(88 98)"><path d="M0 22 q-5 -16 3 -23 q7 5 3 15 q6 -5 9 0 q-3 6 -11 9 z" fill="#FF6FA5"/><circle cx="9" cy="-7" r="2" fill="#111"/><path d="M11 -8 l7 -1 -6 4 z" fill="#f4a300"/></g></g>`;
+    if (has("churro")) s += `<g transform="translate(86 90) rotate(20)"><rect x="0" y="0" width="6" height="27" rx="3" fill="#b5651d"/><path d="M1 3 h4 M1 9 h4 M1 15 h4 M1 21 h4" stroke="#7a3f12" stroke-width="1"/></g>`;
+    if (has("maracas")) s += `<g fill="#d98a2b"><g transform="translate(22 96) rotate(-18)"><ellipse cx="3" cy="0" rx="6" ry="8"/><rect x="1" y="6" width="4" height="13" rx="2" fill="#8a5a22"/></g><g transform="translate(92 96) rotate(18)"><ellipse cx="3" cy="0" rx="6" ry="8"/><rect x="1" y="6" width="4" height="13" rx="2" fill="#8a5a22"/></g></g>`;
+    return s;
+  }
+  // costume bits behind the body (tail, cape) and on the head (stem, spikes, mask)
+  function outfitBack(outfit, kit) {
+    if (outfit === "dino") return `<path d="M84 112 q22 4 24 26 q-1 6 -6 6 q-4 0 -4 -5 q0 -16 -16 -19 z" fill="#3f9a3f"/>`;
+    if (outfit === "hero") return `<path d="M34 70 q26 -8 52 0 l-8 74 q-18 6 -36 0 z" fill="${kit.secondary}" opacity="0.92"/>`;
+    return "";
+  }
+  function outfitHead(outfit, kit) {
+    if (outfit === "banana") return `<g fill="#F6D33C"><path d="M36 20 q24 -20 48 0 q-3 7 -7 7 q-17 -11 -34 0 q-4 0 -7 -7 z"/><path d="M34 18 q-5 16 0 30 q5 -2 6 -9 q-4 -11 0 -20 z"/><path d="M86 18 q5 16 0 30 q-5 -2 -6 -9 q4 -11 0 -20 z"/><path d="M58 -2 q3 -8 7 -4 q-1 7 -4 10 z" fill="#6b4f2a"/></g>`;
+    if (outfit === "dino")   return `<g fill="#2e7d32"><path d="M52 6 l4 9 h-8 z"/><path d="M60 2 l4 11 h-8 z"/><path d="M68 6 l4 9 h-8 z"/></g>`;
+    if (outfit === "hero")   return `<path d="M38 37 q22 -7 44 0 l-2 6 q-20 -6 -40 0 z" fill="${kit.primary}"/>`;
+    return "";
+  }
+  // female figure: bust + hips, tinted to the outfit (bikini/sports top when bare)
+  function femShape(av, outfit, tint, kit) {
+    if (av.body !== 1) return "";
+    const bare = outfit === "barechest" || outfit === "boxers" || outfit === "briefs" || outfit === "speedo";
+    let s = `<path d="M40 84 q9 11 20 7 q11 4 20 -7 q-1 14 -20 14 q-19 0 -20 -14 z" fill="${tint}"/>`;
+    s += `<path d="M60 90 v9" stroke="#0002" stroke-width="1.4"/>`;
+    if (bare) {
+      const c = vivid(kit);
+      s += `<path d="M40 85 q9 10 20 6 q11 4 20 -6 q-2 10 -20 10 q-18 0 -20 -10 z" fill="${c}" stroke="rgba(0,0,0,.25)" stroke-width="0.8"/>`;
+      s += `<rect x="40" y="84" width="40" height="3" fill="#fff" opacity=".4"/>`;
+    }
+    s += `<path d="M36 106 q-7 5 -5 16 q5 -1 8 -9 z" fill="${tint}"/><path d="M84 106 q7 5 5 16 q-5 -1 -8 -9 z" fill="${tint}"/>`;
     return s;
   }
 
@@ -3432,22 +3522,27 @@ const CAV = (function () {
     const kit = kitOf(av);
     // resolve numeric indices -> string names the draw helpers expect
     const outfit = OUTFIT[av.outfit], hair = HAIR[av.hair], beard = BEARD[av.beard], face = FACE[av.face];
-    const sleeve = outfit === "suit" ? "#222630" : kit.primary;
+    // sleeve + torso tint per outfit (costumes carry their own colors)
+    const sleeveMap = { suit: "#222630", banana: "#F6D33C", dino: "#4CAF50", hero: kit.primary };
+    const sleeve = sleeveMap[outfit] || kit.primary;
+    const tintMap = { suit: "#fff", dress: kit.primary, banana: "#F6D33C", dino: "#4CAF50", hero: kit.primary, hotdog: "#E8C27A", kit: kit.primary, tee: kit.primary };
+    const torsoTint = tintMap[outfit] || skin;
 
     const sx = av.build === 0 ? 0.92 : av.build === 2 ? 1.1 : 1;   // slim/avg/beefy
     const sy = av.height === 0 ? 0.92 : av.height === 2 ? 1.08 : 1; // short/avg/tall
-    const bellyFill = (outfit === "kit" || outfit === "tee") ? kit.primary : (outfit === "suit" ? "#fff" : skin);
-    const belly = av.build === 2 ? `<ellipse cx="60" cy="106" rx="25" ry="12" fill="${bellyFill}"/>` : "";
+    const belly = av.build === 2 ? `<ellipse cx="60" cy="106" rx="25" ry="12" fill="${torsoTint}"/>` : "";
 
     // body group (build scales X about 60); head/face/hair/flair stay normal width
     const body =
       flairBack(av, kit) +
+      outfitBack(outfit, kit) +
       `<g transform="translate(60 0) scale(${sx} 1) translate(-60 0)">` +
-        legs(outfit, skin, kit.socks) +
+        legs(outfit, skin, kit.socks, kit) +
         bottoms(outfit, kit, skin) +
         arms(outfit, skin, sleeve) +
         torso(outfit, kit, skin, uid) +
         belly +
+        femShape(av, outfit, torsoTint, kit) +
       `</g>`;
 
     const head =
@@ -3458,6 +3553,7 @@ const CAV = (function () {
       beardLayer(beard, hairC) +
       faceFeatures(face, false) +
       hairTop(hair, hairC) +
+      outfitHead(outfit, kit) +
       flairFront(av, kit, skin);
 
     const inner = `<g transform="translate(60 165) scale(1 ${sy}) translate(-60 -165)">${body}${head}</g>`;
@@ -3480,7 +3576,7 @@ function caFlair(i){ const f = caGet().flair; const k = f.indexOf(+i); if(k>=0) 
 function caRandom(){
   const O = CAV.OPTS, ri = a => Math.floor(Math.random()*a.length), ids = CAV.teamIds();
   poolAvatar = CAV.norm({ skin:ri(O.SKIN), hairC:ri(O.HAIRC), hair:ri(O.HAIR), beard:ri(O.BEARD), face:ri(O.FACE),
-    build:ri(O.BUILD), height:ri(O.HEIGHT), outfit:ri(O.OUTFIT), team:ids[ri(ids)],
+    build:ri(O.BUILD), height:ri(O.HEIGHT), outfit:ri(O.OUTFIT), body:ri(O.BODY), team:ids[ri(ids)],
     variant: Math.random()<0.5?'home':'away', flair: O.FLAIR.map((_,i)=>i).filter(()=>Math.random()<0.3) });
   caRerender();
 }
@@ -3495,6 +3591,7 @@ function caCustomizerHTML(){
     + `<div class="ca-side"><div class="ca-stage">${CAV.svg(a,{size:180})}</div>`
     + `<button class="pool-mini-btn" onclick="caRandom()">🎲 Randomize</button></div>`
     + `<div class="ca-controls">`
+      + row('Body', caChips('body',O.BODY,a.body,O.LABEL.body))
       + row('Build', caChips('build',O.BUILD,a.build,O.LABEL.build))
       + row('Height', caChips('height',O.HEIGHT,a.height,O.LABEL.height))
       + row('Skin', caSwatch('skin',O.SKIN,a.skin))
