@@ -3131,9 +3131,12 @@ function poolEditName(){
   poolLoadBoard();   // refresh leaderboard so the new name shows there too
 }
 function poolLeave(){
-  flushPoolSave();
+  // Sign out on THIS browser only — server data is untouched, so logging back in
+  // with the personal code restores everything. Lets a household share a device.
+  if(!confirm('Sign out of the pool on this browser?\n\nYour picks are saved — log back in anytime with your personal code.')) return;
+  flushPoolSave();   // flush any pending save for the current person first
   ['wc_pool_pool','wc_pool_me','wc_pool_name'].forEach(k=>localStorage.removeItem(k));
-  poolPool=''; poolMe=''; poolName=''; poolPicks={}; poolChampion=''; poolBoard=null; poolSub='bracket'; poolJoinMode='login';
+  poolPool=''; poolMe=''; poolName=''; poolPicks={}; poolChampion=''; poolBoard=null; poolAvatar=null; poolSub='bracket'; poolJoinMode='login';
   renderPool();
 }
 function savePoolSoon(ms){ clearTimeout(_poolSaveT); _poolSaveT=setTimeout(savePool, ms||700); }
@@ -3735,7 +3738,7 @@ function poolHeaderHTML(){
     + `<button class="pool-st ${poolSub==='bracket'?'active':''}" onclick="poolSetSub('bracket')">Bracket</button>`
     + `<button class="pool-st ${poolSub==='leaderboard'?'active':''}" onclick="poolSetSub('leaderboard')">Leaderboard</button>`
     + `<button class="pool-st pool-st-player ${poolSub==='avatar'?'active':''}" onclick="poolSetSub('avatar')">🎨 Player</button></div>`
-    + `<button class="pool-leave" onclick="poolLeave()">leave</button></div>`;
+    + `<button class="pool-leave" onclick="poolLeave()" title="Sign out on this browser — your picks stay saved">Sign out</button></div>`;
 }
 function poolJoinHTML(){
   if(poolJoinMode==='signup'){
