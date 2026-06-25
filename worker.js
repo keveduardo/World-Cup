@@ -17,9 +17,11 @@
  *
  * Requires one KV namespace binding named WC_KV (caching + favorites + pool).
  * Set FOOTBALL_API_KEY as a secret/variable.
- * POOL_CODE is the shared code friends/family enter to join the pool. It defaults
- *   to 'bubblers' below; override it with a POOL_CODE variable to change it without
- *   editing this file.
+ * Pool join codes: each code is a SEPARATE pool with its own leaderboard. A player
+ *   belongs to whichever code they signed up with (stored as `pool` on their entry;
+ *   legacy entries with no `pool` belong to 'bubblers'). Valid codes default to
+ *   'bubblers,family'; override the set with a comma-separated POOL_CODES variable
+ *   (or POOL_CODE for just the primary) without editing this file.
  */
 
 const BASE_URL = 'https://api.football-data.org/v4';
@@ -85,6 +87,15 @@ export default {
     const url = new URL(request.url);
     const type = url.searchParams.get('type') || 'matches';
     const POOL_CODE = (env.POOL_CODE || 'bubblers');
+    // Each join code is its own separate pool with its own leaderboard. A player
+    // belongs to whichever code they signed up with (stored on their entry).
+    // Legacy entries have no `pool` field → they belong to POOL_CODE ('bubblers').
+    // Override the full set with a comma-separated POOL_CODES var if needed.
+    const POOL_CODES = String(env.POOL_CODES || (POOL_CODE + ',family'))
+      .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    const normPool  = (c) => String(c || '').trim().toLowerCase();
+    const validPool = (c) => POOL_CODES.includes(normPool(c));
+    const poolOf    = (e) => normPool((e && e.pool) || POOL_CODE);  // legacy → bubblers
     // Pool admin (remove members). Set as a Worker SECRET: `wrangler secret put
     // POOL_ADMIN_CODE`. Never put it in this repo or index.html. If unset, all
     // admin features are disabled (fail closed).
@@ -127,6 +138,7 @@ export default {
           const raw = await env.WC_KV.get('pool_player_' + me);
           if (raw) { try { entry = JSON.parse(raw); } catch {} }
         }
+        if (entry) entry.pool = poolOf(entry);   // normalize (legacy → bubblers)
         payload = { ok: true, now: Date.now(), championLock: championLockMs(), entry };
 
       } else if (type === 'poolsave') {
@@ -146,11 +158,15 @@ export default {
           const raw = await env.WC_KV.get('pool_player_' + me);
           if (raw) { try { cur = Object.assign(cur, JSON.parse(raw)); existed = true; } catch {} }
 
-          // Creating a NEW entry requires the shared pool code. Existing members
-          // (their entry already exists) can save with just their personal code.
-          if (!existed && pool !== POOL_CODE) {
+          // Creating a NEW entry requires a valid join code; that code becomes the
+          // player's pool. Existing members (entry already exists) save with just
+          // their personal code and keep whatever pool they joined with.
+          if (!existed && !validPool(pool)) {
             payload = { error: 'bad pool code' };
           } else {
+            // Stamp the pool: new entries take the join code; legacy/existing
+            // entries without a pool default to POOL_CODE ('bubblers').
+            cur.pool = existed ? poolOf(cur) : normPool(pool);
             cur.picks = cur.picks || {};
 
             // Apply incoming picks ONLY for matches that haven't kicked off yet.
@@ -180,13 +196,14 @@ export default {
       } else if (type === 'poolboard') {
         const pool = (url.searchParams.get('pool') || '').trim();
         const me   = (url.searchParams.get('me')   || '').trim();
-        // Viewable by anyone with the pool code, or any existing member (by code).
-        let allowed = (pool === POOL_CODE);
-        if (!allowed && me) {
+        // Which pool's board to show: a valid join code names its pool; otherwise
+        // a logged-in member sees their OWN pool. Each pool is fully separate.
+        let boardPool = validPool(pool) ? normPool(pool) : null;
+        if (!boardPool && me) {
           const meRaw = await env.WC_KV.get('pool_player_' + me);
-          if (meRaw) allowed = true;
+          if (meRaw) { try { boardPool = poolOf(JSON.parse(meRaw)); } catch {} }
         }
-        if (!allowed) {
+        if (!boardPool) {
           payload = { error: 'not authorized' };
         } else {
           const now       = Date.now();
@@ -198,6 +215,7 @@ export default {
             if (!raw) continue;
             let e;
             try { e = JSON.parse(raw); } catch { continue; }
+            if (poolOf(e) !== boardPool) continue;   // only this pool's members
             // Redact: only reveal a pick once that match has kicked off, so
             // nobody can copy picks before lock.
             const revealed = {};
@@ -217,7 +235,7 @@ export default {
             if (isAdmin) row.code = k.name.replace('pool_player_', '');
             players.push(row);
           }
-          payload = { ok: true, now, championLock: champLock, players, admin: isAdmin };
+          payload = { ok: true, now, championLock: champLock, players, admin: isAdmin, pool: boardPool };
         }
 
       } else if (type === 'pooldelete') {

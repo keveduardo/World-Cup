@@ -3607,7 +3607,10 @@ function poolLeaderboardHTML(){
   const adminBtn = isAdmin
     ? `<button class="pool-mini-btn" onclick="poolAdminExit()">🔓 Admin: exit</button>`
     : `<button class="pool-mini-btn" onclick="poolAdminUnlock()">🔧 Admin</button>`;
-  let html=`<div class="pool-board pool-board-redesign"><div class="pool-board-head"><h3>Leaderboard</h3>`
+  // Show which pool this board belongs to, capitalized (e.g. "family" → "Family").
+  const poolNm = (poolBoard && poolBoard.pool) ? poolBoard.pool : '';
+  const poolLbl = poolNm ? poolNm.charAt(0).toUpperCase()+poolNm.slice(1) : '';
+  let html=`<div class="pool-board pool-board-redesign"><div class="pool-board-head"><h3>Leaderboard${poolLbl?` · ${poolEsc(poolLbl)}`:''}</h3>`
     + `<div class="pool-board-actions">${adminBtn}<button class="pool-mini-btn" onclick="poolLoadBoard()">↻ Refresh</button></div></div>`;
   if(poolAdmin && !isAdmin) html+=`<div class="pool-admin-note">Admin code not accepted. <a class="pool-link" onclick="poolAdminUnlock()">Try again</a></div>`;
   if(isAdmin) html+=`<div class="pool-admin-note ok">Admin mode — you can remove members.</div>`;
