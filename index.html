@@ -2369,8 +2369,19 @@ function clinchAll(){
 function resolveKOSlot(desc){
   const m=/^([12])([A-L])$/.exec((desc||'').trim());
   if(!m) return null;                  // third-place / other descriptors aren't clinch-resolvable
-  const g = clinchAll()[m[2]];
-  return g ? Object.assign({ groupSize:(standingsMap[m[2]]||[]).length||4 }, g[+m[1]]) : null;
+  const L=m[2], pos=+m[1];
+  const rows=standingsMap[L]||[];
+  const groupSize=rows.length||4;
+  // If the whole group has been played, the table is FINAL — official tiebreakers
+  // (goal difference, goals for) are settled, so resolve the exact team in this
+  // position. This is the same order the Standings tab shows, so it can't be wrong.
+  if(rows.length>=2 && rows.every(r=>(r.mp||0)>=3) && rows[pos-1] && rows[pos-1].team){
+    const team=rows[pos-1].team;
+    return { groupSize, clinched:team, possible:[team] };
+  }
+  // Group still in progress → stay conservative (points-only clinch, never GD).
+  const g = clinchAll()[L];
+  return g ? Object.assign({ groupSize }, g[pos]) : null;
 }
 function koClinchedTeam(desc){ const i=resolveKOSlot(desc); return i && i.clinched ? i.clinched : null; }
 function koSideHTML(desc){
