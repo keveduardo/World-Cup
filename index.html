@@ -341,7 +341,7 @@
     font-size: 13px; border-bottom: 1px solid #f0f2ec;
   }
 
-  .standings-table td:first-child { text-align: left; padding-left: 10px; width: 26px; }
+  .standings-table td:first-child { text-align: left; padding-left: 6px; width: 22px; }
   .standings-table tbody tr:last-child td { border-bottom: none; }
   .standings-table tbody tr.qualify-1 { background: rgba(10,92,54,0.07); }
   .standings-table tbody tr.qualify-2 { background: rgba(10,92,54,0.03); }
@@ -349,7 +349,7 @@
   .rank-num {
     font-family: 'Barlow Condensed', sans-serif;
     font-size: 15px; font-weight: 800; color: var(--muted);
-    width: 16px; display: inline-block;
+    width: 16px; display: inline-block; text-align: right;
   }
 
   .rank-num.q1 { color: var(--pitch); }
@@ -368,15 +368,9 @@
     font-size: 16px; font-weight: 800; color: var(--text);
   }
 
-  .clinch-badge {
-    display: inline-block;
-    background: var(--pitch); color: var(--gold);
-    font-family: 'Barlow Condensed', sans-serif;
-    font-size: 9px; font-weight: 700; letter-spacing: 0.5px;
-    padding: 1px 5px; border-radius: 3px;
-    margin-left: 5px; vertical-align: middle;
+  .clinch-icon {
+    font-size: 13px; line-height: 1; flex-shrink: 0; margin-left: 2px;
   }
-  .clinch-badge.first { background: var(--gold); color: var(--pitch); }
 
   .qualify-note {
     padding: 6px 14px; font-size: 11px; color: var(--muted);
@@ -2258,8 +2252,8 @@ function renderGroups() {
                   <span class="team-row-flag">${flag(r.team)}</span>
                   <span class="team-row-name" data-team="${r.team.replace(/"/g,'&quot;')}">${r.team}${favMark(r.team)}</span>
                   ${fifaRank(r.team) ? `<span class="rank-chip">#${fifaRank(r.team)}</span>` : ''}
-                  ${clinched[i].clinchedFirst ? '<span class="clinch-badge first">✓ WON GRP</span>'
-                    : clinched[i].clinchedTop2 ? '<span class="clinch-badge">✓ ADV</span>' : ''}
+                  ${clinched[i].clinchedFirst ? '<span class="clinch-icon" title="Won the group">🥇</span>'
+                    : clinched[i].clinchedTop2 ? '<span class="clinch-icon" title="Clinched a spot in the next round">✅</span>' : ''}
                 </div></td>
                 <td>${r.mp}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td>
                 <td>${r.gd >= 0 ? '+'+r.gd : r.gd}</td>
@@ -2268,7 +2262,7 @@ function renderGroups() {
           </tbody>
         </table>
         <div class="qualify-note">
-          <span>🟢 Top 2 advance automatically · Best 3rd-place teams may also advance · 🌍 = FIFA world rank</span>
+          <span>🟢 Top 2 advance automatically · Best 3rd-place teams may also advance · 🥇 = won the group · ✅ = clinched a spot · 🌍 = FIFA world rank</span>
         </div>
       </div>`;
   });
