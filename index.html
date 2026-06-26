@@ -1180,7 +1180,9 @@ const FLAG_CODES = {
 function flag(name) {
   const code = FLAG_CODES[name];
   if (!code) return '⚽';
-  return `<img class="flag-img" src="https://flagcdn.com/w40/${code}.png" alt="${name}" loading="lazy">`;
+  // Self-hosted (same-origin) flags — no third-party request. Falls back to ⚽ if
+  // an image is ever missing/unreachable, instead of a broken-image box.
+  return `<img class="flag-img" src="flags/${code}.png" alt="${name}" loading="lazy" onerror="this.replaceWith('⚽')">`;
 }
 
 // ─── TEAM → GROUP MAPPING (authoritative, from official draw) ────────────────
