@@ -1356,57 +1356,79 @@ function wxIcon(code, isDay) {
   return '🌡️';
 }
 
-async function fetchVenueWeather(code, whenISO) {
+// One fetch per stadium covers all of its matches and the whole 16-day window:
+// we cache the raw hourly arrays plus current conditions, then resolve either the
+// kickoff-hour forecast or a live "now" reading from that same bundle.
+async function fetchVenueWx(code) {
   const geo = STADIUM_GEO[code];
   if (!geo) return null;
   const [lat, lon, roof] = geo;
-  // Cache for 30 min per stadium
   const cached = weatherCache[code];
-  if (cached && Date.now() - cached.ts < 30 * 60000) return cached;
+  if (cached && Date.now() - cached.ts < 15 * 60000) return cached; // 15-min cache
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
+      + `&current=temperature_2m,weather_code,is_day`
       + `&hourly=temperature_2m,weather_code&temperature_unit=fahrenheit`
-      + `&timezone=auto&forecast_days=2`;
+      + `&timezone=auto&forecast_days=16`;
     const res = await fetch(url);
     const data = await res.json();
-    const times = data.hourly?.time || [];
-    const temps = data.hourly?.temperature_2m || [];
-    const codes = data.hourly?.weather_code || [];
-    // Find the hour closest to kickoff
-    const target = new Date(whenISO).getTime();
-    let bestI = 0, bestDiff = Infinity;
-    times.forEach((t, i) => {
-      const diff = Math.abs(new Date(t).getTime() - target);
-      if (diff < bestDiff) { bestDiff = diff; bestI = i; }
-    });
-    const hour = new Date(times[bestI]).getHours();
-    const isDay = hour >= 7 && hour < 19;
+    const cur = data.current ? {
+      temp: Math.round(data.current.temperature_2m),
+      wcode: data.current.weather_code,
+      isDay: data.current.is_day === 1,
+    } : null;
     const result = {
-      temp: Math.round(temps[bestI]),
-      wcode: codes[bestI],
-      icon: wxIcon(codes[bestI], isDay),
-      roof,
-      ts: Date.now()
+      cur, roof, ts: Date.now(),
+      offset: data.utc_offset_seconds || 0,   // venue tz: hourly times are venue-local
+      times: data.hourly?.time || [],
+      temps: data.hourly?.temperature_2m || [],
+      codes: data.hourly?.weather_code || [],
     };
     weatherCache[code] = result;
     return result;
   } catch(e) { return null; }
 }
 
-// Populate weather for all match cards within 24h (called after render)
+// Forecast for the hour nearest kickoff. Returns null when kickoff falls outside
+// the fetched window (closest hour > ~90 min off) so we never show a stray temp.
+function wxAtKickoff(b, whenISO) {
+  if (!b || !b.times.length) return null;
+  const target = new Date(whenISO).getTime();
+  // Hourly times are venue-local without an offset; convert each to a true UTC
+  // instant via the venue's utc_offset so matching is independent of the viewer's tz.
+  let bestI = 0, bestDiff = Infinity;
+  b.times.forEach((t, i) => {
+    const utcMs = Date.parse(t + 'Z') - b.offset * 1000;
+    const diff = Math.abs(utcMs - target);
+    if (diff < bestDiff) { bestDiff = diff; bestI = i; }
+  });
+  if (bestDiff > 90 * 60000) return null;
+  const localHour = new Date(b.times[bestI] + 'Z').getUTCHours(); // venue-local hour
+  const isDay = localHour >= 7 && localHour < 19;
+  return { temp: Math.round(b.temps[bestI]), icon: wxIcon(b.codes[bestI], isDay), roof: b.roof };
+}
+
+// Current conditions right now at the venue (game-day / live matches).
+function wxNow(b) {
+  if (!b || !b.cur) return null;
+  return { temp: b.cur.temp, icon: wxIcon(b.cur.wcode, b.cur.isDay), roof: b.roof };
+}
+
+// Fill weather into every slot the renderers emitted. data-wx-mode picks the
+// reading: "now" for live/game-day cards, "forecast" for everything further out.
 async function loadMatchWeather() {
-  const now = Date.now();
   const els = document.querySelectorAll('[data-wx-code][data-wx-when]');
   for (const el of els) {
     const code = el.getAttribute('data-wx-code');
     const whenISO = el.getAttribute('data-wx-when');
-    if (Math.abs(new Date(whenISO) - now) > 24 * 3600 * 1000) continue;
-    const wx = await fetchVenueWeather(code, whenISO);
-    if (wx) {
-      el.innerHTML = wx.roof
-        ? `${wx.icon} ${wx.temp}°F · 🏟 roof`
-        : `${wx.icon} ${wx.temp}°F`;
-    }
+    const mode = el.getAttribute('data-wx-mode') || 'forecast';
+    const b = await fetchVenueWx(code);
+    const wx = mode === 'now' ? wxNow(b) : wxAtKickoff(b, whenISO);
+    if (!wx) continue;
+    const tag = mode === 'now' ? ' · now' : '';
+    el.innerHTML = wx.roof
+      ? `${wx.icon} ${wx.temp}°F${tag} · 🏟 roof`
+      : `${wx.icon} ${wx.temp}°F${tag}`;
   }
 }
 
@@ -2086,11 +2108,16 @@ function renderMatchCard(m, status) {
   }
   const meta = [venue ? `🏟 ${venue}` : '', city].filter(Boolean).join(' · ');
 
-  // Weather slot: only for matches within 24h (filled in async after render)
+  // Weather slot (filled async after render). Forecast up to 15 days out, and a
+  // realtime "now" reading on game day (≤12h to kickoff) and while the match is live.
   const wxCode = m._koVenueCode || lookupVenueCode(m);
-  const within24h = Math.abs(new Date(m.utcDate) - Date.now()) <= 24 * 3600 * 1000;
-  const wxSlot = (wxCode && within24h && status !== 'completed')
-    ? `<div class="match-wx" data-wx-code="${wxCode}" data-wx-when="${m.utcDate}">⛅ …</div>`
+  const hrsToKO = (new Date(m.utcDate).getTime() - Date.now()) / 3600000;
+  let wxMode = '';
+  if (status === 'live') wxMode = 'now';
+  else if (status !== 'completed' && hrsToKO > 0)
+    wxMode = hrsToKO <= 12 ? 'now' : (hrsToKO <= 15 * 24 ? 'forecast' : '');
+  const wxSlot = (wxCode && wxMode)
+    ? `<div class="match-wx" data-wx-code="${wxCode}" data-wx-when="${m.utcDate}" data-wx-mode="${wxMode}">⛅ …</div>`
     : '';
 
   // Recent form (last 5) from ESPN, shown for upcoming/live games within range
@@ -2569,6 +2596,7 @@ function renderKnockout() {
 
   if (!html) html = '<div class="loading-spinner">Knockout schedule loading…</div>';
   container.innerHTML = html;
+  loadMatchWeather(); // fill forecast / live weather into confirmed-fixture cards
 }
 
 // ─── TEAM DETAIL MODAL ───────────────────────────────────────────────────────
@@ -3920,7 +3948,9 @@ if (syncCode) syncLoad(); // pull cloud favorites if sync is on
 // the full data refreshes.
 setInterval(() => {
   const anyLive = allMatches.some(m => matchStatus(m) === 'live');
-  if (anyLive && currentView === 'schedule') renderSchedule();
+  if (!anyLive) return;
+  if (currentView === 'schedule') renderSchedule();
+  else if (currentView === 'knockout') renderKnockout();
 }, 20000);
 
 // Restore the last tab the user was on (defaults to schedule)
