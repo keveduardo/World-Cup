@@ -937,11 +937,51 @@
   .ko-poss b { color: var(--text); }
   .pool-poss { font-size: 11.5px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
   .pool-poss b { color: var(--text); }
+
+  /* ── Pool picks reveal (others' picks, unlocked at kickoff) ── */
+  .pr-toggle { margin-top: 8px; background: none; border: none; padding: 2px 0;
+    font-size: 12px; font-weight: 600; color: var(--pitch); cursor: pointer; }
+  body.dark .pr-toggle { color: var(--gold); }
+  .pr-box { margin-top: 6px; }
+  .pr-wrap { display: flex; flex-direction: column; gap: 6px; }
+  .pr-grp { background: var(--off-white); border: 1px solid var(--border);
+    border-radius: 9px; padding: 7px 9px; }
+  .pr-grp.ok { border-color: #6effa0; background: rgba(14,122,74,.08); }
+  .pr-grp.no { border-color: #ffb3b3; background: rgba(122,43,43,.07); }
+  .pr-team { display: flex; align-items: center; gap: 6px; font-weight: 600;
+    font-size: 13px; }
+  .pr-team .pf { font-size: 16px; }
+  .pr-team .pr-cnt { margin-left: auto; font-size: 11px; font-weight: 700;
+    color: var(--muted); background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 999px; padding: 1px 8px; }
+  .pr-ok { color: #0e7a4a; font-weight: 700; }
+  .pr-no { color: #b03a3a; font-weight: 700; }
+  body.dark .pr-ok { color: #6effa0; } body.dark .pr-no { color: #ffb3b3; }
+  .pr-people { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-top: 7px; }
+  .pr-person { display: flex; align-items: center; gap: 4px; font-size: 11.5px;
+    color: var(--text); }
+  .pr-person.me { font-weight: 700; }
+  .pr-person svg { width: 24px; height: 24px; border-radius: 50%;
+    background: var(--card-bg); border: 1px solid var(--border); }
+  .pr-nm { white-space: nowrap; }
+  .pr-empty, .pr-load { font-size: 12px; color: var(--muted); font-style: italic;
+    padding: 4px 0; }
+  .pr-section { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .pr-section-h { width: 100%; display: flex; align-items: center; justify-content: space-between;
+    background: none; border: none; cursor: pointer; padding: 4px 0;
+    font-family: 'Barlow Condensed',sans-serif; font-size: 17px; font-weight: 700; color: var(--text); }
+  .pr-section-h small { font-weight: 500; font-size: 11px; color: var(--muted); font-family: inherit; }
+  .pr-round { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--muted); margin: 12px 0 4px; }
+  .pr-match { margin-bottom: 10px; }
+  .pr-match-h { font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+
   [data-team] { cursor: pointer; }
   .team-row[data-team]:hover .team-row-name,
   .team-name[data-team]:hover,
   .group-teams-preview [data-team]:hover,
   .ko-poss [data-team]:hover,
+  .pr-team [data-team]:hover,
   .pool-poss [data-team]:hover { text-decoration: underline; }
 
   /* ── Pool redesign + player avatars ── */
@@ -3012,6 +3052,8 @@ let poolAdmin    = localStorage.getItem('wc_pool_admin') || '';  // admin code w
 let poolJoinMode = 'login';  // 'login' (personal code only) | 'signup' (full form)
 let POOL_ADV     = null;    // advancedSets() cache, rebuilt each render
 let POOL_R32FX   = {};      // { matchNumber: {home, away} } resolved R32 fixtures
+let poolReveal   = {};      // { matchNumber: true } — bracket slots whose "Pool picks" panel is open
+let poolPicksOpen= false;   // leaderboard "Who picked what" section expanded
 let _poolSaveT   = null;
 
 function poolEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -3153,7 +3195,9 @@ async function poolLoadBoard(){
   if(!poolMe) return;
   try{ const r=await fetch(`${PROXY}?type=poolboard&me=${encodeURIComponent(poolMe)}&pool=${encodeURIComponent(poolPool)}&admin=${encodeURIComponent(poolAdmin)}`);
     const d=await r.json(); if(d && d.players) poolBoard=d; }catch(e){}
-  if(currentView==='pool' && poolSub==='leaderboard') renderPool();
+  // Refresh whenever the board feeds the current view — the leaderboard's "who
+  // picked what" and the bracket's per-match "Pool picks" both read poolBoard.
+  if(currentView==='pool' && poolSub!=='avatar') renderPool();
 }
 function poolAdminUnlock(){
   const c=prompt('Enter the admin code word to manage members:');
@@ -3626,6 +3670,53 @@ function poolTeamBtn(n, team, picked, locked, correct){
   return `<button class="${cls.join(' ')}" data-t="${poolEsc(team)}" ${click}>`
     + `<span class="pf">${flag(team)}</span><span class="pn">${poolEsc(team)}</span>${mark}</button>`;
 }
+// ── pick reveal (others' picks, unlocked per match at kickoff) ──
+// The Worker only sends a player's pick for a match AFTER its kickoff, so this can
+// never leak picks early. Players are grouped by the team they backed, so you see
+// consensus vs. contrarian at a glance, with ✓/✗ once the round has been decided.
+function poolToggleReveal(n){ poolReveal[n]=!poolReveal[n]; if(!poolBoard) poolLoadBoard(); renderPool(); }
+function poolTogglePicks(){ poolPicksOpen=!poolPicksOpen; if(!poolBoard) poolLoadBoard(); renderPool(); }
+function poolRevealHTML(n){
+  if(!poolBoard || !poolBoard.players) return `<div class="pr-load">Loading picks…</div>`;
+  const r=roundOfMatch(n), settled=poolRoundComplete(r);
+  const byTeam=new Map();
+  poolBoard.players.forEach(p=>{ const t=(p.picks||{})[n]; if(!t) return;
+    if(!byTeam.has(t)) byTeam.set(t,[]); byTeam.get(t).push(p); });
+  if(!byTeam.size) return `<div class="pr-empty">No one had a pick here.</div>`;
+  const groups=[...byTeam.entries()].sort((a,b)=> b[1].length-a[1].length || a[0].localeCompare(b[0]));
+  let html=`<div class="pr-wrap">`;
+  groups.forEach(([team,ps])=>{
+    const adv=POOL_ADV && POOL_ADV[r] && POOL_ADV[r].has(canonName(team));
+    const state=settled ? (adv?'ok':'no') : '';
+    const mark=settled ? (adv?'<span class="pr-ok">✓</span>':'<span class="pr-no">✗</span>') : '';
+    const people=ps.sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(p=>
+      `<span class="pr-person${p.name===poolName?' me':''}" title="${poolEsc(p.name)}">`
+      + `${CAV.svg(CAV.norm(p.avatar),{size:24})}<span class="pr-nm">${poolEsc(p.name)}</span></span>`).join('');
+    html+=`<div class="pr-grp ${state}">`
+      + `<div class="pr-team"><span class="pf">${flag(team)}</span>`
+      + `<span data-team="${poolEsc(team)}">${poolEsc(team)}</span>${mark}`
+      + `<span class="pr-cnt">${ps.length}</span></div>`
+      + `<div class="pr-people">${people}</div></div>`;
+  });
+  return html+`</div>`;
+}
+// Leaderboard section: every match that has kicked off, grouped by round.
+function poolPicksSectionHTML(){
+  const locked=[];
+  POOL_ROUNDS.forEach(({key,label})=>{ (KO_SCHEDULE[key]||[]).slice().sort((a,b)=>a.n-b.n)
+    .forEach(s=>{ if(matchLocked(s.n)) locked.push({n:s.n,label}); }); });
+  const sub = locked.length ? `${locked.length} match${locked.length>1?'es':''} unlocked` : 'unlocks at kickoff';
+  let html=`<div class="pr-section"><button class="pr-section-h" onclick="poolTogglePicks()">`
+    + `<span>${poolPicksOpen?'▾':'▸'} 🔍 Who picked what</span><small>${sub}</small></button>`;
+  if(!poolPicksOpen) return html+`</div>`;
+  if(!locked.length) return html+`<div class="pr-empty">Everyone's picks stay hidden until each match kicks off — check back after the first Round-of-32 match.</div></div>`;
+  let last='';
+  locked.forEach(s=>{
+    if(s.label!==last){ html+=`<div class="pr-round">${s.label}</div>`; last=s.label; }
+    html+=`<div class="pr-match"><div class="pr-match-h">Match ${s.n}</div>${poolRevealHTML(s.n)}</div>`;
+  });
+  return html+`</div>`;
+}
 function poolSlotHTML(slot){
   const n=slot.n, cands=slotCandidates(n), pick=poolPicks[n], locked=matchLocked(n), res=poolPickResult(n);
   const ko=new Date(etToUtcISO(slot.date, slot.et));
@@ -3652,8 +3743,14 @@ function poolSlotHTML(slot){
     const b=poolTeamBtn(n, cands[1], pick && pick===cands[1], locked, pick===cands[1]?res:'');
     body=`<div class="pool-pair">${a}<span class="pool-vs">v</span>${b}</div>`;
   }
+  let reveal='';
+  if(locked){
+    const open=!!poolReveal[n];
+    reveal=`<button class="pr-toggle" onclick="poolToggleReveal(${n})">${open?'▾':'▸'} 👥 Pool picks</button>`
+      + (open ? `<div class="pr-box">${poolRevealHTML(n)}</div>` : '');
+  }
   return `<div class="pool-slot ${locked?'locked':''}">`
-    + `<div class="pool-slot-top"><span>Match ${n}</span><span>${locked?'🔒 ':''}${when} ${tzShort()}</span></div>${body}</div>`;
+    + `<div class="pool-slot-top"><span>Match ${n}</span><span>${locked?'🔒 ':''}${when} ${tzShort()}</span></div>${body}${reveal}</div>`;
 }
 function poolChampionHTML(){
   const locked=championLocked();
@@ -3726,7 +3823,8 @@ function poolLeaderboardHTML(){
       + `<div class="lb-name">${poolEsc(r.name)}${ch}</div>`
       + `<div class="lb-score"><span class="lb-pts">${r.pts}</span><small>pts · ${r.correct}✓</small></div>${rm}</div>`;
   });
-  return html + `</div><div class="pool-hint">R32 1 · R16 2 · QF 4 · SF 8 · Final 16 · 3rd 4 · Champion +${POOL_CHAMP_BONUS}. Other players' picks reveal after each kickoff.</div></div>`;
+  html += `</div><div class="pool-hint">R32 1 · R16 2 · QF 4 · SF 8 · Final 16 · 3rd 4 · Champion +${POOL_CHAMP_BONUS}. Other players' picks reveal after each kickoff.</div>`;
+  return html + poolPicksSectionHTML() + `</div>`;
 }
 function poolHeaderHTML(){
   const a=caGet();
