@@ -7,6 +7,7 @@
  *   ?type=standings            football-data group standings
  *   ?type=espn                 ESPN live scoreboard (scores + clock)
  *   ?type=espnsummary&event=ID ESPN match summary (goals, cards, stats, lineups)
+ *   ?type=weather&lat=..&lon=..  Open-Meteo forecast + current (edge-cached 15m)
  *   ?type=favsave&code=X&teams=A|B&tz=America/Denver   save favorites
  *   ?type=favload&code=X       load favorites
  *
@@ -257,6 +258,24 @@ export default {
           payload = await edgeCachedFetch('wc_sum_' + eid, ESPN_SUM + eid, 30, null);
         } else {
           payload = { error: 'missing event id' };
+        }
+
+      } else if (type === 'weather') {
+        // Proxy Open-Meteo so the browser only talks to this Worker (no third-party
+        // request). Coords are validated + rounded; the upstream params are fixed
+        // here, so this can only ever return a weather forecast (not an open proxy).
+        const lat = parseFloat(url.searchParams.get('lat'));
+        const lon = parseFloat(url.searchParams.get('lon'));
+        if (!Number.isFinite(lat) || !Number.isFinite(lon) ||
+            lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+          payload = { error: 'bad coordinates' };
+        } else {
+          const la = lat.toFixed(4), lo = lon.toFixed(4);
+          const omUrl = 'https://api.open-meteo.com/v1/forecast?latitude=' + la + '&longitude=' + lo
+            + '&current=temperature_2m,weather_code,is_day'
+            + '&hourly=temperature_2m,weather_code&temperature_unit=fahrenheit'
+            + '&timezone=auto&forecast_days=16';
+          payload = await edgeCachedFetch('wc_wx_' + la + '_' + lo, omUrl, 900, null);
         }
 
       } else if (type === 'espn') {
