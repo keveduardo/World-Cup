@@ -2035,6 +2035,8 @@ function renderMatchCard(m, status) {
   const grp = groupOfMatch(m);
   const grpTag = grp
     ? `<span class="group-tag clickable" onclick="goToGroup('${grp}')">GRP ${grp} ›</span>`
+    : m._koNum
+    ? `<span class="group-tag">MATCH ${m._koNum}</span>`
     : `<span class="group-tag">${(m.stage||'').replace(/_/g,' ')}</span>`;
 
   // Score helper: prefer full-time, fall back to half-time
@@ -2075,14 +2077,17 @@ function renderMatchCard(m, status) {
 
   let venue = m.venue || '';
   let city = venueCity(venue);
-  if (!venue) {
+  if (!venue && m._koVenueCode && STADIUMS[m._koVenueCode]) {
+    // Knockout fixture: API omits venue, so use the slot's stadium from KO_SCHEDULE.
+    [venue, city] = STADIUMS[m._koVenueCode];
+  } else if (!venue) {
     const hc = lookupVenue(hn, an);
     if (hc) { venue = hc[0]; city = hc[1]; }
   }
   const meta = [venue ? `🏟 ${venue}` : '', city].filter(Boolean).join(' · ');
 
   // Weather slot: only for matches within 24h (filled in async after render)
-  const wxCode = lookupVenueCode(m);
+  const wxCode = m._koVenueCode || lookupVenueCode(m);
   const within24h = Math.abs(new Date(m.utcDate) - Date.now()) <= 24 * 3600 * 1000;
   const wxSlot = (wxCode && within24h && status !== 'completed')
     ? `<div class="match-wx" data-wx-code="${wxCode}" data-wx-when="${m.utcDate}">⛅ …</div>`
@@ -2516,6 +2521,15 @@ function renderPlaceholderKO(slot) {
     </div>`;
 }
 
+// Find the API fixture for a KO slot. Kickoff time uniquely identifies a slot
+// across the whole bracket, and the API carries no venue — so we key on time and
+// pull venue/number from KO_SCHEDULE instead.
+function koMatchForSlot(stage, slot){
+  const want = new Date(etToUtcISO(slot.date, slot.et)).getTime();
+  return allMatches.find(m => m.stage === stage &&
+    new Date(m.utcDate).getTime() === want) || null;
+}
+
 function renderKnockout() {
   const container = document.getElementById('knockout-list');
   const stages = [
@@ -2529,23 +2543,28 @@ function renderKnockout() {
 
   let html = '';
   stages.forEach(({key, label}) => {
-    const matches = allMatches.filter(m => m.stage === key);
-    // A match has "real" teams only if both names map to actual countries
-    const realMatches = matches.filter(m =>
-      groupOfTeam(m.homeTeam?.name) && groupOfTeam(m.awayTeam?.name));
+    const slots = (KO_SCHEDULE[key] || []).slice()
+      .sort((a,b)=> new Date(etToUtcISO(a.date,a.et)) - new Date(etToUtcISO(b.date,b.et)));
+    if (!slots.length) return;
 
-    if (realMatches.length) {
-      // Real fixtures available from the API
-      html += `<div class="section-head"><h2>${label}</h2><span class="count">${realMatches.length} match${realMatches.length>1?'es':''}</span></div>`;
-      realMatches.sort((a,b)=>new Date(a.utcDate)-new Date(b.utcDate)).forEach(m => {
-        html += renderMatchCard(m, matchStatus(m));
-      });
-    } else if (KO_SCHEDULE[key]) {
-      // Placeholder schedule — dates/times/venues known, teams TBD
-      const slots = KO_SCHEDULE[key];
-      html += `<div class="section-head"><h2>${label}</h2><span class="count">${slots.length} match${slots.length>1?'es':''} · teams TBD</span></div>`;
-      slots.forEach(slot => { html += renderPlaceholderKO(slot); });
-    }
+    // Render every slot: a confirmed fixture (both real teams) becomes a full match
+    // card; everything else stays a placeholder with its clinched/possible match-ups.
+    let confirmed = 0;
+    let body = '';
+    slots.forEach(slot => {
+      const m = koMatchForSlot(key, slot);
+      if (m && groupOfTeam(m.homeTeam?.name) && groupOfTeam(m.awayTeam?.name)) {
+        m._koNum = slot.n; m._koVenueCode = slot.v;   // so the card keeps MATCH #, venue & weather
+        body += renderMatchCard(m, matchStatus(m));
+        confirmed++;
+      } else {
+        body += renderPlaceholderKO(slot);
+      }
+    });
+
+    const note = confirmed >= slots.length ? '' :
+      confirmed > 0 ? ` · ${confirmed} confirmed` : ' · teams TBD';
+    html += `<div class="section-head"><h2>${label}</h2><span class="count">${slots.length} match${slots.length>1?'es':''}${note}</span></div>` + body;
   });
 
   if (!html) html = '<div class="loading-spinner">Knockout schedule loading…</div>';
