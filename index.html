@@ -2107,7 +2107,11 @@ function renderMatchCard(m, status) {
     const hc = lookupVenue(hn, an);
     if (hc) { venue = hc[0]; city = hc[1]; }
   }
-  const meta = [venue ? `🏟 ${venue}` : '', city].filter(Boolean).join(' · ');
+  // The Knockout tab has no date dividers (unlike Schedule), so confirmed KO cards
+  // need their own date here — matching the placeholder cards' "Mon, Jun 29" line.
+  const koDate = (m._koNum && typeof currentView !== 'undefined' && currentView === 'knockout')
+    ? formatDatePST(m.utcDate) : '';
+  const meta = [koDate, venue ? `🏟 ${venue}` : '', city].filter(Boolean).join(' · ');
 
   // Weather slot (filled async after render). Forecast up to 15 days out, and a
   // realtime "now" reading on game day (≤12h to kickoff) and while the match is live.
