@@ -3131,20 +3131,28 @@ function resolvePlacement(desc){
   if(m){ const rows=standingsMap[m[2]]; if(rows && rows[+m[1]-1]) return rows[+m[1]-1].team; }
   return null; // third-place descriptors (e.g. '3rd A/B/C/D/F') resolve via the fixture itself
 }
+// Resolve one R32 side descriptor to a team. Reuses the SAME logic the Knockout
+// tab uses, so the pool bracket fills exactly when the Knockout tab does — including
+// the best-eight third-place slots (Annex C), which the old version couldn't resolve.
+function koSideTeam(desc, slot){
+  if(/^3rd/i.test(desc||'')){
+    const other=(slot.home===desc)?slot.away:slot.home;   // the "1X" winner this 3rd-place team faces
+    const w=/^1([A-L])$/.exec((other||'').trim());
+    return w ? resolveThirdForWinner(w[1]) : null;
+  }
+  return koClinchedTeam(desc);
+}
 // Map each R32 slot (73-88) to its real fixture once the bracket is seeded.
 function r32Fixtures(){
   const out={};
-  const fx=allMatches.filter(m=>m.stage==='LAST_32' && groupOfTeam(m.homeTeam?.name) && groupOfTeam(m.awayTeam?.name));
   KO_SCHEDULE.LAST_32.forEach(slot=>{
-    // 1) prefer the official API fixture once teams are seeded
-    if(fx.length){
-      const home=resolvePlacement(slot.home);
-      if(home){ const hc=canonName(home);
-        const f=fx.find(m=>canonName(m.homeTeam.name)===hc || canonName(m.awayTeam.name)===hc);
-        if(f){ out[slot.n]={ home:f.homeTeam.name, away:f.awayTeam.name }; return; } }
+    // 1) prefer the official API fixture, matched by kickoff time (as the Knockout tab does)
+    const m=koMatchForSlot('LAST_32', slot);
+    if(m && groupOfTeam(m.homeTeam?.name) && groupOfTeam(m.awayTeam?.name)){
+      out[slot.n]={ home:m.homeTeam.name, away:m.awayTeam.name }; return;
     }
-    // 2) otherwise early-fill from clinched group positions (both sides must be locked)
-    const h=koClinchedTeam(slot.home), a=koClinchedTeam(slot.away);
+    // 2) otherwise resolve each side from the final standings / Annex C third-place table
+    const h=koSideTeam(slot.home, slot), a=koSideTeam(slot.away, slot);
     if(h && a) out[slot.n]={ home:h, away:a };
   });
   return out;
