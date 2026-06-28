@@ -3103,10 +3103,13 @@ let poolHelp     = false;     // bracket "how it works" panel toggle
 let poolAdmin    = localStorage.getItem('wc_pool_admin') || '';  // admin code word (server-verified)
 let poolJoinMode = 'login';  // 'login' (personal code only) | 'signup' (full form)
 let POOL_ADV     = null;    // advancedSets() cache, rebuilt each render
+let POOL_ELIM    = {};      // { stage: Set } teams that LOST their match in that round
+let POOL_DEAD    = new Set();// teams knocked out of the tournament (lost any KO match)
 let POOL_R32FX   = {};      // { matchNumber: {home, away} } resolved R32 fixtures
 let poolReveal   = {};      // { matchNumber: true } — bracket slots whose "Pool picks" panel is open
 let poolPicksOpen= false;   // leaderboard "Who picked what" section expanded
 let _poolSaveT   = null;
+let _poolDirty   = false;   // unsaved local change pending (drives the exit-time beacon)
 
 function poolEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
@@ -3201,12 +3204,31 @@ function advancedSets(){
 }
 function poolFinishedCount(stage){ return allMatches.filter(m=>m.stage===stage && m.status==='FINISHED').length; }
 function poolRoundComplete(r){ return poolFinishedCount(r) >= POOL_ROUND_COUNT[r]; }
+// Per-round losers + a tournament-wide "knocked out" set. Lets us mark a pick ✗ the
+// moment its own match is decided, instead of waiting for the whole round to finish.
+function koResultSets(){
+  const elim={LAST_32:new Set(),LAST_16:new Set(),QUARTER_FINALS:new Set(),SEMI_FINALS:new Set(),THIRD_PLACE:new Set(),FINAL:new Set()};
+  const dead=new Set();
+  allMatches.forEach(m=>{ const st=m.stage; if(!elim[st] || m.status!=='FINISHED') return;
+    const w=poolWinnerOf(m); if(!w) return; const wc=canonName(w);
+    [m.homeTeam?.name, m.awayTeam?.name].forEach(nm=>{ if(nm){ const c=canonName(nm); if(c!==wc){ elim[st].add(c); dead.add(c); } } });
+  });
+  return { elim, dead };
+}
+// Grade one team for one slot: 'yes' if it won that round, 'no' once it's provably
+// out, '' while undecided. Third place is special — its players are SF losers (in
+// POOL_DEAD), so there we judge only by the third-place match itself.
+function poolTeamResult(n, team){
+  const r=roundOfMatch(n); if(!r || !team || !POOL_ADV) return '';
+  const pc=canonName(team);
+  if(POOL_ADV[r] && POOL_ADV[r].has(pc)) return 'yes';
+  if(r==='THIRD_PLACE') return (POOL_ELIM.THIRD_PLACE && POOL_ELIM.THIRD_PLACE.has(pc)) ? 'no' : '';
+  return POOL_DEAD.has(pc) ? 'no' : '';
+}
 function poolPickResult(n){
-  const r=roundOfMatch(n); const pick=poolPicks[n];
-  if(!pick || !matchLocked(n) || !POOL_ADV) return '';
-  if(POOL_ADV[r] && POOL_ADV[r].has(canonName(pick))) return 'yes';
-  if(poolRoundComplete(r)) return 'no';
-  return '';
+  const pick=poolPicks[n];
+  if(!pick || !matchLocked(n)) return '';
+  return poolTeamResult(n, pick);
 }
 function poolScore(p, adv, actualChamp){
   let pts=0, correct=0;
@@ -3217,8 +3239,8 @@ function poolScore(p, adv, actualChamp){
 }
 
 // ── actions ──
-function poolPick(n, team){ if(matchLocked(n)) return; poolPicks[n]=team; validateBracket(); renderPool(); savePoolSoon(); }
-function poolSetChampion(v){ if(championLocked()) return; poolChampion=v; renderPool(); savePoolSoon(); }
+function poolPick(n, team){ if(matchLocked(n)){ renderPool(); return; } poolPicks[n]=team; validateBracket(); renderPool(); savePoolSoon(); }
+function poolSetChampion(v){ if(championLocked()){ renderPool(); return; } poolChampion=v; renderPool(); savePoolSoon(); }
 function poolSetSub(s){ if(poolSub==='avatar' && s!=='avatar') flushPoolSave(); poolSub=s; renderPool(); if(s==='leaderboard') poolLoadBoard(); }
 function poolCopyCode(){ try{ navigator.clipboard.writeText(poolMe); }catch(e){} }
 function poolEditName(){
@@ -3241,15 +3263,29 @@ function poolLeave(){
   poolPool=''; poolMe=''; poolName=''; poolPicks={}; poolChampion=''; poolBoard=null; poolAvatar=null; poolSub='bracket'; poolJoinMode='login';
   renderPool();
 }
-function savePoolSoon(ms){ clearTimeout(_poolSaveT); _poolSaveT=setTimeout(savePool, ms||700); }
+function savePoolSoon(ms){ _poolDirty=true; clearTimeout(_poolSaveT); _poolSaveT=setTimeout(savePool, ms||700); }
 function flushPoolSave(){ if(_poolSaveT){ clearTimeout(_poolSaveT); _poolSaveT=null; savePool(); } }
 function poolPicksStr(){ return Object.keys(poolPicks).filter(n=>poolPicks[n]).map(n=>n+':'+poolPicks[n]).join('|'); }
-async function savePool(){
-  if(!poolMe) return;
-  const u=`${PROXY}?type=poolsave&pool=${encodeURIComponent(poolPool)}&me=${encodeURIComponent(poolMe)}`
+function poolSaveURL(){
+  return `${PROXY}?type=poolsave&pool=${encodeURIComponent(poolPool)}&me=${encodeURIComponent(poolMe)}`
     +`&name=${encodeURIComponent(poolName)}&picks=${encodeURIComponent(poolPicksStr())}&champion=${encodeURIComponent(poolChampion)}`
     +`&avatar=${encodeURIComponent(JSON.stringify(poolAvatar||{}))}`;
-  try{ await fetch(u); }catch(e){}
+}
+async function savePool(){
+  if(!poolMe) return;
+  // Clear the dirty flag only once the save is confirmed, so a tab closed mid-flight
+  // still triggers the exit beacon rather than silently dropping the change.
+  try{ await fetch(poolSaveURL()); _poolDirty=false; }catch(e){}
+}
+// Last-ditch save when the page is being hidden/closed: the debounced fetch may
+// never run, so beacon the current state. The Worker merges and ignores any pick
+// whose match has already kicked off, so this can't overwrite a locked pick.
+function poolSaveBeacon(){
+  if(!poolMe || !_poolDirty) return;
+  clearTimeout(_poolSaveT); _poolSaveT=null;
+  const url=poolSaveURL();
+  try{ if(navigator.sendBeacon && navigator.sendBeacon(url)){ _poolDirty=false; return; } }catch(e){}
+  try{ fetch(url, {keepalive:true}); _poolDirty=false; }catch(e){}
 }
 async function poolLoadBoard(){
   if(!poolMe) return;
@@ -3738,7 +3774,6 @@ function poolToggleReveal(n){ poolReveal[n]=!poolReveal[n]; if(!poolBoard) poolL
 function poolTogglePicks(){ poolPicksOpen=!poolPicksOpen; if(!poolBoard) poolLoadBoard(); renderPool(); }
 function poolRevealHTML(n){
   if(!poolBoard || !poolBoard.players) return `<div class="pr-load">Loading picks…</div>`;
-  const r=roundOfMatch(n), settled=poolRoundComplete(r);
   const byTeam=new Map();
   poolBoard.players.forEach(p=>{ const t=(p.picks||{})[n]; if(!t) return;
     if(!byTeam.has(t)) byTeam.set(t,[]); byTeam.get(t).push(p); });
@@ -3746,9 +3781,9 @@ function poolRevealHTML(n){
   const groups=[...byTeam.entries()].sort((a,b)=> b[1].length-a[1].length || a[0].localeCompare(b[0]));
   let html=`<div class="pr-wrap">`;
   groups.forEach(([team,ps])=>{
-    const adv=POOL_ADV && POOL_ADV[r] && POOL_ADV[r].has(canonName(team));
-    const state=settled ? (adv?'ok':'no') : '';
-    const mark=settled ? (adv?'<span class="pr-ok">✓</span>':'<span class="pr-no">✗</span>') : '';
+    const rr=poolTeamResult(n, team);   // same per-match grading the bracket uses
+    const state=rr==='yes'?'ok':rr==='no'?'no':'';
+    const mark=rr==='yes'?'<span class="pr-ok">✓</span>':rr==='no'?'<span class="pr-no">✗</span>':'';
     const people=ps.sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(p=>
       `<span class="pr-person${p.name===poolName?' me':''}" title="${poolEsc(p.name)}">`
       + `${CAV.svg(CAV.norm(p.avatar),{size:24})}<span class="pr-nm">${poolEsc(p.name)}</span></span>`).join('');
@@ -3812,6 +3847,21 @@ function poolSlotHTML(slot){
   return `<div class="pool-slot ${locked?'locked':''}">`
     + `<div class="pool-slot-top"><span>Match ${n}</span><span>${locked?'🔒 ':''}${when} ${tzShort()}</span></div>${body}${reveal}</div>`;
 }
+// Champion options: only teams that can still win it. Once the full R32 field is
+// seeded, that's the 32 knockout teams (excludes group-stage casualties) minus any
+// later eliminations. Before the field is set, fall back to the full list so we
+// never risk hiding a live team. Any already-saved pick is always kept selectable.
+function poolChampList(){
+  const fx=[]; for(let n=73;n<=88;n++){ if(POOL_R32FX[n]) fx.push(POOL_R32FX[n]); }
+  let list;
+  if(fx.length<16){ list=poolTeamList(); }
+  else {
+    const alive=new Set(); fx.forEach(f=>{ alive.add(f.home); alive.add(f.away); });
+    list=[...alive].filter(t=>!POOL_DEAD.has(canonName(t))).sort();
+  }
+  if(poolChampion && !list.some(t=>canonName(t)===canonName(poolChampion))) list=[poolChampion, ...list];
+  return list;
+}
 function poolChampionHTML(){
   const locked=championLocked();
   const actual = POOL_ADV && POOL_ADV.FINAL && POOL_ADV.FINAL.size ? [...POOL_ADV.FINAL][0] : '';
@@ -3820,7 +3870,7 @@ function poolChampionHTML(){
     res=`<div class="pool-champ-res ${ok?'correct':'wrong'}">Champion: ${flag(actual)} ${poolEsc(actual)}`
       + `${poolChampion ? (ok ? ' — your pick ✓ +'+POOL_CHAMP_BONUS : ' — you picked '+poolEsc(poolChampion)+' ✗') : ''}</div>`; }
   const opts=['<option value="">— pick a champion —</option>'].concat(
-    poolTeamList().map(t=>`<option value="${poolEsc(t)}" ${t===poolChampion?'selected':''}>${poolEsc(t)}</option>`)).join('');
+    poolChampList().map(t=>`<option value="${poolEsc(t)}" ${t===poolChampion?'selected':''}>${poolEsc(t)}</option>`)).join('');
   const inner = locked
     ? `<div class="pool-champ-locked">${poolChampion ? flag(poolChampion)+' '+poolEsc(poolChampion) : '—'}<span class="pool-lock">🔒 locked</span></div>${res}`
     : `<select class="pool-select" onchange="poolSetChampion(this.value)">${opts}</select>`
@@ -3927,6 +3977,7 @@ function renderPool(){
   if(!c) return;
   if(!poolMe){ c.innerHTML=poolJoinHTML(); return; }
   POOL_ADV=advancedSets();
+  const _kr=koResultSets(); POOL_ELIM=_kr.elim; POOL_DEAD=_kr.dead;
   POOL_R32FX=r32Fixtures();
   validateBracket();
   let mid;
@@ -3965,6 +4016,21 @@ setInterval(() => {
   if (currentView === 'schedule') renderSchedule();
   else if (currentView === 'knockout') renderKnockout();
 }, 20000);
+
+// Keep the pool bracket honest about locks even if the user just sits on it: every
+// 30s re-render so matches/champion freeze the moment their kickoff passes, the
+// countdown advances, and any newly-kicked-off "Pool picks" become available.
+// (Bracket only — the avatar builder and leaderboard shouldn't redraw underfoot.)
+setInterval(() => {
+  if (currentView === 'pool' && poolSub === 'bracket' && poolMe) renderPool();
+}, 30000);
+
+// Don't lose a pick made moments before the tab is closed/backgrounded: the
+// debounced save may not have fired yet, so flush it with a beacon on the way out.
+window.addEventListener('pagehide', poolSaveBeacon);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') poolSaveBeacon();
+});
 
 // Restore the last tab the user was on (defaults to schedule)
 (function restoreLastTab() {
