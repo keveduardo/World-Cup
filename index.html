@@ -938,6 +938,15 @@
   .pool-poss { font-size: 11.5px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
   .pool-poss b { color: var(--text); }
 
+  /* "You're not done" nudge above the bracket */
+  .pool-nudge { border-radius: 11px; padding: 9px 12px; font-size: 13px; line-height: 1.45;
+    margin: 0 0 12px; border: 1px solid var(--border); }
+  .pool-nudge.warn { background: rgba(245,197,24,.16); border-color: var(--gold); color: var(--text); }
+  body.dark .pool-nudge.warn { background: rgba(245,197,24,.12); }
+  .pool-nudge.done { background: rgba(14,122,74,.10); border-color: #6effa0; color: var(--text); }
+  body.dark .pool-nudge.done { background: rgba(14,122,74,.14); }
+  .pool-nudge b { font-weight: 700; }
+
   /* ── Pool picks reveal (others' picks, unlocked at kickoff) ── */
   .pr-toggle { margin-top: 8px; background: none; border: none; padding: 2px 0;
     font-size: 12px; font-weight: 600; color: var(--pitch); cursor: pointer; }
@@ -3167,10 +3176,30 @@ function slotCandidates(n){ n=+n;
   const slot=koSlot(n); if(!slot) return null;
   return [poolRef(slot.home), poolRef(slot.away)];
 }
+// Real result of a knockout match (once it's actually been played), so downstream
+// slots can switch from the player's predicted advancer to the REAL one the moment
+// the feeder game is decided.
+function koActualWinner(n){
+  const stage=roundOfMatch(n), slot=koSlot(n); if(!stage||!slot) return null;
+  const m=koMatchForSlot(stage, slot);
+  return (m && m.status==='FINISHED') ? (poolWinnerOf(m)||null) : null;
+}
+function koActualLoser(n){
+  const stage=roundOfMatch(n), slot=koSlot(n); if(!stage||!slot) return null;
+  const m=koMatchForSlot(stage, slot);
+  if(!m || m.status!=='FINISHED') return null;
+  const w=poolWinnerOf(m); if(!w) return null;
+  const wc=canonName(w);
+  return canonName(m.homeTeam?.name)===wc ? (m.awayTeam?.name||null) : (m.homeTeam?.name||null);
+}
+// A downstream slot's team: the REAL advancer once the feeder match is played,
+// otherwise the player's own pick (the pre-fill). When the real result replaces a
+// losing pre-fill, validateBracket drops any now-impossible downstream pick so the
+// fresh, real match-up shows up empty to re-pick.
 function poolRef(ref){ let m;
-  if((m=/^W (\d+)$/.exec(ref))) return poolPicks[m[1]] || null;
-  if((m=/^W SF(\d)$/.exec(ref))) return poolPicks[m[1]==='1'?'101':'102'] || null;
-  if((m=/^L SF(\d)$/.exec(ref))) return poolLoser(m[1]==='1'?'101':'102');
+  if((m=/^W (\d+)$/.exec(ref))){ const n=+m[1]; return koActualWinner(n) || poolPicks[n] || null; }
+  if((m=/^W SF(\d)$/.exec(ref))){ const n=m[1]==='1'?101:102; return koActualWinner(n) || poolPicks[n] || null; }
+  if((m=/^L SF(\d)$/.exec(ref))){ const n=m[1]==='1'?101:102; return koActualLoser(n) || poolLoser(n); }
   return null;
 }
 function poolLoser(n){ const c=slotCandidates(n); const w=poolPicks[n]; if(!c||!w) return null; return c[0]===w?c[1]:(c[1]===w?c[0]:null); }
@@ -3890,9 +3919,41 @@ function poolHelpHTML(){
     + `<li><b>Make it yours:</b> tap the <b>🎨 Player</b> tab (or your avatar, top-left) to build your character.</li>`
     + `</ul></div>`;
 }
+// Pickable-but-unmade picks: a slot you can act on now (teams known, not yet locked)
+// that you haven't filled. Drives the "you're not done" nudge before kickoffs.
+function poolOpenPicks(){
+  const open=[];
+  for(let n=73;n<=104;n++){
+    if(matchLocked(n)) continue;
+    const c=slotCandidates(n);
+    if(c && c[0] && c[1] && !poolPicks[n]) open.push(n);
+  }
+  return open;
+}
+function poolFmtIn(ms){
+  const diff=ms-Date.now(); if(diff<=0) return 'now';
+  const h=Math.floor(diff/3600000), m=Math.floor((diff%3600000)/60000);
+  if(h>=24){ const d=Math.floor(h/24); return `${d}d ${h%24}h`; }
+  return h>0 ? `${h}h ${m}m` : `${m}m`;
+}
+function poolNudgeHTML(){
+  const open=poolOpenPicks();
+  const champOpen=!poolChampion && !championLocked();
+  if(!open.length && !champOpen) return `<div class="pool-nudge done">✓ You're all set — every pick that's open right now is in.</div>`;
+  let next=Infinity; open.forEach(n=>{ next=Math.min(next, poolKickMs(n)); });
+  if(champOpen) next=Math.min(next, poolChampLockMs());
+  const when=isFinite(next)
+    ? `${new Date(next).toLocaleString('en-US',{timeZone:tz(),weekday:'short',hour:'numeric',minute:'2-digit'})} ${tzShort()} (in ${poolFmtIn(next)})`
+    : '';
+  const bits=[];
+  if(open.length) bits.push(`<b>${open.length}</b> match${open.length!==1?'es':''}`);
+  if(champOpen) bits.push(`your <b>champion</b>`);
+  return `<div class="pool-nudge warn">⚠️ Still open: ${bits.join(' + ')}. Picks lock as games kick off${when?` — next at <b>${when}</b>`:''}.</div>`;
+}
 function poolBracketHTML(){
   let html=`<div class="pool-bracket-top"><button class="pool-info-btn" onclick="poolToggleHelp()">ⓘ How the pool works</button></div>`;
   if(poolHelp) html+=poolHelpHTML();
+  html+=poolNudgeHTML();
   html+=poolChampionHTML();
   POOL_ROUNDS.forEach(({key,label})=>{
     const slots=KO_SCHEDULE[key]||[];
