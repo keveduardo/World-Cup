@@ -874,6 +874,8 @@
   .pool-champ-bonus { color: var(--gold); font-size: 13px; margin-left: 6px; }
   .pool-select { width: 100%; padding: 10px; border-radius: 8px; border: none;
     font-size: 15px; background: var(--white); color: var(--text); }
+  .pool-tb-input { width: 110px; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
+    font-size: 15px; background: var(--white); color: var(--text); text-align: center; }
   .pool-champ-locked { font-size: 16px; font-weight: 600; }
   .pool-lock { font-size: 12px; color: var(--gold); margin-left: 8px; }
   .pool-champ-res { margin-top: 8px; font-weight: 700; font-size: 14px; }
@@ -935,6 +937,35 @@
     border-radius: 8px; margin: -4px 0 14px; padding: 8px 12px; font-size: 12px; }
   .ko-poss { color: var(--muted); line-height: 1.55; }
   .ko-poss b { color: var(--text); }
+
+  /* Knockout view toggle (List / Bracket) */
+  .ko-viewtoggle { display: flex; gap: 6px; margin: 0 0 14px; }
+  .ko-vt { flex: 0 0 auto; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--card-bg); color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer; }
+  .ko-vt.on { background: var(--pitch); color: var(--white); border-color: var(--pitch); }
+  body.dark .ko-vt.on { background: var(--gold); color: #1a1a1a; border-color: var(--gold); }
+
+  /* Visual bracket tree */
+  .bt-hint { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .bt-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 8px; }
+  .bt-grid { display: flex; gap: 14px; min-width: max-content; align-items: stretch; }
+  .bt-col { display: flex; flex-direction: column; min-width: 150px; }
+  .bt-colhead { font-family: 'Barlow Condensed',sans-serif; font-weight: 700; font-size: 15px;
+    text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 8px; text-align: center; }
+  .bt-colbody { display: flex; flex-direction: column; justify-content: space-around; flex: 1; gap: 8px; }
+  .bt-match { background: var(--card-bg); border: 1px solid var(--border); border-radius: 9px;
+    padding: 6px 8px; position: relative; }
+  .bt-no { position: absolute; top: -7px; left: 8px; font-size: 9px; font-weight: 700; color: var(--muted);
+    background: var(--card-bg); padding: 0 4px; border-radius: 4px; }
+  .bt-team { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 3px 2px;
+    white-space: nowrap; overflow: hidden; }
+  .bt-team + .bt-team { border-top: 1px dashed var(--border); }
+  .bt-team .bt-nm { overflow: hidden; text-overflow: ellipsis; }
+  .bt-team.tbd { color: var(--muted); font-style: italic; font-size: 12px; }
+  .bt-team.won { font-weight: 800; }
+  .bt-team.won .bt-nm { color: var(--pitch); }
+  body.dark .bt-team.won .bt-nm { color: var(--gold); }
+  .bt-thirdwrap { margin-top: 16px; max-width: 220px; }
   .pool-poss { font-size: 11.5px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
   .pool-poss b { color: var(--text); }
 
@@ -2571,8 +2602,20 @@ function koMatchForSlot(stage, slot){
     new Date(m.utcDate).getTime() === want) || null;
 }
 
+let koView = localStorage.getItem('wc_ko_view') || 'list';   // 'list' | 'tree'
+function setKoView(v){ koView=v; localStorage.setItem('wc_ko_view', v); renderKnockout(); }
+function koViewToggle(){
+  return `<div class="ko-viewtoggle">`
+    + `<button class="ko-vt ${koView==='list'?'on':''}" onclick="setKoView('list')">📋 List</button>`
+    + `<button class="ko-vt ${koView==='tree'?'on':''}" onclick="setKoView('tree')">🗺 Bracket</button></div>`;
+}
+
 function renderKnockout() {
   const container = document.getElementById('knockout-list');
+  if (koView === 'tree') {
+    container.innerHTML = koViewToggle() + renderKnockoutTree();
+    return;
+  }
   const stages = [
     {key:'LAST_32',     label:'Round of 32'},
     {key:'LAST_16',     label:'Round of 16'},
@@ -2609,8 +2652,70 @@ function renderKnockout() {
   });
 
   if (!html) html = '<div class="loading-spinner">Knockout schedule loading…</div>';
-  container.innerHTML = html;
+  container.innerHTML = koViewToggle() + html;
   loadMatchWeather(); // fill forecast / live weather into confirmed-fixture cards
+}
+
+// ─── VISUAL BRACKET (column-per-round tree, read-only) ───────────────────────
+// Walks KO_SCHEDULE's W-refs to order matches into true bracket position, then lays
+// the rounds out as columns. Shows the real/clinched team for each side once known,
+// highlighting the winner; otherwise the descriptor (1A, W 73…) in muted text.
+function koChildren(n){
+  const slot=koSlot(n); if(!slot) return null;
+  const ref=desc=>{ let m;
+    if((m=/^W (\d+)$/.exec(desc))) return +m[1];
+    if((m=/^W SF(\d)$/.exec(desc))) return desc==='W SF1'?101:102;
+    return null; };
+  const a=ref(slot.home), b=ref(slot.away);
+  return (a&&b)?[a,b]:null;
+}
+function koOrderKeys(){
+  const key={};
+  (function rec(n){ const c=koChildren(n);
+    if(!c){ key[n]=Object.keys(key).length; return key[n]; }
+    const a=rec(c[0]), b=rec(c[1]); key[n]=(a+b)/2; return key[n];
+  })(104);
+  return key;
+}
+function koResolveSide(desc, slot){
+  if(slot && /^3rd/i.test(desc||'')){
+    const other=(slot.home===desc)?slot.away:slot.home;
+    const w=/^1([A-L])$/.exec((other||'').trim());
+    return w?resolveThirdForWinner(w[1]):null;
+  }
+  let m;
+  if((m=/^W (\d+)$/.exec(desc))) return koActualWinner(+m[1]);
+  if((m=/^W SF(\d)$/.exec(desc))) return koActualWinner(desc==='W SF1'?101:102);
+  if((m=/^L SF(\d)$/.exec(desc))) return koActualLoser(desc==='L SF1'?101:102);
+  const info=resolveKOSlot(desc); return (info&&info.clinched)?info.clinched:null;
+}
+function koTreeSide(desc, slot, win){
+  const team=koResolveSide(desc, slot);
+  if(team){ const dt=team.replace(/"/g,'&quot;'); const won=win&&canonName(team)===win;
+    return `<span class="bt-team${won?' won':''}" data-team="${dt}">${flag(team)}<span class="bt-nm">${team}</span></span>`; }
+  return `<span class="bt-team tbd">${desc}</span>`;
+}
+function koTreeMatch(n){
+  const slot=koSlot(n); if(!slot) return '<div class="bt-match"></div>';
+  const m=koMatchForSlot(roundOfMatch(n), slot);
+  const win=(m && m.status==='FINISHED') ? canonName(poolWinnerOf(m)||'') : null;
+  return `<div class="bt-match"><span class="bt-no">M${n}</span>`
+    + koTreeSide(slot.home, slot, win) + koTreeSide(slot.away, slot, win) + `</div>`;
+}
+function renderKnockoutTree(){
+  const key=koOrderKeys();
+  const cols=[['LAST_32','R32'],['LAST_16','R16'],['QUARTER_FINALS','QF'],['SEMI_FINALS','SF'],['FINAL','🏆 Final']];
+  let html=`<div class="bt-hint">Real teams fill in as the tournament unfolds; the advancing side is highlighted. Scroll sideways →</div><div class="bt-scroll"><div class="bt-grid">`;
+  cols.forEach(([stage,label])=>{
+    const ms=(KO_SCHEDULE[stage]||[]).slice().sort((a,b)=>(key[a.n]??0)-(key[b.n]??0));
+    html+=`<div class="bt-col"><div class="bt-colhead">${label}</div><div class="bt-colbody">`;
+    ms.forEach(s=>{ html+=koTreeMatch(s.n); });
+    html+=`</div></div>`;
+  });
+  html+=`</div></div>`;
+  const tp=(KO_SCHEDULE.THIRD_PLACE||[])[0];
+  if(tp) html+=`<div class="bt-thirdwrap"><div class="bt-colhead">Third place</div>${koTreeMatch(tp.n)}</div>`;
+  return html;
 }
 
 // ─── TEAM DETAIL MODAL ───────────────────────────────────────────────────────
@@ -3106,6 +3211,7 @@ let poolMe       = localStorage.getItem('wc_pool_me')   || '';
 let poolName     = localStorage.getItem('wc_pool_name') || '';
 let poolPicks    = {};      // { matchNumber: teamName }
 let poolChampion = '';
+let poolTiebreak = '';      // predicted TOTAL goals in the Final (string of an int) — tiebreaker
 let poolBoard    = null;    // last leaderboard payload from the Worker
 let poolSub      = 'bracket';
 let poolHelp     = false;     // bracket "how it works" panel toggle
@@ -3136,6 +3242,16 @@ function poolKickMs(n){ const s=koSlot(n); return s ? new Date(etToUtcISO(s.date
 function matchLocked(n){ return Date.now() >= poolKickMs(n); }
 function poolChampLockMs(){ let min=Infinity; KO_SCHEDULE.LAST_32.forEach(s=>{ min=Math.min(min, new Date(etToUtcISO(s.date,s.et)).getTime()); }); return min; }
 function championLocked(){ return Date.now() >= poolChampLockMs(); }
+// Tiebreaker (predicted total goals in the Final) is editable right up to the Final kickoff.
+function tiebreakLocked(){ return Date.now() >= poolKickMs(104); }
+function poolSetTiebreak(v){ if(tiebreakLocked()) { renderPool(); return; }
+  v=String(v).replace(/[^0-9]/g,'').slice(0,2); poolTiebreak=v; savePoolSoon(); }
+// Actual total goals scored in the Final (regulation + extra time), once it's played.
+function poolFinalActualTotal(){
+  const m=allMatches.find(x=>x.stage==='FINAL' && x.status==='FINISHED');
+  if(!m) return null; const ft=m.score?.fullTime||{};
+  return (typeof ft.home==='number' && typeof ft.away==='number') ? ft.home+ft.away : null;
+}
 
 // Resolve a group-placement descriptor like '2A' or '1E' to an actual team via standings.
 function resolvePlacement(desc){
@@ -3298,7 +3414,7 @@ function poolPicksStr(){ return Object.keys(poolPicks).filter(n=>poolPicks[n]).m
 function poolSaveURL(){
   return `${PROXY}?type=poolsave&pool=${encodeURIComponent(poolPool)}&me=${encodeURIComponent(poolMe)}`
     +`&name=${encodeURIComponent(poolName)}&picks=${encodeURIComponent(poolPicksStr())}&champion=${encodeURIComponent(poolChampion)}`
-    +`&avatar=${encodeURIComponent(JSON.stringify(poolAvatar||{}))}`;
+    +`&tiebreak=${encodeURIComponent(poolTiebreak)}&avatar=${encodeURIComponent(JSON.stringify(poolAvatar||{}))}`;
 }
 async function savePool(){
   if(!poolMe) return;
@@ -3349,6 +3465,7 @@ async function poolLoginSubmit(){
   if(!d || !d.entry){ alert('No bracket found for that code. If you are new, tap “Sign up”.'); return; }
   poolMe=me; poolPool='';
   poolPicks=d.entry.picks||{}; poolChampion=d.entry.champion||''; poolName=d.entry.name||'';
+  poolTiebreak=d.entry.tiebreak!=null?String(d.entry.tiebreak):'';
   poolAvatar=CAV.norm(d.entry.avatar);
   localStorage.setItem('wc_pool_me', poolMe);
   localStorage.setItem('wc_pool_name', poolName);
@@ -3903,17 +4020,36 @@ function poolChampionHTML(){
   const inner = locked
     ? `<div class="pool-champ-locked">${poolChampion ? flag(poolChampion)+' '+poolEsc(poolChampion) : '—'}<span class="pool-lock">🔒 locked</span></div>${res}`
     : `<select class="pool-select" onchange="poolSetChampion(this.value)">${opts}</select>`
-      + `<div class="pool-hint">Locks at the first Round-of-32 kickoff. You can change it until then.</div>`;
+      + `<div class="pool-hint">A separate <b>+${POOL_CHAMP_BONUS}</b> bonus — it doesn't have to match who you advance through the Final. Locks at the first Round-of-32 kickoff.</div>`;
   return `<div class="pool-champ"><div class="pool-champ-label">🏆 Tournament Champion<span class="pool-champ-bonus">+${POOL_CHAMP_BONUS} bonus</span></div>${inner}</div>`;
+}
+// Tiebreaker: predicted total goals in the Final. Worth 0 points — only separates
+// players who finish level. Locks at the Final kickoff (you have until then to set it).
+function poolTiebreakHTML(){
+  const locked=tiebreakLocked();
+  const actual=poolFinalActualTotal();
+  let res='';
+  if(actual!=null && poolTiebreak!==''){
+    const d=Math.abs(+poolTiebreak-actual);
+    res=`<div class="pool-champ-res ${d===0?'correct':''}">Final had <b>${actual}</b> goal${actual!==1?'s':''} · your guess <b>${poolEsc(poolTiebreak)}</b> — off by ${d}</div>`;
+  }
+  const inner = locked
+    ? `<div class="pool-champ-locked">${poolTiebreak!==''?`${poolEsc(poolTiebreak)} goals`:'—'}<span class="pool-lock">🔒 locked</span></div>${res}`
+    : `<input type="number" inputmode="numeric" min="0" max="20" class="pool-tb-input" value="${poolEsc(poolTiebreak)}" placeholder="e.g. 3" oninput="poolSetTiebreak(this.value)">`
+      + `<div class="pool-hint">Worth 0 points — only breaks ties on the leaderboard. Locks at the Final kickoff.</div>`;
+  return `<div class="pool-champ"><div class="pool-champ-label">⚖️ Tiebreaker — total goals in the Final</div>${inner}</div>`;
 }
 function poolToggleHelp(){ poolHelp=!poolHelp; renderPool(); }
 function poolHelpHTML(){
   return `<div class="pool-help">`
     + `<div class="pool-help-h">How the pool works <button class="pool-help-x" onclick="poolToggleHelp()" aria-label="Close">✕</button></div>`
     + `<ul class="pool-help-list">`
-    + `<li><b>Predict every knockout match.</b> Tap a team to pick who advances, round by round — your Round-of-32 winners flow into the Round of 16, and so on to the Final.</li>`
-    + `<li><b>Pick your champion</b> (🏆 at the top) for a <b>+${POOL_CHAMP_BONUS}</b> bonus. It locks at the first Round-of-32 kickoff.</li>`
+    + `<li><b>This is a rolling predictor, not a fill-it-all-up-front bracket.</b> You pick each match before <i>that</i> match kicks off, round by round. You don't lock your whole bracket at the start — later rounds stay open.</li>`
+    + `<li><b>Your picks flow forward.</b> Your Round-of-32 winner is pre-filled into the Round of 16. The moment a game is actually decided, the next round shows the <b>real</b> winner to pick from — so a busted pick never strands you.</li>`
+    + `<li><b>Everyone picks each round with the same info</b> (the previous round's real results), so the rolling format stays fair.</li>`
     + `<li><b>Each match locks at its kickoff.</b> You can change a pick any time before that match starts — after that it's frozen.</li>`
+    + `<li><b>Pick your champion</b> (🏆) for a <b>+${POOL_CHAMP_BONUS}</b> bonus. It's a <b>separate</b> pick — it needn't match who you advance through the Final. Locks at the first Round-of-32 kickoff.</li>`
+    + `<li><b>Tiebreaker:</b> predict the <b>total goals in the Final</b> (⚖️). Worth 0 points — it only separates players tied on score. Locks at the Final kickoff.</li>`
     + `<li><b>Points per correct advancer:</b> R32 ${POOL_WEIGHTS.LAST_32} · R16 ${POOL_WEIGHTS.LAST_16} · QF ${POOL_WEIGHTS.QUARTER_FINALS} · SF ${POOL_WEIGHTS.SEMI_FINALS} · 3rd ${POOL_WEIGHTS.THIRD_PLACE} · Final ${POOL_WEIGHTS.FINAL}. Later rounds are worth more.</li>`
     + `<li><b>No copying:</b> everyone's picks stay hidden on the Leaderboard until each match kicks off.</li>`
     + `<li><b>Make it yours:</b> tap the <b>🎨 Player</b> tab (or your avatar, top-left) to build your character.</li>`
@@ -3955,6 +4091,7 @@ function poolBracketHTML(){
   if(poolHelp) html+=poolHelpHTML();
   html+=poolNudgeHTML();
   html+=poolChampionHTML();
+  html+=poolTiebreakHTML();
   POOL_ROUNDS.forEach(({key,label})=>{
     const slots=KO_SCHEDULE[key]||[];
     const wt=POOL_WEIGHTS[key];
@@ -3968,9 +4105,12 @@ function poolLeaderboardHTML(){
   const actualChamp = adv.FINAL && adv.FINAL.size ? [...adv.FINAL][0] : '';
   let rows=[];
   const isAdmin = !!(poolBoard && poolBoard.admin);
+  const finalTotal=poolFinalActualTotal();
+  const tbDelta=r=>(finalTotal==null || r.tiebreak==null || r.tiebreak==='') ? Infinity : Math.abs(+r.tiebreak - finalTotal);
   if(poolBoard && poolBoard.players){
-    rows=poolBoard.players.map(p=>{ const s=poolScore(p,adv,actualChamp); return { name:p.name, champion:p.champion, avatar:p.avatar, code:p.code, ...s }; });
-    rows.sort((a,b)=> b.pts-a.pts || b.correct-a.correct || a.name.localeCompare(b.name));
+    rows=poolBoard.players.map(p=>{ const s=poolScore(p,adv,actualChamp); return { name:p.name, champion:p.champion, tiebreak:p.tiebreak, avatar:p.avatar, code:p.code, ...s }; });
+    // points → correct → closest Final-goals tiebreaker → name (alphabetical only as a last resort)
+    rows.sort((a,b)=> b.pts-a.pts || b.correct-a.correct || (tbDelta(a)-tbDelta(b) || 0) || a.name.localeCompare(b.name));
   }
   const adminBtn = isAdmin
     ? `<button class="pool-mini-btn" onclick="poolAdminExit()">🔓 Admin: exit</button>`
@@ -3989,13 +4129,39 @@ function poolLeaderboardHTML(){
     const pos = i===0?'🥇':i===1?'🥈':i===2?'🥉':`<span class="lb-rank">${i+1}</span>`;
     const ch = r.champion ? `<span class="lb-champ">🏆 ${flag(r.champion)}</span>` : '';
     const rm = (isAdmin && r.code) ? `<button class="lb-remove" title="Remove ${poolEsc(r.name)}" data-code="${poolEsc(r.code)}" data-name="${poolEsc(r.name)}" onclick="poolRemove(this)">🗑</button>` : '';
+    const tb = (finalTotal!=null && r.tiebreak!=null && r.tiebreak!=='') ? ` · ⚖️${poolEsc(String(r.tiebreak))}` : '';
     html+=`<div class="lb-row${me}"><div class="lb-pos">${pos}</div>`
       + `<div class="lb-ava">${CAV.svg(r.avatar,{size:46})}</div>`
       + `<div class="lb-name">${poolEsc(r.name)}${ch}</div>`
-      + `<div class="lb-score"><span class="lb-pts">${r.pts}</span><small>pts · ${r.correct}✓</small></div>${rm}</div>`;
+      + `<div class="lb-score"><span class="lb-pts">${r.pts}</span><small>pts · ${r.correct}✓${tb}</small></div>${rm}</div>`;
   });
-  html += `</div><div class="pool-hint">R32 1 · R16 2 · QF 4 · SF 8 · Final 16 · 3rd 4 · Champion +${POOL_CHAMP_BONUS}. Other players' picks reveal after each kickoff.</div>`;
-  return html + poolPicksSectionHTML() + `</div>`;
+  const tbHint = finalTotal!=null ? ' Ties broken by closest Final-goals guess (⚖️).' : '';
+  html += `</div><div class="pool-hint">R32 1 · R16 2 · QF 4 · SF 8 · Final 16 · 3rd 4 · Champion +${POOL_CHAMP_BONUS}. Other players' picks reveal after each kickoff.${tbHint}</div>`;
+  return html + poolChampDistHTML() + poolPicksSectionHTML() + `</div>`;
+}
+// Champion pick distribution — who the pool backed for the title. Champions are
+// revealed by the Worker only after the champion lock (first R32 kickoff), so this
+// stays empty until then. Marks ✓ on the eventual winner.
+function poolChampDistHTML(){
+  if(!poolBoard || !poolBoard.players) return '';
+  const byCh=new Map();
+  poolBoard.players.forEach(p=>{ if(!p.champion) return; if(!byCh.has(p.champion)) byCh.set(p.champion,[]); byCh.get(p.champion).push(p); });
+  if(!byCh.size) return '';
+  const actual = POOL_ADV && POOL_ADV.FINAL && POOL_ADV.FINAL.size ? [...POOL_ADV.FINAL][0] : '';
+  const groups=[...byCh.entries()].sort((a,b)=> b[1].length-a[1].length || a[0].localeCompare(b[0]));
+  const total=poolBoard.players.filter(p=>p.champion).length;
+  let html=`<div class="pr-section"><div class="pr-section-h" style="cursor:default"><span>🏆 Champion picks</span><small>${total} in</small></div><div class="pr-wrap">`;
+  groups.forEach(([team,ps])=>{
+    const win = actual && canonName(team)===canonName(actual);
+    const state = actual ? (win?'ok':'no') : '';
+    const mark = win ? '<span class="pr-ok">✓</span>' : '';
+    const people=ps.sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(p=>
+      `<span class="pr-person${p.name===poolName?' me':''}" title="${poolEsc(p.name)}">${CAV.svg(CAV.norm(p.avatar),{size:24})}<span class="pr-nm">${poolEsc(p.name)}</span></span>`).join('');
+    html+=`<div class="pr-grp ${state}"><div class="pr-team"><span class="pf">${flag(team)}</span>`
+      + `<span data-team="${poolEsc(team)}">${poolEsc(team)}</span>${mark}<span class="pr-cnt">${ps.length}</span></div>`
+      + `<div class="pr-people">${people}</div></div>`;
+  });
+  return html+`</div></div>`;
 }
 function poolHeaderHTML(){
   const a=caGet();
@@ -4051,7 +4217,7 @@ async function poolInit(){
   if(poolMe){
     try{ const r=await fetch(`${PROXY}?type=poolload&me=${encodeURIComponent(poolMe)}`);
       const d=await r.json();
-      if(d && d.entry){ poolPicks=d.entry.picks||{}; poolChampion=d.entry.champion||''; if(d.entry.name) poolName=d.entry.name; poolAvatar=CAV.norm(d.entry.avatar); }
+      if(d && d.entry){ poolPicks=d.entry.picks||{}; poolChampion=d.entry.champion||''; poolTiebreak=d.entry.tiebreak!=null?String(d.entry.tiebreak):''; if(d.entry.name) poolName=d.entry.name; poolAvatar=CAV.norm(d.entry.avatar); }
     }catch(e){}
   }
   if(typeof currentView!=='undefined' && currentView==='pool') renderPool();

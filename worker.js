@@ -13,7 +13,7 @@
  *
  *   --- Prediction pool (knockout) ---
  *   ?type=poolload&pool=CODE&me=PCODE     validate pool code + return my entry
- *   ?type=poolsave&pool=CODE&me=PCODE&name=...&picks=73:Brazil|90:...&champion=...
+ *   ?type=poolsave&pool=CODE&me=PCODE&name=...&picks=73:Brazil|90:...&champion=...&tiebreak=3
  *   ?type=poolboard&pool=CODE             redacted leaderboard data (locked picks only)
  *
  * Requires one KV namespace binding named WC_KV (caching + favorites + pool).
@@ -182,6 +182,13 @@ export default {
             }
             // Champion is editable until the first R32 kickoff.
             if (champIn && now < championLockMs()) cur.champion = champIn.slice(0, 40);
+            // Tiebreaker (predicted total goals in the Final) — editable until the
+            // Final kicks off. Empty string clears it.
+            if (url.searchParams.has('tiebreak') && now < koKickoffMs(104)) {
+              const tbIn = (url.searchParams.get('tiebreak') || '').trim();
+              if (tbIn === '') { delete cur.tiebreak; }
+              else { const v = parseInt(tbIn, 10); if (Number.isFinite(v) && v >= 0 && v <= 30) cur.tiebreak = v; }
+            }
             if (name) cur.name = name;
             // Avatar cosmetics (not secret; small JSON of option indices).
             if (avatarRaw && avatarRaw.length < 800) {
@@ -228,6 +235,8 @@ export default {
               name: e.name || 'Anon',
               picks: revealed,
               champion: (now >= champLock) ? (e.champion || '') : '',
+              // Tiebreaker stays hidden (like picks) until the Final kicks off.
+              tiebreak: (now >= koKickoffMs(104)) ? (e.tiebreak ?? null) : null,
               avatar: e.avatar || null,
               updatedAt: e.updatedAt || 0,
             };
