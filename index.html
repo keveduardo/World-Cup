@@ -966,6 +966,39 @@
   .bt-team.won .bt-nm { color: var(--pitch); }
   body.dark .bt-team.won .bt-nm { color: var(--gold); }
   .bt-thirdwrap { margin-top: 16px; max-width: 220px; }
+  .bt-team.mine .bt-nm { font-weight: 800; color: var(--pitch); }
+  body.dark .bt-team.mine .bt-nm { color: var(--gold); }
+  .bt-team.lost .bt-nm { text-decoration: line-through; color: var(--muted); }
+  .bt-score { text-align: center; font-size: 11px; font-weight: 700; color: var(--muted); margin-top: 3px; }
+  .bt-score.live { color: var(--live-red); display: flex; align-items: center; justify-content: center; gap: 4px; }
+
+  /* Live / final score line inside a pool slot */
+  .pool-live { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px;
+    font-weight: 600; color: var(--live-red); }
+  .pool-live.done { color: var(--muted); }
+  .pool-live b { font-weight: 800; }
+  .pool-live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--live-red);
+    animation: pulse 1.4s infinite; flex: 0 0 auto; }
+
+  /* Personal status chip */
+  .pool-stats { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
+  .ps-item { flex: 1; min-width: 90px; text-align: center; background: var(--card-bg);
+    border: 1px solid var(--border); border-radius: 10px; padding: 8px 6px; font-size: 12px; color: var(--muted); }
+  .ps-item b { display: block; font-family: 'Barlow Condensed',sans-serif; font-size: 22px;
+    color: var(--text); line-height: 1; margin-bottom: 2px; }
+
+  /* Leaderboard momentum */
+  .lb-mv { display: block; font-size: 10px; font-weight: 700; margin-top: 2px; }
+  .lb-up { color: #0e9a55; } body.dark .lb-up { color: #6effa0; }
+  .lb-down { color: #c0392b; } body.dark .lb-down { color: #ffb3b3; }
+  .lb-flat { color: var(--muted); }
+  .lb-gain { color: var(--gold); margin-left: 3px; }
+
+  /* "Saved ✓" flash in the pool header */
+  .pool-save-flash { font-size: 12px; font-weight: 700; color: #0e9a55; opacity: 0; pointer-events: none; }
+  body.dark .pool-save-flash { color: #6effa0; }
+  .pool-save-flash.show { animation: saveflash 2s ease forwards; }
+  @keyframes saveflash { 0%{opacity:0} 12%{opacity:1} 65%{opacity:1} 100%{opacity:0} }
   .pool-poss { font-size: 11.5px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
   .pool-poss b { color: var(--text); }
 
@@ -2699,8 +2732,13 @@ function koTreeMatch(n){
   const slot=koSlot(n); if(!slot) return '<div class="bt-match"></div>';
   const m=koMatchForSlot(roundOfMatch(n), slot);
   const win=(m && m.status==='FINISHED') ? canonName(poolWinnerOf(m)||'') : null;
+  let live='';
+  if(m){ const st=matchStatus(m); const ft=m.score?.fullTime||{};
+    if(st==='live' && typeof ft.home==='number'){ const c=matchClock(m);
+      live=`<div class="bt-score live"><span class="pool-live-dot"></span>${ft.home}–${ft.away}${c.detail?` ${c.detail}`:''}</div>`; }
+    else if(st==='completed' && typeof ft.home==='number'){ live=`<div class="bt-score">${ft.home}–${ft.away}</div>`; } }
   return `<div class="bt-match"><span class="bt-no">M${n}</span>`
-    + koTreeSide(slot.home, slot, win) + koTreeSide(slot.away, slot, win) + `</div>`;
+    + koTreeSide(slot.home, slot, win) + koTreeSide(slot.away, slot, win) + live + `</div>`;
 }
 function renderKnockoutTree(){
   const key=koOrderKeys();
@@ -3416,11 +3454,15 @@ function poolSaveURL(){
     +`&name=${encodeURIComponent(poolName)}&picks=${encodeURIComponent(poolPicksStr())}&champion=${encodeURIComponent(poolChampion)}`
     +`&tiebreak=${encodeURIComponent(poolTiebreak)}&avatar=${encodeURIComponent(JSON.stringify(poolAvatar||{}))}`;
 }
+function poolFlashSaved(){
+  const el=document.getElementById('poolSaveFlash'); if(!el) return;
+  el.textContent='Saved ✓'; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+}
 async function savePool(){
   if(!poolMe) return;
   // Clear the dirty flag only once the save is confirmed, so a tab closed mid-flight
   // still triggers the exit beacon rather than silently dropping the change.
-  try{ await fetch(poolSaveURL()); _poolDirty=false; }catch(e){}
+  try{ await fetch(poolSaveURL()); _poolDirty=false; poolFlashSaved(); }catch(e){}
 }
 // Last-ditch save when the page is being hidden/closed: the debounced fetch may
 // never run, so beacon the current state. The Worker merges and ignores any pick
@@ -3958,6 +4000,21 @@ function poolPicksSectionHTML(){
   });
   return html+`</div>`;
 }
+// The real fixture behind a pool slot (for live score / final result).
+function poolSlotMatch(n){ const stage=roundOfMatch(n), slot=koSlot(n); return (stage&&slot)?koMatchForSlot(stage,slot):null; }
+// Live or final score line for a slot, so you can watch your pick play out in-app.
+function poolMatchLine(n){
+  const m=poolSlotMatch(n); if(!m) return '';
+  const st=matchStatus(m); if(st!=='live' && st!=='completed') return '';
+  const ft=m.score?.fullTime||{};
+  const hs=(typeof ft.home==='number')?ft.home:'–', as=(typeof ft.away==='number')?ft.away:'–';
+  const score=`${flag(m.homeTeam?.name)} <b>${hs}–${as}</b> ${flag(m.awayTeam?.name)}`;
+  if(st==='live'){ const c=matchClock(m); const clk=[c.label,c.detail].filter(Boolean).join(' ');
+    return `<div class="pool-live"><span class="pool-live-dot"></span>${score}${clk?` · ${clk}`:''}</div>`; }
+  const pens=m.score?.penalties;
+  const pk=(pens && typeof pens.home==='number') ? ` (${pens.home}–${pens.away} pens)` : '';
+  return `<div class="pool-live done">FT ${score}${pk}</div>`;
+}
 function poolSlotHTML(slot){
   const n=slot.n, cands=slotCandidates(n), pick=poolPicks[n], locked=matchLocked(n), res=poolPickResult(n);
   const ko=new Date(etToUtcISO(slot.date, slot.et));
@@ -3991,7 +4048,7 @@ function poolSlotHTML(slot){
       + (open ? `<div class="pr-box">${poolRevealHTML(n)}</div>` : '');
   }
   return `<div class="pool-slot ${locked?'locked':''}">`
-    + `<div class="pool-slot-top"><span>Match ${n}</span><span>${locked?'🔒 ':''}${when} ${tzShort()}</span></div>${body}${reveal}</div>`;
+    + `<div class="pool-slot-top"><span>Match ${n}</span><span>${locked?'🔒 ':''}${when} ${tzShort()}</span></div>${body}${poolMatchLine(n)}${reveal}</div>`;
 }
 // Champion options: only teams that can still win it. Once the full R32 field is
 // seeded, that's the 32 knockout teams (excludes group-stage casualties) minus any
@@ -4086,9 +4143,31 @@ function poolNudgeHTML(){
   if(champOpen) bits.push(`your <b>champion</b>`);
   return `<div class="pool-nudge warn">⚠️ Still open: ${bits.join(' + ')}. Picks lock as games kick off${when?` — next at <b>${when}</b>`:''}.</div>`;
 }
+// Your running stake: points banked, how many of your teams are still alive, and
+// the ceiling you could still reach. Banked matches what the leaderboard shows.
+function poolMyStats(){
+  let banked=0, potential=0;
+  const grade=(team,r,wt)=>{ const pc=canonName(team);
+    if(POOL_ADV[r] && POOL_ADV[r].has(pc)) banked+=wt;
+    else if(!POOL_DEAD.has(pc)) potential+=wt; };
+  for(const n in poolPicks){ const t=poolPicks[n]; if(!t) continue; const r=roundOfMatch(n); if(!r) continue; grade(t,r,POOL_WEIGHTS[r]); }
+  if(poolChampion) grade(poolChampion,'FINAL',POOL_CHAMP_BONUS);
+  const teams=new Set(Object.values(poolPicks).filter(Boolean).map(canonName));
+  if(poolChampion) teams.add(canonName(poolChampion));
+  let alive=0; teams.forEach(t=>{ if(!POOL_DEAD.has(t)) alive++; });
+  return { pts:banked, max:banked+potential, alive };
+}
+function poolStatsHTML(){
+  const s=poolMyStats();
+  return `<div class="pool-stats">`
+    + `<span class="ps-item"><b>${s.pts}</b> pts</span>`
+    + `<span class="ps-item"><b>${s.alive}</b> still alive</span>`
+    + `<span class="ps-item"><b>${s.max}</b> max possible</span></div>`;
+}
 function poolBracketHTML(){
   let html=`<div class="pool-bracket-top"><button class="pool-info-btn" onclick="poolToggleHelp()">ⓘ How the pool works</button></div>`;
   if(poolHelp) html+=poolHelpHTML();
+  html+=poolStatsHTML();
   html+=poolNudgeHTML();
   html+=poolChampionHTML();
   html+=poolTiebreakHTML();
@@ -4099,6 +4178,62 @@ function poolBracketHTML(){
     slots.slice().sort((a,b)=>a.n-b.n).forEach(s=>{ html+=poolSlotHTML(s); });
   });
   return html;
+}
+// "My bracket" — the player's predicted bracket as a scrollable tree, ✓/✗ as
+// results land. Reuses the Knockout bracket layout; shows your pick on each side.
+function poolMyTreeMatch(n){
+  const c=slotCandidates(n), pick=poolPicks[n];
+  const side=(team)=>{
+    if(!team) return `<span class="bt-team tbd">TBD</span>`;
+    const picked = pick && team===pick;
+    const res = picked ? poolTeamResult(n,team) : '';
+    const cls=['bt-team']; if(picked) cls.push('mine'); if(res==='yes') cls.push('won'); if(res==='no') cls.push('lost');
+    const mark = res==='yes' ? ' ✓' : res==='no' ? ' ✗' : '';
+    return `<span class="${cls.join(' ')}" data-team="${team.replace(/"/g,'&quot;')}">${flag(team)}<span class="bt-nm">${team}${mark}</span></span>`;
+  };
+  return `<div class="bt-match"><span class="bt-no">M${n}</span>${side(c?c[0]:null)}${side(c?c[1]:null)}</div>`;
+}
+function poolMyBracketHTML(){
+  const key=koOrderKeys();
+  const cols=[['LAST_32','R32'],['LAST_16','R16'],['QUARTER_FINALS','QF'],['SEMI_FINALS','SF'],['FINAL','🏆 Final']];
+  let html=poolStatsHTML()
+    + `<div class="bt-hint">Your predicted bracket — your pick highlighted, ✓/✗ as games finish. Scroll sideways →</div>`
+    + `<div class="pool-champ" style="margin-bottom:12px"><div class="pool-champ-label">🏆 Your champion: ${poolChampion?flag(poolChampion)+' '+poolEsc(poolChampion):'<span style="color:var(--muted)">— none picked —</span>'}</div></div>`
+    + `<div class="bt-scroll"><div class="bt-grid">`;
+  cols.forEach(([stage,label])=>{
+    const ms=(KO_SCHEDULE[stage]||[]).slice().sort((a,b)=>(key[a.n]??0)-(key[b.n]??0));
+    html+=`<div class="bt-col"><div class="bt-colhead">${label}</div><div class="bt-colbody">`;
+    ms.forEach(s=>{ html+=poolMyTreeMatch(s.n); });
+    html+=`</div></div>`;
+  });
+  html+=`</div></div>`;
+  const tp=(KO_SCHEDULE.THIRD_PLACE||[])[0];
+  if(tp) html+=`<div class="bt-thirdwrap"><div class="bt-colhead">3rd place</div>${poolMyTreeMatch(tp.n)}</div>`;
+  return html;
+}
+// Movement since the previous batch of results. We snapshot standings per results-
+// state (count of finished knockout matches) in localStorage: while the state is
+// unchanged the baseline stays put (so the arrows persist across views), and it
+// advances only when new results actually land.
+function poolMomentumBaseline(rows){
+  const sig=allMatches.filter(m=>POOL_ROUND_COUNT[m.stage] && m.status==='FINISHED').length;
+  const pid=(poolBoard && poolBoard.pool) || poolPool || '';
+  const k='wc_pool_mv_'+pid;
+  let stored=null; try{ stored=JSON.parse(localStorage.getItem(k)||'null'); }catch(e){}
+  const cur={}; rows.forEach((r,i)=>{ cur[r.name]={pts:r.pts, rank:i}; });
+  let baseline=null;
+  if(stored && stored.sig===sig){ baseline=stored.prev; }
+  else { baseline = stored ? stored.cur : null; }   // results advanced → last state becomes baseline
+  try{ localStorage.setItem(k, JSON.stringify({ sig, prev: baseline, cur })); }catch(e){}
+  return baseline;
+}
+function poolMomentumHTML(baseline, name, rank, pts){
+  if(!baseline || !baseline[name]) return '';
+  const rd=baseline[name].rank - rank;          // + = climbed
+  const pd=pts - baseline[name].pts;            // points gained
+  const arrow = rd>0 ? `<span class="lb-up">▲${rd}</span>` : rd<0 ? `<span class="lb-down">▼${-rd}</span>` : `<span class="lb-flat">–</span>`;
+  const gain = pd>0 ? `<span class="lb-gain">+${pd}</span>` : '';
+  return `<span class="lb-mv">${arrow}${gain}</span>`;
 }
 function poolLeaderboardHTML(){
   const adv=POOL_ADV||advancedSets();
@@ -4112,6 +4247,7 @@ function poolLeaderboardHTML(){
     // points → correct → closest Final-goals tiebreaker → name (alphabetical only as a last resort)
     rows.sort((a,b)=> b.pts-a.pts || b.correct-a.correct || (tbDelta(a)-tbDelta(b) || 0) || a.name.localeCompare(b.name));
   }
+  const mvBaseline = rows.length ? poolMomentumBaseline(rows) : null;
   const adminBtn = isAdmin
     ? `<button class="pool-mini-btn" onclick="poolAdminExit()">🔓 Admin: exit</button>`
     : `<button class="pool-mini-btn" onclick="poolAdminUnlock()">🔧 Admin</button>`;
@@ -4130,7 +4266,8 @@ function poolLeaderboardHTML(){
     const ch = r.champion ? `<span class="lb-champ">🏆 ${flag(r.champion)}</span>` : '';
     const rm = (isAdmin && r.code) ? `<button class="lb-remove" title="Remove ${poolEsc(r.name)}" data-code="${poolEsc(r.code)}" data-name="${poolEsc(r.name)}" onclick="poolRemove(this)">🗑</button>` : '';
     const tb = (finalTotal!=null && r.tiebreak!=null && r.tiebreak!=='') ? ` · ⚖️${poolEsc(String(r.tiebreak))}` : '';
-    html+=`<div class="lb-row${me}"><div class="lb-pos">${pos}</div>`
+    const mv = poolMomentumHTML(mvBaseline, r.name, i, r.pts);
+    html+=`<div class="lb-row${me}"><div class="lb-pos">${pos}${mv}</div>`
       + `<div class="lb-ava">${CAV.svg(r.avatar,{size:46})}</div>`
       + `<div class="lb-name">${poolEsc(r.name)}${ch}</div>`
       + `<div class="lb-score"><span class="lb-pts">${r.pts}</span><small>pts · ${r.correct}✓${tb}</small></div>${rm}</div>`;
@@ -4169,8 +4306,10 @@ function poolHeaderHTML(){
     + `<div class="pool-hdr-id"><button class="pool-hdr-ava" onclick="poolSetSub('avatar')" title="Edit your player" aria-label="Edit your player">${CAV.svg(a,{size:50})}<span class="pool-hdr-ava-edit">✏️</span></button>`
       + `<div class="pool-hdr-l"><span class="pool-you">${poolEsc(poolName)} <button class="pool-name-edit" onclick="poolEditName()" title="Edit your name" aria-label="Edit your name">✏️</button></span>`
       + `<span class="pool-code">code: <b>${poolEsc(poolMe)}</b> <button class="pool-mini-btn" onclick="poolCopyCode()">copy</button></span></div></div>`
+    + `<span id="poolSaveFlash" class="pool-save-flash"></span>`
     + `<div class="pool-subtabs">`
-    + `<button class="pool-st ${poolSub==='bracket'?'active':''}" onclick="poolSetSub('bracket')">Bracket</button>`
+    + `<button class="pool-st ${poolSub==='bracket'?'active':''}" onclick="poolSetSub('bracket')">Picks</button>`
+    + `<button class="pool-st ${poolSub==='mybracket'?'active':''}" onclick="poolSetSub('mybracket')">🗺 My bracket</button>`
     + `<button class="pool-st ${poolSub==='leaderboard'?'active':''}" onclick="poolSetSub('leaderboard')">Leaderboard</button>`
     + `<button class="pool-st pool-st-player ${poolSub==='avatar'?'active':''}" onclick="poolSetSub('avatar')">🎨 Player</button></div>`
     + `<button class="pool-leave" onclick="poolLeave()" title="Sign out on this browser — your picks stay saved">Sign out</button></div>`;
@@ -4210,6 +4349,7 @@ function renderPool(){
   let mid;
   if(poolSub==='leaderboard') mid=poolLeaderboardHTML();
   else if(poolSub==='avatar') mid=caCustomizerHTML();
+  else if(poolSub==='mybracket') mid=poolMyBracketHTML();
   else mid=poolBracketHTML();
   c.innerHTML = poolHeaderHTML() + mid;
 }
@@ -4242,14 +4382,17 @@ setInterval(() => {
   if (!anyLive) return;
   if (currentView === 'schedule') renderSchedule();
   else if (currentView === 'knockout') renderKnockout();
+  // Live scores stream into the pool too — refresh the pick/bracket views (not the
+  // avatar builder or leaderboard, which shouldn't redraw while in use).
+  else if (currentView === 'pool' && (poolSub === 'bracket' || poolSub === 'mybracket') && poolMe) renderPool();
 }, 20000);
 
 // Keep the pool bracket honest about locks even if the user just sits on it: every
 // 30s re-render so matches/champion freeze the moment their kickoff passes, the
 // countdown advances, and any newly-kicked-off "Pool picks" become available.
-// (Bracket only — the avatar builder and leaderboard shouldn't redraw underfoot.)
+// (Picks/bracket only — the avatar builder and leaderboard shouldn't redraw underfoot.)
 setInterval(() => {
-  if (currentView === 'pool' && poolSub === 'bracket' && poolMe) renderPool();
+  if (currentView === 'pool' && (poolSub === 'bracket' || poolSub === 'mybracket') && poolMe) renderPool();
 }, 30000);
 
 // Don't lose a pick made moments before the tab is closed/backgrounded: the
