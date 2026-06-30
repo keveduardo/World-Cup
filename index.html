@@ -3384,12 +3384,15 @@ function poolRef(ref){ let m;
 }
 function poolLoser(n){ const c=slotCandidates(n); const w=poolPicks[n]; if(!c||!w) return null; return c[0]===w?c[1]:(c[1]===w?c[0]:null); }
 
-// After any change, drop picks that no longer match their slot's candidates (cascades downstream).
+// Drop a pick only when its slot's two teams are KNOWN and the pick is neither
+// (a real cascade after an upstream change). Never drop just because candidates
+// aren't resolvable yet — on a cold render the match data may not have loaded, and
+// dropping there would silently wipe valid picks (and they'd never re-appear).
 function validateBracket(){
   for(let n=73;n<=104;n++){
     const p=poolPicks[n]; if(!p) continue;
     const c=slotCandidates(n);
-    if(!c || (c[0]!==p && c[1]!==p)) delete poolPicks[n];
+    if(c && c[0] && c[1] && canonName(c[0])!==canonName(p) && canonName(c[1])!==canonName(p)) delete poolPicks[n];
   }
 }
 
@@ -4063,8 +4066,10 @@ function poolSlotHTML(slot){
     }
     body=`<div class="pool-tbd">${msg}</div>${extra}`;
   } else {
-    const a=poolTeamBtn(n, cands[0], pick && pick===cands[0], locked, pick===cands[0]?res:'');
-    const b=poolTeamBtn(n, cands[1], pick && pick===cands[1], locked, pick===cands[1]?res:'');
+    const isA = !!(pick && cands[0] && canonName(pick)===canonName(cands[0]));
+    const isB = !!(pick && cands[1] && canonName(pick)===canonName(cands[1]));
+    const a=poolTeamBtn(n, cands[0], isA, locked, isA?res:'');
+    const b=poolTeamBtn(n, cands[1], isB, locked, isB?res:'');
     body=`<div class="pool-pair">${a}<span class="pool-vs">v</span>${b}</div>`;
   }
   let reveal='';
