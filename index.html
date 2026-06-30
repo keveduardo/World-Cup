@@ -1754,10 +1754,13 @@ async function loadEspnLive() {
         id: ev.id,                                   // event id for summary calls
         state: st.type?.state,                       // 'pre' | 'in' | 'post'
         desc: st.type?.description || '',            // 'Halftime', 'Full Time'...
+        detail: st.type?.detail || '',               // longer phrase, helps disambiguate ET/pens
         clock: st.displayClock || '',                // "75'"
         period: st.period || 0,
         homeScore: parseInt(home.score, 10),
         awayScore: parseInt(away.score, 10),
+        shHome: (home.shootoutScore != null) ? parseInt(home.shootoutScore, 10) : undefined,
+        shAway: (away.shootoutScore != null) ? parseInt(away.shootoutScore, 10) : undefined,
         homeForm: home.form || '',                   // "WWWDD"
         awayForm: away.form || '',
         broadcast: [...new Set(bc)].slice(0,3).join(', '),
@@ -1871,22 +1874,47 @@ function matchStatus(m) {
 }
 
 // Live match clock: returns {label, detail} based on minute/half if available
+// On-pitch score to display. football-data's fullTime for a shootout INCLUDES the
+// penalty goals (e.g. it reports "4-5" for a 1-1 game won 4-3 on pens), so subtract
+// the shootout back out — the score that "stands" is regulation + extra time.
+function matchDisplayScore(m) {
+  const sc = m.score || {};
+  const ft = sc.fullTime || {}, ht = sc.halfTime || {};
+  let h = ft.home ?? ht.home, a = ft.away ?? ht.away;
+  const p = sc.penalties;
+  if (p && typeof p.home === 'number' && typeof h === 'number' && typeof a === 'number') {
+    h -= p.home; a -= p.away;
+  }
+  return { home: h, away: a };
+}
+
 function matchClock(m) {
   // Prefer ESPN's real match clock when present
   if (m._espn && m._espn.state === 'in') {
     const e = m._espn;
-    if (/half\s*time|halftime/i.test(e.desc)) return { label: 'Half Time', detail: '' };
-    const half = e.period === 1 ? '1st Half' : e.period === 2 ? '2nd Half'
-      : e.period > 2 ? 'Extra Time' : 'Live';
-    return { label: half, detail: e.clock || '' };
+    const txt = ((e.desc || '') + ' ' + (e.detail || '')).toLowerCase();
+    const period = e.period || 0;
+    // Penalty shootout — never call this "extra time".
+    if (period >= 5 || /penalt|shootout/.test(txt)) {
+      const so = (typeof e.shHome === 'number' && typeof e.shAway === 'number') ? `${e.shHome}–${e.shAway}` : '';
+      return { label: 'Penalties', detail: so };
+    }
+    const inET = period >= 3 || /extra/.test(txt);
+    const isBreak = m.status === 'PAUSED' || /half\s*time|halftime|end of|break|interval/.test(txt);
+    if (isBreak) return inET ? { label: 'Extra Time', detail: 'break' } : { label: 'Half Time', detail: '' };
+    if (inET) return { label: 'Extra Time', detail: e.clock || '' };
+    if (period === 2) return { label: '2nd Half', detail: e.clock || '' };
+    if (period === 1) return { label: '1st Half', detail: e.clock || '' };
+    return { label: 'Live', detail: e.clock || '' };
   }
 
   // Prefer the API's own minute if present
   const start = new Date(m.utcDate).getTime();
   const elapsedMin = Math.floor((Date.now() - start) / 60000);
 
-  // If the API marks it paused, that's half-time
-  if (m.status === 'PAUSED') return { label: 'HALF TIME', detail: '' };
+  // Paused without ESPN detail — best guess is half-time (regulation); we can't tell
+  // an extra-time break apart here, so keep it generic.
+  if (m.status === 'PAUSED') return { label: 'Half Time', detail: '' };
 
   // Use API minute when available, else estimate from kickoff
   let minute = (typeof m.minute === 'number') ? m.minute : elapsedMin;
@@ -2158,11 +2186,10 @@ function renderMatchCard(m, status) {
     ? `<span class="group-tag">MATCH ${m._koNum}</span>`
     : `<span class="group-tag">${(m.stage||'').replace(/_/g,' ')}</span>`;
 
-  // Score helper: prefer full-time, fall back to half-time
-  const ft = m.score?.fullTime || {};
-  const ht = m.score?.halfTime || {};
-  const hs  = ft.home ?? ht.home ?? 0;
-  const as_ = ft.away ?? ht.away ?? 0;
+  // Score helper: on-pitch score (shootout goals excluded — see matchDisplayScore)
+  const _ds = matchDisplayScore(m);
+  const hs  = _ds.home ?? 0;
+  const as_ = _ds.away ?? 0;
 
   // Extra time / penalty shootout annotations
   const pens = m.score?.penalties;
@@ -2756,10 +2783,11 @@ function koTreeMatch(n){
   const m=koMatchForSlot(roundOfMatch(n), slot);
   const win=(m && m.status==='FINISHED') ? canonName(poolWinnerOf(m)||'') : null;
   let live='';
-  if(m){ const st=matchStatus(m); const ft=m.score?.fullTime||{};
-    if(st==='live' && typeof ft.home==='number'){ const c=matchClock(m);
-      live=`<div class="bt-score live"><span class="pool-live-dot"></span>${ft.home}–${ft.away}${c.detail?` ${c.detail}`:''}</div>`; }
-    else if(st==='completed' && typeof ft.home==='number'){ live=`<div class="bt-score">${ft.home}–${ft.away}</div>`; } }
+  if(m){ const st=matchStatus(m); const ds=matchDisplayScore(m); const pens=m.score?.penalties;
+    if(st==='live' && typeof ds.home==='number'){ const c=matchClock(m); const tag=[c.label,c.detail].filter(Boolean).join(' ');
+      live=`<div class="bt-score live"><span class="pool-live-dot"></span>${ds.home}–${ds.away}${tag?` ${tag}`:''}</div>`; }
+    else if(st==='completed' && typeof ds.home==='number'){ const pk=(pens&&typeof pens.home==='number')?` (${pens.home}–${pens.away}p)`:'';
+      live=`<div class="bt-score">${ds.home}–${ds.away}${pk}</div>`; } }
   return `<div class="bt-match"><span class="bt-no">M${n}</span>`
     + koTreeSide(slot.home, slot, win) + koTreeSide(slot.away, slot, win) + live + `</div>`;
 }
@@ -4035,8 +4063,8 @@ function poolSlotMatch(n){ const stage=roundOfMatch(n), slot=koSlot(n); return (
 function poolMatchLine(n){
   const m=poolSlotMatch(n); if(!m) return '';
   const st=matchStatus(m); if(st!=='live' && st!=='completed') return '';
-  const ft=m.score?.fullTime||{};
-  const hs=(typeof ft.home==='number')?ft.home:'–', as=(typeof ft.away==='number')?ft.away:'–';
+  const ds=matchDisplayScore(m);
+  const hs=(typeof ds.home==='number')?ds.home:'–', as=(typeof ds.away==='number')?ds.away:'–';
   const score=`${flag(m.homeTeam?.name)} <b>${hs}–${as}</b> ${flag(m.awayTeam?.name)}`;
   if(st==='live'){ const c=matchClock(m); const clk=[c.label,c.detail].filter(Boolean).join(' ');
     return `<div class="pool-live"><span class="pool-live-dot"></span>${score}${clk?` · ${clk}`:''}</div>`; }
