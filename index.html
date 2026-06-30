@@ -999,6 +999,29 @@
   body.dark .pool-save-flash { color: #6effa0; }
   .pool-save-flash.show { animation: saveflash 2s ease forwards; }
   @keyframes saveflash { 0%{opacity:0} 12%{opacity:1} 65%{opacity:1} 100%{opacity:0} }
+
+  /* 🏅 leaderboard superlative badges */
+  .lb-badges { white-space: nowrap; }
+  .lb-badge { font-size: 13px; margin-left: 1px; cursor: default; }
+
+  /* 💥 bracket-buster callout */
+  .pool-buster { background: rgba(230,57,70,.12); border: 1px solid var(--live-red);
+    border-radius: 10px; padding: 9px 12px; font-size: 13px; line-height: 1.45; margin: 0 0 12px; }
+  .pool-buster b { font-weight: 700; }
+
+  /* 🃏🐐 fun stat cards */
+  .pool-funcard { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px;
+    padding: 10px 12px; margin-top: 12px; }
+  .pool-funcard-h { font-family: 'Barlow Condensed',sans-serif; font-weight: 700; font-size: 16px; margin-bottom: 3px; }
+  .pool-funcard-b { font-size: 13px; line-height: 1.45; color: var(--text); }
+
+  /* 🎉 confetti */
+  .confetti-wrap { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 9999; }
+  .confetti-bit { position: absolute; top: -12px; width: 9px; height: 14px; border-radius: 2px;
+    animation: confetti-fall linear forwards; }
+  @keyframes confetti-fall { 0%{ transform: translateY(-10vh) rotate(0); opacity: 1; }
+    100%{ transform: translateY(105vh) rotate(720deg); opacity: .9; } }
+  @media (prefers-reduced-motion: reduce){ .confetti-wrap { display: none; } }
   .pool-poss { font-size: 11.5px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
   .pool-poss b { color: var(--text); }
 
@@ -3263,6 +3286,9 @@ let poolReveal   = {};      // { matchNumber: true } — bracket slots whose "Po
 let poolPicksOpen= false;   // leaderboard "Who picked what" section expanded
 let _poolSaveT   = null;
 let _poolDirty   = false;   // unsaved local change pending (drives the exit-time beacon)
+let _poolMyRank  = -1;      // my leaderboard index this render (for confetti)
+let _poolChampWon= false;   // my champion won it all (for confetti)
+let _poolConfetti= new Set();// confetti reasons already celebrated this session
 
 function poolEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
@@ -4164,10 +4190,96 @@ function poolStatsHTML(){
     + `<span class="ps-item"><b>${s.alive}</b> still alive</span>`
     + `<span class="ps-item"><b>${s.max}</b> max possible</span></div>`;
 }
+// 💥 Bracket-buster callout — when a pick you needed has died. Cheeky, personal.
+function poolBusterHTML(){
+  const champOut = poolChampion && POOL_DEAD.has(canonName(poolChampion));
+  const dead = new Set(); Object.values(poolPicks).forEach(t=>{ if(t && POOL_DEAD.has(canonName(t))) dead.add(canonName(t)); });
+  if(!champOut && !dead.size) return '';
+  let msg;
+  if(champOut) msg = `💥 Your champion ${flag(poolChampion)} <b>${poolEsc(poolChampion)}</b> is out — there goes your +${POOL_CHAMP_BONUS}.`;
+  else msg = `💥 <b>${dead.size}</b> of your picked team${dead.size!==1?'s have':' has'} been knocked out.`;
+  return `<div class="pool-buster">${msg}</div>`;
+}
+// 🏅 Per-player superlative badges, computed from the standings + results.
+function poolSuperlatives(rows, baseline){
+  const anyResults = allMatches.some(m=>POOL_ROUND_COUNT[m.stage] && m.status==='FINISHED');
+  const maxCorrect = rows.reduce((a,r)=>Math.max(a,r.correct),0);
+  let bestGain=0; if(baseline){ rows.forEach((r,i)=>{ const b=baseline[r.name]; if(b){ const g=b.rank-i; if(g>bestGain) bestGain=g; } }); }
+  const perfectRounds = POOL_ROUNDS.map(x=>x.key).filter(r=> POOL_ROUND_COUNT[r]>=2 && poolFinishedCount(r)>=POOL_ROUND_COUNT[r]);
+  return rows.map((r,i)=>{
+    const b=[];
+    if(anyResults && i===0 && (rows.length<2 || r.pts>rows[1].pts || r.correct>0)) b.push(['👑','Pool leader']);
+    if(anyResults && rows.length>1 && i===rows.length-1) b.push(['🥄','Wooden spoon — last place']);
+    if(maxCorrect>0 && r.correct===maxCorrect) b.push(['🔮','Oracle — most correct picks']);
+    if(baseline && bestGain>0){ const bl=baseline[r.name]; if(bl && (bl.rank-i)===bestGain) b.push(['🚀','On a heater — biggest climb']); }
+    if(r.champion && POOL_DEAD.has(canonName(r.champion))) b.push(['🪦','Busted — champion eliminated']);
+    if(r.picks){ for(const rd of perfectRounds){ const need=POOL_ROUND_COUNT[rd]; let got=0;
+      for(const n in r.picks){ if(roundOfMatch(n)===rd && POOL_ADV[rd] && POOL_ADV[rd].has(canonName(r.picks[n]))) got++; }
+      if(got>=need){ b.push(['🎯','Perfect '+rd.replace(/_/g,' ').toLowerCase()]); break; } } }
+    return b;
+  });
+}
+// 🃏 Boldest correct call — the finished match whose winner the fewest backers
+// picked (and not everyone who engaged got it). Bragging rights.
+function poolContrarianHTML(){
+  if(!poolBoard || !poolBoard.players) return '';
+  const players=poolBoard.players; let best=null;
+  for(const key in KO_SCHEDULE){ for(const slot of KO_SCHEDULE[key]){ const n=slot.n;
+    const m=koMatchForSlot(key, slot); if(!m || m.status!=='FINISHED') continue;
+    const w=poolWinnerOf(m); if(!w) continue; const wc=canonName(w);
+    const engaged=players.filter(p=>(p.picks||{})[n]);
+    if(engaged.length<2) continue;
+    const backers=engaged.filter(p=>canonName(p.picks[n])===wc);
+    if(!backers.length || backers.length===engaged.length) continue;   // need it to be genuinely bold
+    if(!best || backers.length<best.count || (backers.length===best.count && backers.length/engaged.length<best.frac)){
+      const loser = canonName(m.homeTeam?.name)===wc ? m.awayTeam?.name : m.homeTeam?.name;
+      best={ count:backers.length, total:engaged.length, frac:backers.length/engaged.length,
+             team:w, opp:loser, names:backers.map(p=>p.name) };
+    }
+  }}
+  if(!best) return '';
+  const who = best.names.length<=3 ? best.names.map(poolEsc).join(', ') : `${best.names.length} players`;
+  return `<div class="pool-funcard"><div class="pool-funcard-h">🃏 Boldest call</div>`
+    + `<div class="pool-funcard-b"><b>${who}</b> — only ${best.count} of ${best.total} backed ${flag(best.team)} <b>${poolEsc(best.team)}</b> past ${poolEsc(best.opp)}.</div></div>`;
+}
+// 🐐 Cinderella — the lowest FIFA-ranked team still standing, and who picked them
+// to win it all.
+function poolCinderellaHTML(){
+  const field=new Set();
+  for(let n=73;n<=88;n++){ const f=POOL_R32FX[n]; if(f){ field.add(f.home); field.add(f.away); } }
+  if(!field.size) return '';
+  let worst=null;
+  field.forEach(t=>{ if(POOL_DEAD.has(canonName(t))) return; const rk=fifaRank(t); if(rk==null) return;
+    if(!worst || rk>worst.rk) worst={team:t, rk}; });
+  if(!worst) return '';
+  let backers=[];
+  if(poolBoard && poolBoard.players) backers=poolBoard.players.filter(p=>p.champion && canonName(p.champion)===canonName(worst.team)).map(p=>p.name);
+  const back = backers.length ? ` — ${backers.length} in the pool picked them to win it all` : '';
+  return `<div class="pool-funcard"><div class="pool-funcard-h">🐐 Cinderella</div>`
+    + `<div class="pool-funcard-b">${flag(worst.team)} <b>${poolEsc(worst.team)}</b> (FIFA #${worst.rk}) is the lowest-ranked team still standing${back}.</div></div>`;
+}
+// 🎉 Confetti — a quick celebratory burst (no libs). Fires once per reason/session.
+function poolConfetti(){
+  const colors=['#f5c518','#0e7a4a','#e63946','#2a6fdb','#ff8a00','#ffffff'];
+  const wrap=document.createElement('div'); wrap.className='confetti-wrap';
+  for(let i=0;i<70;i++){ const c=document.createElement('span'); c.className='confetti-bit';
+    c.style.left=Math.random()*100+'vw'; c.style.background=colors[i%colors.length];
+    c.style.animationDelay=(Math.random()*0.6)+'s'; c.style.animationDuration=(2.2+Math.random()*1.4)+'s';
+    c.style.transform=`rotate(${Math.random()*360}deg)`; wrap.appendChild(c); }
+  document.body.appendChild(wrap);
+  setTimeout(()=>wrap.remove(), 4200);
+}
+function poolMaybeConfetti(){
+  if(typeof currentView==='undefined' || currentView!=='pool') return;
+  if(_poolChampWon && !_poolConfetti.has('champ')){ _poolConfetti.add('champ'); poolConfetti(); return; }
+  const anyResults = allMatches.some(m=>POOL_ROUND_COUNT[m.stage] && m.status==='FINISHED');
+  if(anyResults && _poolMyRank===0 && !_poolConfetti.has('lead')){ _poolConfetti.add('lead'); poolConfetti(); }
+}
 function poolBracketHTML(){
   let html=`<div class="pool-bracket-top"><button class="pool-info-btn" onclick="poolToggleHelp()">ⓘ How the pool works</button></div>`;
   if(poolHelp) html+=poolHelpHTML();
   html+=poolStatsHTML();
+  html+=poolBusterHTML();
   html+=poolNudgeHTML();
   html+=poolChampionHTML();
   html+=poolTiebreakHTML();
@@ -4197,6 +4309,7 @@ function poolMyBracketHTML(){
   const key=koOrderKeys();
   const cols=[['LAST_32','R32'],['LAST_16','R16'],['QUARTER_FINALS','QF'],['SEMI_FINALS','SF'],['FINAL','🏆 Final']];
   let html=poolStatsHTML()
+    + poolBusterHTML()
     + `<div class="bt-hint">Your predicted bracket — your pick highlighted, ✓/✗ as games finish. Scroll sideways →</div>`
     + `<div class="pool-champ" style="margin-bottom:12px"><div class="pool-champ-label">🏆 Your champion: ${poolChampion?flag(poolChampion)+' '+poolEsc(poolChampion):'<span style="color:var(--muted)">— none picked —</span>'}</div></div>`
     + `<div class="bt-scroll"><div class="bt-grid">`;
@@ -4243,11 +4356,15 @@ function poolLeaderboardHTML(){
   const finalTotal=poolFinalActualTotal();
   const tbDelta=r=>(finalTotal==null || r.tiebreak==null || r.tiebreak==='') ? Infinity : Math.abs(+r.tiebreak - finalTotal);
   if(poolBoard && poolBoard.players){
-    rows=poolBoard.players.map(p=>{ const s=poolScore(p,adv,actualChamp); return { name:p.name, champion:p.champion, tiebreak:p.tiebreak, avatar:p.avatar, code:p.code, ...s }; });
+    rows=poolBoard.players.map(p=>{ const s=poolScore(p,adv,actualChamp); return { name:p.name, champion:p.champion, tiebreak:p.tiebreak, picks:p.picks, avatar:p.avatar, code:p.code, ...s }; });
     // points → correct → closest Final-goals tiebreaker → name (alphabetical only as a last resort)
     rows.sort((a,b)=> b.pts-a.pts || b.correct-a.correct || (tbDelta(a)-tbDelta(b) || 0) || a.name.localeCompare(b.name));
   }
   const mvBaseline = rows.length ? poolMomentumBaseline(rows) : null;
+  const badges = poolSuperlatives(rows, mvBaseline);
+  // remember my standing this render so confetti can fire on a win / 1st place
+  const myI = rows.findIndex(r=>r.name===poolName);
+  _poolMyRank = myI; _poolChampWon = !!(actualChamp && poolChampion && canonName(poolChampion)===canonName(actualChamp));
   const adminBtn = isAdmin
     ? `<button class="pool-mini-btn" onclick="poolAdminExit()">🔓 Admin: exit</button>`
     : `<button class="pool-mini-btn" onclick="poolAdminUnlock()">🔧 Admin</button>`;
@@ -4267,14 +4384,15 @@ function poolLeaderboardHTML(){
     const rm = (isAdmin && r.code) ? `<button class="lb-remove" title="Remove ${poolEsc(r.name)}" data-code="${poolEsc(r.code)}" data-name="${poolEsc(r.name)}" onclick="poolRemove(this)">🗑</button>` : '';
     const tb = (finalTotal!=null && r.tiebreak!=null && r.tiebreak!=='') ? ` · ⚖️${poolEsc(String(r.tiebreak))}` : '';
     const mv = poolMomentumHTML(mvBaseline, r.name, i, r.pts);
+    const bdg = (badges[i]||[]).map(([e,t])=>`<span class="lb-badge" title="${t}">${e}</span>`).join('');
     html+=`<div class="lb-row${me}"><div class="lb-pos">${pos}${mv}</div>`
       + `<div class="lb-ava">${CAV.svg(r.avatar,{size:46})}</div>`
-      + `<div class="lb-name">${poolEsc(r.name)}${ch}</div>`
+      + `<div class="lb-name">${poolEsc(r.name)}${bdg?` <span class="lb-badges">${bdg}</span>`:''}${ch}</div>`
       + `<div class="lb-score"><span class="lb-pts">${r.pts}</span><small>pts · ${r.correct}✓${tb}</small></div>${rm}</div>`;
   });
   const tbHint = finalTotal!=null ? ' Ties broken by closest Final-goals guess (⚖️).' : '';
   html += `</div><div class="pool-hint">R32 1 · R16 2 · QF 4 · SF 8 · Final 16 · 3rd 4 · Champion +${POOL_CHAMP_BONUS}. Other players' picks reveal after each kickoff.${tbHint}</div>`;
-  return html + poolChampDistHTML() + poolPicksSectionHTML() + `</div>`;
+  return html + poolContrarianHTML() + poolCinderellaHTML() + poolChampDistHTML() + poolPicksSectionHTML() + `</div>`;
 }
 // Champion pick distribution — who the pool backed for the title. Champions are
 // revealed by the Worker only after the champion lock (first R32 kickoff), so this
@@ -4352,6 +4470,7 @@ function renderPool(){
   else if(poolSub==='mybracket') mid=poolMyBracketHTML();
   else mid=poolBracketHTML();
   c.innerHTML = poolHeaderHTML() + mid;
+  if(poolSub==='leaderboard') poolMaybeConfetti();   // 🎉 once per session on a win / 1st place
 }
 async function poolInit(){
   if(poolMe){
