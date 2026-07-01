@@ -4269,7 +4269,7 @@ function poolRevealHTML(n){
 // Leaderboard section: every match that has kicked off, grouped by round.
 function poolPicksSectionHTML(){
   const locked=[];
-  POOL_ROUNDS.forEach(({key,label})=>{ (KO_SCHEDULE[key]||[]).slice().sort((a,b)=>a.n-b.n)
+  POOL_ROUNDS.forEach(({key,label})=>{ (KO_SCHEDULE[key]||[]).slice().sort((a,b)=>poolKickMs(a.n)-poolKickMs(b.n))
     .forEach(s=>{ if(matchLocked(s.n)) locked.push({n:s.n,label}); }); });
   const sub = locked.length ? `${locked.length} match${locked.length>1?'es':''} unlocked` : 'unlocks at kickoff';
   let html=`<div class="pr-section"><button class="pr-section-h" onclick="poolTogglePicks()">`
@@ -4869,7 +4869,8 @@ function poolBracketHTML(){
     const slots=KO_SCHEDULE[key]||[];
     const wt=POOL_WEIGHTS[key];
     html+=`<div class="pool-round-head"><h2>${label}</h2><span class="wt">${wt} pt${wt>1?'s':''} each</span></div>`;
-    slots.slice().sort((a,b)=>a.n-b.n).forEach(s=>{ html+=poolSlotHTML(s); });
+    // Chronological (as played), not by bracket match-number.
+    slots.slice().sort((a,b)=>poolKickMs(a.n)-poolKickMs(b.n)).forEach(s=>{ html+=poolSlotHTML(s); });
   });
   return html;
 }
