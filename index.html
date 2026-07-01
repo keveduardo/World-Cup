@@ -988,11 +988,6 @@
     color: var(--text); line-height: 1; margin-bottom: 2px; }
 
   /* Leaderboard momentum */
-  .lb-mv { display: block; font-size: 10px; font-weight: 700; margin-top: 2px; }
-  .lb-up { color: #0e9a55; } body.dark .lb-up { color: #6effa0; }
-  .lb-down { color: #c0392b; } body.dark .lb-down { color: #ffb3b3; }
-  .lb-flat { color: var(--muted); }
-  .lb-gain { color: var(--gold); margin-left: 3px; }
 
   /* "Saved ✓" flash in the pool header */
   .pool-save-flash { font-size: 12px; font-weight: 700; color: #0e9a55; opacity: 0; pointer-events: none; }
@@ -4709,14 +4704,6 @@ function poolMomentumBaseline(rows){
   try{ localStorage.setItem(k, JSON.stringify({ sig, prev: baseline, cur })); }catch(e){}
   return baseline;
 }
-function poolMomentumHTML(baseline, name, rank, pts){
-  if(!baseline || !baseline[name]) return '';
-  const rd=baseline[name].rank - rank;          // + = climbed
-  const pd=pts - baseline[name].pts;            // points gained
-  const arrow = rd>0 ? `<span class="lb-up">▲${rd}</span>` : rd<0 ? `<span class="lb-down">▼${-rd}</span>` : `<span class="lb-flat">–</span>`;
-  const gain = pd>0 ? `<span class="lb-gain">+${pd}</span>` : '';
-  return `<span class="lb-mv">${arrow}${gain}</span>`;
-}
 function poolLeaderboardHTML(){
   const adv=POOL_ADV||advancedSets();
   const actualChamp = adv.FINAL && adv.FINAL.size ? [...adv.FINAL][0] : '';
@@ -4755,7 +4742,6 @@ function poolLeaderboardHTML(){
     const ch = r.champion ? `<span class="lb-champ">🏆 ${flag(r.champion)}</span>` : '';
     const rm = (isAdmin && r.code) ? `<button class="lb-remove" title="Remove ${poolEsc(r.name)}" data-code="${poolEsc(r.code)}" data-name="${poolEsc(r.name)}" onclick="poolRemove(this)">🗑</button>` : '';
     const tb = (finalTotal!=null && r.tiebreak!=null && r.tiebreak!=='') ? ` · ⚖️${poolEsc(String(r.tiebreak))}` : '';
-    const mv = poolMomentumHTML(mvBaseline, r.name, i, r.pts);
     const m = meta[i] || { badges:[], roast:'', topper:'' };
     const bdg = m.badges.map(([e,t])=>`<span class="lb-badge" title="${t}">${e}</span>`).join('');
     const top = m.topper ? `<span class="lb-topper">${m.topper}</span>` : '';
@@ -4769,7 +4755,7 @@ function poolLeaderboardHTML(){
       ? `<span class="lb-code">🔑 <code data-code="${poolEsc(r.code)}">${poolEsc(r.code)}</code>`
         + `<button class="pool-mini-btn" data-code="${poolEsc(r.code)}" onclick="poolCopy(this.dataset.code)">copy</button></span>`
       : '';
-    html+=`<div class="lb-row${me}"><div class="lb-pos">${pos}${mv}</div>`
+    html+=`<div class="lb-row${me}"><div class="lb-pos">${pos}</div>`
       + `<div class="lb-ava">${top}${CAV.svg(r.avatar,{size:46})}</div>`
       + `<div class="lb-name">${poolEsc(r.name)}${bdg?` <span class="lb-badges">${bdg}</span>`:''}${ch}${roast}${codeLine}</div>`
       + `<div class="lb-score"><span class="lb-pts">${r.pts}</span><small>pts · ${r.correct}✓${tb}</small></div>${rm}</div>`;
