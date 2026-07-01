@@ -1274,6 +1274,56 @@
     background: linear-gradient(180deg, #12432c, #0a2c1e); color: var(--gold); letter-spacing: 1.5px;
     border: 1px solid rgba(245,197,24,.3); box-shadow: 0 1px 2px rgba(0,0,0,.4), 0 1px 0 rgba(255,255,255,.08) inset;
   }
+
+  /* ── STEP 2: header (grass pitch) · metallic title · broadcast clock · tabs ── */
+  body.broadcast header {
+    background:
+      radial-gradient(130% 90% at 50% -25%, rgba(255,255,255,.10), transparent 60%),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0 62px, rgba(0,0,0,.05) 62px 124px),
+      repeating-linear-gradient(0deg, rgba(0,0,0,.05) 0 2px, transparent 2px 7px),
+      linear-gradient(180deg, #0e5a37 0%, #0a3f27 55%, #072c1d 100%);
+    border-bottom: 3px solid var(--gold);
+    box-shadow: 0 3px 0 rgba(184,137,31,.5), 0 9px 20px rgba(0,0,0,.42);
+  }
+  body.broadcast h1 {
+    color: #f6d75f;
+    text-shadow: 0 1px 0 #b8891f, 0 2px 3px rgba(0,0,0,.6), 0 0 16px rgba(245,197,24,.35);
+    letter-spacing: .5px;
+  }
+  body.broadcast h1 .info-btn { color: var(--gold); text-shadow: none; }
+  body.broadcast .eyebrow { color: var(--gold); text-shadow: 0 0 10px rgba(245,197,24,.4); }
+  body.broadcast .byline { text-shadow: 0 1px 4px rgba(0,0,0,.5), 0 0 12px rgba(245,197,24,.3); }
+  /* broadcast clock — inset panel, glowing amber digits */
+  body.broadcast .live-clock {
+    background: linear-gradient(180deg, #0a2a1c, #061a12);
+    border: 1px solid rgba(245,197,24,.35); border-radius: 8px; padding: 6px 12px;
+    box-shadow: 0 2px 6px rgba(0,0,0,.5), 0 1px 0 rgba(255,255,255,.08) inset, 0 -7px 12px rgba(0,0,0,.32) inset;
+  }
+  body.broadcast .live-clock .time { color: #ffe98a; letter-spacing: 1px; text-shadow: 0 0 6px rgba(245,197,24,.6), 0 1px 1px rgba(0,0,0,.6); }
+  body.broadcast .live-clock .tz { color: rgba(245,197,24,.85); }
+  /* glossy metallic pool pill */
+  body.broadcast .pool-nav {
+    background: linear-gradient(180deg, #ffe37a 0%, #f5c518 50%, #d19b12 100%); color: #073d24;
+    border: 1px solid rgba(120,90,15,.5);
+    box-shadow: 0 2px 8px rgba(0,0,0,.35), 0 1px 0 rgba(255,255,255,.55) inset, 0 -3px 6px rgba(0,0,0,.15) inset;
+  }
+  /* brushed dark-metal tab bar, glowing gold active tab */
+  body.broadcast .tab-bar {
+    background: linear-gradient(180deg, #0c3a25, #072a1b);
+    box-shadow: 0 3px 10px rgba(0,0,0,.4), 0 1px 0 rgba(255,255,255,.06) inset;
+  }
+  body.broadcast .tab.active, body.broadcast .tab:hover { color: #ffe98a; text-shadow: 0 0 10px rgba(245,197,24,.5); }
+  /* next-up "up next" broadcast panel + countdown */
+  body.broadcast .next-up-banner {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0) 42%),
+      linear-gradient(158deg, #0c4a2e 0%, #0a3826 60%, #0b2740 100%);
+    border: 1px solid rgba(245,197,24,.28); border-radius: 12px;
+    box-shadow: 0 5px 14px rgba(0,0,0,.32), 0 1px 0 rgba(255,255,255,.08) inset;
+  }
+  body.broadcast .next-up-label { color: var(--gold); text-shadow: 0 0 8px rgba(245,197,24,.4); }
+  body.broadcast .next-up-time { color: #ffe98a; text-shadow: 0 0 6px rgba(245,197,24,.5); }
+  body.broadcast .next-up-countdown { color: rgba(255,255,255,.85); }
 </style>
 </head>
 <body>
