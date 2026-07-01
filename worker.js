@@ -72,7 +72,7 @@ function parsePicks(str) {
     const i = p.indexOf(':');
     if (i > 0) {
       const n = p.slice(0, i);
-      const name = p.slice(i + 1);
+      const name = p.slice(i + 1, i + 41);   // cap team name length (KV-bloat guard)
       if (name && KO_TIMES[n]) out[n] = name;
     }
   });
@@ -108,7 +108,7 @@ export default {
 
     try {
       if (type === 'favsave') {
-        const code  = (url.searchParams.get('code')  || '').trim();
+        const code  = (url.searchParams.get('code')  || '').trim().slice(0, 64);
         const teams = (url.searchParams.get('teams') || '');
         const tz    = (url.searchParams.get('tz')    || '');
         if (code) {
@@ -122,7 +122,7 @@ export default {
         }
 
       } else if (type === 'favload') {
-        const code = (url.searchParams.get('code') || '').trim();
+        const code = (url.searchParams.get('code') || '').trim().slice(0, 64);
         const raw = code ? await env.WC_KV.get('fav_' + code) : null;
         if (!raw) {
           payload = { teams: [], tz: '' };
@@ -134,7 +134,7 @@ export default {
       // ─── PREDICTION POOL ────────────────────────────────────────────────
       } else if (type === 'poolload') {
         // Returning members log in with just their personal code.
-        const me = (url.searchParams.get('me') || '').trim();
+        const me = (url.searchParams.get('me') || '').trim().slice(0, 64);
         let entry = null;
         if (me) {
           const raw = await env.WC_KV.get('pool_player_' + me);
@@ -145,7 +145,7 @@ export default {
 
       } else if (type === 'poolsave') {
         const pool = (url.searchParams.get('pool') || '').trim();
-        const me   = (url.searchParams.get('me')   || '').trim();
+        const me   = (url.searchParams.get('me')   || '').trim().slice(0, 64);
         const name = (url.searchParams.get('name') || '').trim().slice(0, 40);
         if (!me) {
           payload = { error: 'missing personal code' };
@@ -204,7 +204,7 @@ export default {
 
       } else if (type === 'poolboard') {
         const pool = (url.searchParams.get('pool') || '').trim();
-        const me   = (url.searchParams.get('me')   || '').trim();
+        const me   = (url.searchParams.get('me')   || '').trim().slice(0, 64);
         // Which pool's board to show: a valid join code names its pool; otherwise
         // a logged-in member sees their OWN pool. Each pool is fully separate.
         let boardPool = validPool(pool) ? normPool(pool) : null;
@@ -252,7 +252,7 @@ export default {
       } else if (type === 'pooldelete') {
         // Admin-only: remove a member's entry. Auth enforced server-side against
         // the POOL_ADMIN_CODE secret — a client flag alone can't delete anything.
-        const target = (url.searchParams.get('target') || '').trim();
+        const target = (url.searchParams.get('target') || '').trim().slice(0, 64);
         if (!isAdmin) {
           payload = { error: 'not authorized' };
         } else if (!target) {
@@ -267,7 +267,7 @@ export default {
         // normal champion lock (for commissioner fixes — e.g. members who never got
         // to pick). Target by personal code, or by name within a pool. Auth enforced
         // server-side against POOL_ADMIN_CODE.
-        const target = (url.searchParams.get('target') || '').trim();      // personal code
+        const target = (url.searchParams.get('target') || '').trim().slice(0, 64);      // personal code
         const name   = (url.searchParams.get('name')   || '').trim();      // or display name
         const champ  = (url.searchParams.get('champion') || '').trim().slice(0, 40);
         const pool   = (url.searchParams.get('pool') || '').trim();
@@ -348,7 +348,10 @@ export default {
           { 'X-Auth-Token': env.FOOTBALL_API_KEY });
       }
     } catch (err) {
-      payload = { error: String(err) };
+      // Log server-side (visible via `wrangler tail`) but never echo internals to
+      // the client — raw errors leaked KV limits / implementation details.
+      console.error('worker error:', err);
+      payload = { error: 'request failed' };
     }
 
     return new Response(JSON.stringify(payload), { headers: CORS });

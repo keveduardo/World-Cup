@@ -3633,12 +3633,6 @@ function poolFinalActualTotal(){
   return (typeof ft.home==='number' && typeof ft.away==='number') ? ft.home+ft.away : null;
 }
 
-// Resolve a group-placement descriptor like '2A' or '1E' to an actual team via standings.
-function resolvePlacement(desc){
-  const m=/^([12])([A-L])$/.exec(desc);
-  if(m){ const rows=standingsMap[m[2]]; if(rows && rows[+m[1]-1]) return rows[+m[1]-1].team; }
-  return null; // third-place descriptors (e.g. '3rd A/B/C/D/F') resolve via the fixture itself
-}
 // Resolve one R32 side descriptor to a team. Reuses the SAME logic the Knockout
 // tab uses, so the pool bracket fills exactly when the Knockout tab does — including
 // the best-eight third-place slots (Annex C), which the old version couldn't resolve.
@@ -3731,7 +3725,6 @@ function advancedSets(){
   return adv;
 }
 function poolFinishedCount(stage){ return allMatches.filter(m=>m.stage===stage && m.status==='FINISHED').length; }
-function poolRoundComplete(r){ return poolFinishedCount(r) >= POOL_ROUND_COUNT[r]; }
 // Per-round losers + a tournament-wide "knocked out" set. Lets us mark a pick ✗ the
 // moment its own match is decided, instead of waiting for the whole round to finish.
 function koResultSets(){
