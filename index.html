@@ -1003,6 +1003,11 @@
   /* 🏅 leaderboard superlative badges */
   .lb-badges { white-space: nowrap; }
   .lb-badge { font-size: 13px; margin-left: 1px; cursor: default; }
+  /* admin-only personal code line */
+  .lb-code { display: flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 11px; color: var(--muted); }
+  .lb-code code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--text);
+    background: var(--off-white); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; }
+  .lb-code .pool-mini-btn { padding: 1px 6px; font-size: 10px; }
 
   /* 💥 bracket-buster callout */
   .pool-buster { background: rgba(230,57,70,.12); border: 1px solid var(--live-red);
@@ -3483,6 +3488,7 @@ function poolPick(n, team){ if(matchLocked(n)){ renderPool(); return; } poolPick
 function poolSetChampion(v){ if(championLocked()){ renderPool(); return; } poolChampion=v; renderPool(); savePoolSoon(); }
 function poolSetSub(s){ if(poolSub==='avatar' && s!=='avatar') flushPoolSave(); poolSub=s; renderPool(); if(s==='leaderboard') poolLoadBoard(); }
 function poolCopyCode(){ try{ navigator.clipboard.writeText(poolMe); }catch(e){} }
+function poolCopy(s){ try{ navigator.clipboard.writeText(s); }catch(e){} }
 function poolEditName(){
   const v=prompt('Edit your display name:', poolName||'');
   if(v==null) return;
@@ -4418,9 +4424,15 @@ function poolLeaderboardHTML(){
     const tb = (finalTotal!=null && r.tiebreak!=null && r.tiebreak!=='') ? ` · ⚖️${poolEsc(String(r.tiebreak))}` : '';
     const mv = poolMomentumHTML(mvBaseline, r.name, i, r.pts);
     const bdg = (badges[i]||[]).map(([e,t])=>`<span class="lb-badge" title="${t}">${e}</span>`).join('');
+    // Admin-only: show each member's personal code (their login) so you can recover
+    // it for them. The Worker only sends codes to an authenticated admin.
+    const codeLine = (isAdmin && r.code)
+      ? `<span class="lb-code">🔑 <code data-code="${poolEsc(r.code)}">${poolEsc(r.code)}</code>`
+        + `<button class="pool-mini-btn" data-code="${poolEsc(r.code)}" onclick="poolCopy(this.dataset.code)">copy</button></span>`
+      : '';
     html+=`<div class="lb-row${me}"><div class="lb-pos">${pos}${mv}</div>`
       + `<div class="lb-ava">${CAV.svg(r.avatar,{size:46})}</div>`
-      + `<div class="lb-name">${poolEsc(r.name)}${bdg?` <span class="lb-badges">${bdg}</span>`:''}${ch}</div>`
+      + `<div class="lb-name">${poolEsc(r.name)}${bdg?` <span class="lb-badges">${bdg}</span>`:''}${ch}${codeLine}</div>`
       + `<div class="lb-score"><span class="lb-pts">${r.pts}</span><small>pts · ${r.correct}✓${tb}</small></div>${rm}</div>`;
   });
   const tbHint = finalTotal!=null ? ' Ties broken by closest Final-goals guess (⚖️).' : '';
