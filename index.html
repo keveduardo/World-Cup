@@ -4286,16 +4286,68 @@ function poolBusterHTML(){
 // deterministic tiny hash so a player's random-flavored line stays put per render
 function poolHash(s){ let h=0; s=String(s||''); for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0; return Math.abs(h); }
 const POOL_ROASTS={
-  leader:["running away with it — insufferable already 😤","currently everyone's problem","peaked. it's all downhill from here","the bracket to beat, allegedly","built different (or just lucky)"],
-  last:["single-handedly holding up the entire table — a true foundation","in a brave, bold, confident last place","technically still alive, spiritually not","the designated driver of this pool","picks chosen by a coin. the coin is losing"],
-  busted:["champion's out — pour one out 🫗","the dream is dead, the picks remain","that +10 was never real, was it","bracket now held together by hope and duct tape"],
-  dead:["everything's eliminated. it's just vibes now 💀","technically playing, functionally spectating","the bracket flatlined. calling it","nothing left alive — pure chaos mode"],
-  heater:["climbing the board like rent's due 📈","on a heater — somebody check the thermostat","moving on up, making enemies","suddenly a threat. weird"],
-  cold:["free-falling and pretending it's fine 🧊","sliding down the board gracefully. not really","was that your good round? 😬","cooling off faster than the halftime tea"],
-  oracle:["suspiciously good at this 🔮","genius or witch, jury's out","reading the games like a menu","calling it before it happens, show-off"],
-  mid:["comfortably, aggressively mid","neither thriving nor dying","present and accounted for","just vibing in the middle","a solid 'meh' so far"],
+  leader:[
+    "running away with it — insufferable already 😤","currently everyone's problem","peaked. it's all downhill from here",
+    "the bracket to beat, allegedly","built different (or just lucky)","leading the pool and letting everyone know it",
+    "first place and absolutely zero chill","somebody had to be good at this. tragically, it's them","the villain this pool deserves",
+    "hasn't stopped talking since the group stage","feet up at the top, watching you all squirm","carrying a smug little grin around the leaderboard",
+    "the person you love to lose to","riding a wave of skill and/or blind luck","already drafting the acceptance speech",
+    "king of the hill, and the hill knows it","so far ahead it's basically a solo tournament","insufferable, but technically correct",
+  ],
+  last:[
+    "single-handedly holding up the entire table — a true foundation","in a brave, bold, confident last place","technically still alive, spiritually not",
+    "the designated driver of this pool","picks chosen by a coin. the coin is losing","providing everyone else with much-needed confidence",
+    "the anchor — literally dragging the bottom","here for the vibes, clearly not the points","somebody's gotta be last. thank you for your service",
+    "bracket looks like it was filled out during an earthquake","aggressively committed to finishing dead last","the wooden spoon has your name pre-engraved",
+    "playing a completely different sport, apparently","so far back the leader gets mail from a different time zone","consistency is key — and you're consistently last",
+    "turning last place into an art form","the pool's emotional support loser 🥄","reverse-sweeping the field with total confidence",
+  ],
+  busted:[
+    "champion's out — pour one out 🫗","the dream is dead, the picks remain","that +10 was never real, was it",
+    "bracket now held together by hope and duct tape","champion pick aged like milk in the sun","put all the eggs in one basket. basket is gone",
+    "there goes the title bet — bold, wrong, memorable","the champion has left the building. and the tournament","ten points evaporated on live television",
+    "picked a winner. the tournament respectfully disagreed","the crown fell off before the final. tragic","condolences on the champ. brief, beautiful, gone",
+  ],
+  dead:[
+    "everything's eliminated. it's just vibes now 💀","technically playing, functionally spectating","the bracket flatlined. calling it",
+    "nothing left alive — pure chaos mode","your teams are on a beach somewhere already","bracket status: smoking crater",
+    "watching the rest for fun now, like a normal person","every horse scratched — betting slip is confetti","mathematically here, emotionally checked out",
+    "the whole bracket got sent home early","running on fumes and a champion who's also out","nothing left to root for but everyone else's misery",
+  ],
+  heater:[
+    "climbing the board like rent's due 📈","on a heater — somebody check the thermostat","moving on up, making enemies",
+    "suddenly a threat. weird","came out of nowhere and started swinging","the comeback nobody asked for",
+    "rocketing up the table, drunk on momentum","was nobody, is now somebody, briefly","hot streak so bright it needs sunglasses",
+    "climbing so fast the leader's getting nervous","found the cheat code this round","up the leaderboard like it owes them money",
+  ],
+  cold:[
+    "free-falling and pretending it's fine 🧊","sliding down the board, gracefully — not really","was that your good round? 😬",
+    "cooling off faster than the halftime tea","in a full nosedive with the seatbelt light on","the wheels came off this round",
+    "dropping down the table like a bad habit","ice cold — someone fetch a blanket","momentum went out for cigarettes and never came back",
+    "sinking quietly, hoping nobody notices","peaked early, paying for it now","the fall from grace was quick and very public",
+  ],
+  oracle:[
+    "suspiciously good at this 🔮","genius or witch — jury's out","reading the games like a menu",
+    "calling it before it happens, show-off","either studied the film or sold their soul","nailing picks like it's rigged (it's not… right?)",
+    "the pool's resident know-it-all, annoyingly correct","seeing the future and rubbing it in","picks so sharp they need a warning label",
+    "how are they doing this. seriously","the crystal ball is working overtime","correct so often it's getting suspicious",
+  ],
+  mid:[
+    "comfortably, aggressively mid","neither thriving nor dying","present and accounted for","just vibing in the middle","a solid 'meh' so far",
+    "perfectly, unremarkably average","the human embodiment of a shrug","not good, not bad, just… there",
+    "middle of the pack, playing it safe","quietly existing on the leaderboard","no notes, no highlights, no problems",
+    "the pool's beige wall of a competitor","hovering in the mediocrity comfort zone","flying so under the radar it's basically stealth",
+    "the 'room temperature' of brackets","doing enough to not get roasted. barely",
+  ],
 };
-function poolRoastLine(key,name){ const bank=POOL_ROASTS[key]||POOL_ROASTS.mid; return bank[poolHash(name+key)%bank.length]; }
+// Rotate the burn: stable within a render, but shifts each day and after every new
+// result — so the jokes keep refreshing instead of getting stale on one line.
+function poolRoastLine(key,name){
+  const bank=POOL_ROASTS[key]||POOL_ROASTS.mid;
+  const day=Math.floor(Date.now()/86400000);
+  const done=allMatches.filter(m=>POOL_ROUND_COUNT[m.stage] && m.status==='FINISHED').length;
+  return bank[(poolHash(name+key)+day+done)%bank.length];
+}
 // Players who were the ONLY correct backer of a finished match's winner (🍀).
 function poolSoleUpsetCallers(){
   const out=new Set(); if(!poolBoard||!poolBoard.players) return out;
