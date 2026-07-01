@@ -148,6 +148,8 @@
   }
 
   .tab.active, .tab:hover { color: var(--gold); border-bottom-color: var(--gold); }
+  .tab-ico { margin-right: 5px; font-size: 13px; }
+  @media (max-width: 600px){ .tab-ico { margin-right: 3px; font-size: 12px; } }
 
   main { max-width: 900px; margin: 0 auto; padding: 16px; }
 
@@ -405,8 +407,31 @@
     font-size: 16px; font-weight: 700;
     color: var(--gold); white-space: nowrap;
   }
+  .next-up-banner .next-up-wx {
+    color: var(--gold); font-size: 13px; font-weight: 700; margin-top: 0; white-space: nowrap;
+  }
+  body.broadcast .next-up-banner .next-up-wx { color: #8fd0ff; text-shadow: 0 0 6px rgba(143,208,255,.4); }
 
-  .filter-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .filter-row { margin-bottom: 16px; }
+  .grp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; }
+  .grp-badge {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 800;
+    letter-spacing: .5px; text-transform: uppercase;
+    background: white; border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 4px; cursor: pointer; color: var(--text); text-align: center;
+    transition: background .15s, color .15s, border-color .15s, transform .1s;
+  }
+  .grp-badge:active { transform: scale(.94); }
+  .grp-badge.all { grid-column: span 2; }
+  .grp-badge.active, .grp-badge:hover { background: var(--pitch); color: var(--gold); border-color: var(--pitch); }
+  body.dark .grp-badge { background: #1b231c; border-color: var(--border); }
+  body.dark .grp-badge.active, body.dark .grp-badge:hover { background: var(--pitch); color: var(--gold); }
+  .filter-controls { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  /* broadcast: metallic group badges */
+  body.broadcast .grp-badge { background: linear-gradient(180deg, #12432c, #0a2c1e); color: var(--white);
+    border: 1px solid rgba(245,197,24,.22); box-shadow: 0 1px 2px rgba(0,0,0,.35), 0 1px 0 rgba(255,255,255,.06) inset; }
+  body.broadcast .grp-badge.active, body.broadcast .grp-badge:hover {
+    background: linear-gradient(180deg, #ffe37a, #f5c518, #d19b12); color: #073d24; border-color: rgba(120,90,15,.5); }
 
   .today-bar {
     display: flex; align-items: center; justify-content: space-between;
@@ -1350,10 +1375,10 @@
 
 <div class="tab-bar">
   <div class="tabs">
-    <button class="tab active" onclick="showView('schedule',this)">Schedule</button>
-    <button class="tab" onclick="showView('groups',this)">Groups & Standings</button>
-    <button class="tab" onclick="showView('knockout',this)">Knockout</button>
-    <button class="tab" onclick="showView('teams',this)">Teams</button>
+    <button class="tab active" onclick="showView('schedule',this)"><span class="tab-ico">📅</span>Schedule</button>
+    <button class="tab" onclick="showView('groups',this)"><span class="tab-ico">📊</span>Groups &amp; Standings</button>
+    <button class="tab" onclick="showView('knockout',this)"><span class="tab-ico">🏆</span>Knockout</button>
+    <button class="tab" onclick="showView('teams',this)"><span class="tab-ico">🌍</span>Teams</button>
   </div>
 </div>
 
@@ -1557,6 +1582,17 @@ function lookupVenueCode(m) {
   // Returns the stadium code (e.g. 'LA') for a match, group stage only
   const key = [canonName(m.homeTeam?.name || ''), canonName(m.awayTeam?.name || '')].sort().join('|');
   return PAIR_VENUES[key] || null;
+}
+// Stadium code for any match: knockout slot venue (by kickoff time) or the group-
+// stage team-pair lookup. Used for both the match cards and the Next-Up weather.
+function venueCodeFor(m) {
+  if (m._koVenueCode) return m._koVenueCode;
+  if (KO_SCHEDULE[m.stage]) {
+    const want = new Date(m.utcDate).getTime();
+    const slot = (KO_SCHEDULE[m.stage] || []).find(s => new Date(etToUtcISO(s.date, s.et)).getTime() === want);
+    if (slot) return slot.v;
+  }
+  return lookupVenueCode(m);
 }
 
 
@@ -2100,17 +2136,19 @@ function renderSchedule() {
   const nextUpEl    = document.getElementById('next-up-container');
   const filterRowEl = document.getElementById('filter-row');
 
-  // Build group filter buttons + sync button
-  const groups = ['All','A','B','C','D','E','F','G','H','I','J','K','L'];
-  filterRowEl.innerHTML = groups.map(g => {
-    const key = g === 'All' ? 'all' : g;
-    return `<button class="filter-btn ${activeFilter===key?'active':''}"
-      onclick="setFilter('${key}')">${g === 'All' ? 'All' : 'Grp ' + g}</button>`;
-  }).join('')
+  // Group filter — compact grid of A–L badges (faster to scan than a long pill row)
+  const groups = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+  filterRowEl.innerHTML =
+    `<div class="grp-grid">`
+    + `<button class="grp-badge all ${activeFilter==='all'?'active':''}" onclick="setFilter('all')">All</button>`
+    + groups.map(g => `<button class="grp-badge ${activeFilter===g?'active':''}" onclick="setFilter('${g}')">${g}</button>`).join('')
+    + `</div>`
+    + `<div class="filter-controls">`
     + `<button class="sync-btn" onclick="setupSync()">${syncCode ? '☁ Synced' : '☁ Sync'}</button>`
-    + `<select class="filter-btn" style="appearance:auto" onchange="setTZ(this.value)">
-        ${TZ_OPTIONS.map(o => `<option value="${o.id}" ${o.id===userTZ?'selected':''}>🕐 ${o.label}</option>`).join('')}
-      </select>`;
+    + `<select class="filter-btn" style="appearance:auto" onchange="setTZ(this.value)">`
+    + `${TZ_OPTIONS.map(o => `<option value="${o.id}" ${o.id===userTZ?'selected':''}>🕐 ${o.label}</option>`).join('')}`
+    + `</select>`
+    + `</div>`;
 
   // Filter
   let matches = allMatches.filter(m =>
@@ -2153,11 +2191,19 @@ function renderSchedule() {
     const hn = m.homeTeam?.name || 'TBD', an = m.awayTeam?.name || 'TBD';
     nextKickoff = new Date(m.utcDate);
     const venueTxt = matchVenueText(m);
+    // Weather at the venue (filled in async by loadMatchWeather): forecast up to 15
+    // days out, realtime "now" within 12h of kickoff.
+    const wxCode = venueCodeFor(m);
+    const hrsToKO = (new Date(m.utcDate).getTime() - Date.now()) / 3600000;
+    const wxMode = hrsToKO <= 12 ? 'now' : (hrsToKO <= 15 * 24 ? 'forecast' : '');
+    const wxChip = (wxCode && wxMode)
+      ? `<span class="next-up-wx match-wx" data-wx-code="${wxCode}" data-wx-when="${m.utcDate}" data-wx-mode="${wxMode}">⛅ …</span>` : '';
     bannerHtml = `
       <div class="next-up-banner">
         <span class="next-up-label">Next Up</span>
         <span class="next-up-game">${flag(hn)} ${hn} vs ${an} ${flag(an)}</span>
         <span class="next-up-time">${formatPST(m.utcDate)} ${tzShort()}</span>
+        ${wxChip}
         ${venueTxt ? `<div class="next-up-countdown">🏟 ${venueTxt}</div>` : ''}
         <div class="next-up-countdown" id="nextCountdown"></div>
       </div>`;
