@@ -4340,13 +4340,69 @@ const POOL_ROASTS={
     "the 'room temperature' of brackets","doing enough to not get roasted. barely",
   ],
 };
+// Personalized burns, keyed by lower-cased display name. Blended into the rotation
+// with the status lines, so these folks get custom ribbing AND position roasts.
+const POOL_PERSONAL={
+  'ppp':[
+    "an Arsenal fan explaining football to everyone, as tradition demands","did the math. the math filed a complaint",
+    "knows everything about soccer, allegedly, loudly","supports Arsenal — no stranger to a dramatic late collapse",
+    "ran a regression on his bracket and found only pain","an 'expected goals' guy living in an actual-results world",
+    "two brains: mathematician and Arsenal fan. both overthink, both suffer","will explain the offside rule at the faintest provocation",
+    "trusts the spreadsheet far more than the spreadsheet has earned","solved for x, forgot to solve for 'winning'",
+    "so confident about soccer it's almost adorable","the only man who can make a bracket feel like a proof",
+  ],
+  'big shrinky':[
+    "a therapist whose own bracket badly needs a session","refuses to turn on the AC — suffering is a lifestyle","10,000 steps a day, not one toward a better pick",
+    "processes everyone's feelings, ignores his bracket's","loves France and hot rooms — a man of baffling comfort choices",
+    "gets out-strategized by his own 4-year-old","'and how does that bracket make you feel?'","walks everywhere, still can't outrun these picks",
+    "the only therapist prescribing 'just sit in the heat and reflect'","France to the bitter end, AC never — commitment, inverted",
+    "his 4-year-old naps with more consistency than his bracket performs","emotionally available, competitively questionable",
+  ],
+  'champ':[
+    "a lawyer prepared to appeal every single result","roots for Indiana football — a true connoisseur of the lost cause","objection! …to the entire leaderboard",
+    "the most competitive man alive, per his own closing argument","billing the group chat for unsolicited hot takes",
+    "named 'Champ' — a bold claim, legally speaking","knows everything about soccer, will enter it into evidence",
+    "brings Big Ten football energy to a sport he swears he's mastered","cross-examines every pick, wins exactly zero cases",
+    "competitive enough to argue with the scoreboard itself","Hoosier faithful — pain is simply the pedigree","will take this bracket all the way to the Supreme Court",
+  ],
+  'chuckles':[
+    "a financial advisor running a deeply speculative bracket","diversified confidently into all the wrong picks","doesn't know soccer and it is beautifully obvious",
+    "loves Ohio State and Chipotle — elite, uncomplicated tastes","the guac was extra; the soccer knowledge was not",
+    "on sabbatical from work and from watching a single match","picks like a Chipotle order — a bit of everything, zero plan",
+    "O-H… I-O… still doesn't spell a winning bracket","advises on portfolios, absolutely wings it on soccer",
+    "his sabbatical is longer than his list of soccer facts","high risk, no reward, extra queso","buys high, sells low, picks worse",
+  ],
+  'losgehts-backdraft':[
+    "a firefighter who somehow cannot contain this bracket","lives in Germany and STILL got blindsided by the football","world-class at removing ticks, hopeless at removing bad picks",
+    "shaved head, unshakeable and unsolicited opinions","will tell you everything about soccer, asked or not, mostly not",
+    "German efficiency, applied enthusiastically to being loud","the group's unpaid, unstoppable soccer commentator","puts out fires, starts arguments about formations",
+    "knows everything about the sport and needs you to know that he knows","backdraft: also the word for his takes in the group chat",
+    "roots from Germany like it's a whole personality","louder about soccer than the actual commentators",
+  ],
+  'professor':[
+    "tenured in confidence, adjunct in actual results","grades everyone else's picks, generously curves his own","a gardener whose bracket sprouted nothing but weeds",
+    "sips a latte and lectures on a sport he's losing at","blends a smooth smoothie and a lumpy bracket","plays golf like he picks — many swings, few pars",
+    "assigns the reading, skips it himself","the one professor who clearly didn't do the homework","cultivating tomatoes and a bumper crop of bad opinions",
+    "latte art noticeably better than his bracket art","office hours: closed. tee time: sacred.","publish or perish — the bracket chose perish",
+  ],
+  'aquadoc':[
+    "an OBGYN whose bracket needs a second opinion","swims laps daily, still can't stay afloat on here","not into soccer, and every pick is a full confession",
+    "elite at deliveries, but this bracket came out breech","happiest in a pool that has actual water","treading water with the enthusiasm of a true non-fan",
+    "picked teams like a movie he has no intention of watching","the doctor is in — the soccer knowledge is very much out",
+    "made a splash, mostly of the belly-flop variety","prescribed himself a bracket; it isn't taking","would genuinely rather be swimming, and it shows","diagnosis: acute, chronic disinterest in soccer",
+  ],
+};
 // Rotate the burn: stable within a render, but shifts each day and after every new
-// result — so the jokes keep refreshing instead of getting stale on one line.
+// result. Named users lean on their personal bank (~2 of every 3) with the odd
+// status line mixed in; both rotate through their full set.
 function poolRoastLine(key,name){
-  const bank=POOL_ROASTS[key]||POOL_ROASTS.mid;
+  const statusBank=POOL_ROASTS[key]||POOL_ROASTS.mid;
+  const personal=POOL_PERSONAL[String(name||'').trim().toLowerCase()];
   const day=Math.floor(Date.now()/86400000);
   const done=allMatches.filter(m=>POOL_ROUND_COUNT[m.stage] && m.status==='FINISHED').length;
-  return bank[(poolHash(name+key)+day+done)%bank.length];
+  const r=poolHash(name+key)+day+done;
+  if(personal && r%3!==0) return personal[r%personal.length];   // 2 of 3: a custom burn
+  return statusBank[r%statusBank.length];                        // otherwise a status line
 }
 // Players who were the ONLY correct backer of a finished match's winner (🍀).
 function poolSoleUpsetCallers(){
