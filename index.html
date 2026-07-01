@@ -4893,9 +4893,19 @@ setInterval(() => {
 // Keep the pool bracket honest about locks even if the user just sits on it: every
 // 30s re-render so matches/champion freeze the moment their kickoff passes, the
 // countdown advances, and any newly-kicked-off "Pool picks" become available.
-// (Picks/bracket only — the avatar builder and leaderboard shouldn't redraw underfoot.)
+// (Picks/bracket only — the avatar builder shouldn't redraw underfoot.)
+let _lbWasLive = false;
 setInterval(() => {
-  if (currentView === 'pool' && (poolSub === 'bracket' || poolSub === 'mybracket') && poolMe) renderPool();
+  if (currentView !== 'pool' || !poolMe) return;
+  if (poolSub === 'bracket' || poolSub === 'mybracket') { renderPool(); return; }
+  // Leaderboard: re-fetch the board (standings/picks/burns come from the Worker) while
+  // games are live, plus one final pull the tick after the last live game ends so the
+  // closing standings + burns land without a manual refresh.
+  if (poolSub === 'leaderboard') {
+    const anyLive = allMatches.some(m => matchStatus(m) === 'live');
+    if (anyLive || _lbWasLive) poolLoadBoard();
+    _lbWasLive = anyLive;
+  }
 }, 30000);
 
 // Don't lose a pick made moments before the tab is closed/backgrounded: the
