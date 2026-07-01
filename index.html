@@ -414,7 +414,7 @@
   .next-up-banner .next-up-wx {
     color: var(--gold); font-size: 13px; font-weight: 700; margin-top: 0; white-space: nowrap;
   }
-  body.broadcast .next-up-banner .next-up-wx { color: #8fd0ff; text-shadow: 0 0 6px rgba(143,208,255,.4); }
+  body.broadcast.dark .next-up-banner .next-up-wx { color: #8fd0ff; text-shadow: 0 0 6px rgba(143,208,255,.4); }
   @media (max-width: 600px){
     .next-up-banner { gap: 3px 8px; padding: 11px 13px; }
     .next-up-game { flex-basis: 100%; font-size: 15px; }   /* own line — never squeezed */
@@ -432,9 +432,9 @@
   .grp-toggle.filtered { background: var(--pitch); color: var(--gold); border-color: var(--pitch); }
   body.dark .grp-toggle { background: #1b231c; border-color: var(--border); color: var(--text); }
   body.dark .grp-toggle.filtered { background: var(--pitch); color: var(--gold); }
-  body.broadcast .grp-toggle { background: linear-gradient(180deg, #12432c, #0a2c1e); color: var(--white);
+  body.broadcast.dark .grp-toggle { background: linear-gradient(180deg, #12432c, #0a2c1e); color: var(--white);
     border: 1px solid rgba(245,197,24,.22); box-shadow: 0 1px 2px rgba(0,0,0,.35), 0 1px 0 rgba(255,255,255,.06) inset; }
-  body.broadcast .grp-toggle.filtered { background: linear-gradient(180deg, #ffe37a, #f5c518, #d19b12); color: #073d24; border-color: rgba(120,90,15,.5); }
+  body.broadcast.dark .grp-toggle.filtered { background: linear-gradient(180deg, #ffe37a, #f5c518, #d19b12); color: #073d24; border-color: rgba(120,90,15,.5); }
   .grp-badge {
     font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 800;
     letter-spacing: .5px; text-transform: uppercase;
@@ -449,9 +449,9 @@
   body.dark .grp-badge.active, body.dark .grp-badge:hover { background: var(--pitch); color: var(--gold); }
   .filter-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   /* broadcast: metallic group badges */
-  body.broadcast .grp-badge { background: linear-gradient(180deg, #12432c, #0a2c1e); color: var(--white);
+  body.broadcast.dark .grp-badge { background: linear-gradient(180deg, #12432c, #0a2c1e); color: var(--white);
     border: 1px solid rgba(245,197,24,.22); box-shadow: 0 1px 2px rgba(0,0,0,.35), 0 1px 0 rgba(255,255,255,.06) inset; }
-  body.broadcast .grp-badge.active, body.broadcast .grp-badge:hover {
+  body.broadcast.dark .grp-badge.active, body.broadcast.dark .grp-badge:hover {
     background: linear-gradient(180deg, #ffe37a, #f5c518, #d19b12); color: #073d24; border-color: rgba(120,90,15,.5); }
 
   .today-bar {
@@ -1265,14 +1265,14 @@
   /* Broadcast palette: a deep green-tinted dark base + gold-tinted borders. Sits
      after body.dark's variables (which broadcast also gets via forced dark), so the
      whole app reads "broadcast" rather than neutral dark. */
-  body.broadcast {
+  body.broadcast.dark{
     --off-white: #072016;
     --card-bg: #0d3521;
     --text: #eef4ea;
     --muted: #9db29c;
     --border: rgba(245,197,24,.16);
   }
-  body.broadcast .match-card {
+  body.broadcast.dark .match-card {
     background:
       linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,0) 42%),
       repeating-linear-gradient(90deg, rgba(255,255,255,.022) 0 2px, transparent 2px 44px),
@@ -1281,48 +1281,48 @@
     border-radius: 14px; padding: 14px 16px; color: var(--white);
     box-shadow: 0 6px 16px rgba(0,0,0,.34), 0 1px 0 rgba(255,255,255,.10) inset, 0 -12px 22px rgba(0,0,0,.22) inset;
   }
-  body.broadcast .match-card::before { width: 5px; box-shadow: 0 0 10px currentColor; }
-  body.broadcast .match-card.live::before { background: var(--live-red); color: var(--live-red); box-shadow: 0 0 12px var(--live-red); }
-  body.broadcast .match-card.upcoming::before { background: var(--gold); color: var(--gold); box-shadow: 0 0 10px rgba(245,197,24,.7); }
-  body.broadcast .match-card.completed::before { background: #9fb0a0; }
-  body.broadcast .match-card.live {
+  body.broadcast.dark .match-card::before { width: 5px; box-shadow: 0 0 10px currentColor; }
+  body.broadcast.dark .match-card.live::before { background: var(--live-red); color: var(--live-red); box-shadow: 0 0 12px var(--live-red); }
+  body.broadcast.dark .match-card.upcoming::before { background: var(--gold); color: var(--gold); box-shadow: 0 0 10px rgba(245,197,24,.7); }
+  body.broadcast.dark .match-card.completed::before { background: #9fb0a0; }
+  body.broadcast.dark .match-card.live {
     background:
       linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,0) 42%),
       linear-gradient(158deg, #4a1420 0%, #2a1526 46%, #0b2740 100%);
     border-color: rgba(230,57,70,.45);
     box-shadow: 0 6px 20px rgba(230,57,70,.22), 0 1px 0 rgba(255,255,255,.10) inset, 0 -12px 22px rgba(0,0,0,.22) inset;
   }
-  body.broadcast .match-card .team-name { color: var(--white); font-size: 16px; text-shadow: 0 1px 2px rgba(0,0,0,.55); }
-  body.broadcast .match-card .card-rank { color: var(--gold); opacity: .9; }
-  body.broadcast .match-card .match-meta,
-  body.broadcast .match-card .broadcast-tag,
-  body.broadcast .match-card .attendance-tag { color: #c3d0be; }
+  body.broadcast.dark .match-card .team-name { color: var(--white); font-size: 16px; text-shadow: 0 1px 2px rgba(0,0,0,.55); }
+  body.broadcast.dark .match-card .card-rank { color: var(--gold); opacity: .9; }
+  body.broadcast.dark .match-card .match-meta,
+  body.broadcast.dark .match-card .broadcast-tag,
+  body.broadcast.dark .match-card .attendance-tag { color: #c3d0be; }
   /* glowing hero score */
-  body.broadcast .score-display {
+  body.broadcast.dark .score-display {
     font-size: clamp(30px, 9vw, 42px); letter-spacing: 3px; color: #fff8e6;
     text-shadow: 0 0 4px rgba(255,255,255,.4), 0 0 16px rgba(245,197,24,.55), 0 2px 3px rgba(0,0,0,.6);
   }
-  body.broadcast .vs-display { font-size: 18px; color: rgba(245,197,24,.85); text-shadow: 0 1px 2px rgba(0,0,0,.5); }
-  body.broadcast .match-time { color: #cfe0ff; }
-  body.broadcast .match-time.done { color: #b8c6b2; }
-  body.broadcast .match-wx { color: #8fd0ff; }
+  body.broadcast.dark .vs-display { font-size: 18px; color: rgba(245,197,24,.85); text-shadow: 0 1px 2px rgba(0,0,0,.5); }
+  body.broadcast.dark .match-time { color: #cfe0ff; }
+  body.broadcast.dark .match-time.done { color: #b8c6b2; }
+  body.broadcast.dark .match-wx { color: #8fd0ff; }
   /* 3D-framed flag "chips" */
-  body.broadcast .team-flag { font-size: 26px; }
-  body.broadcast .flag-img {
+  body.broadcast.dark .team-flag { font-size: 26px; }
+  body.broadcast.dark .flag-img {
     height: 1.35em; border-radius: 4px; border: 1px solid rgba(0,0,0,.4);
     box-shadow: 0 2px 5px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.18) inset;
   }
   /* glowing live status light */
-  body.broadcast .live-badge { background: linear-gradient(180deg, #ff5563, #d62435); box-shadow: 0 0 12px rgba(230,57,70,.6); }
-  body.broadcast .live-dot { box-shadow: 0 0 8px #fff, 0 0 12px var(--live-red); }
+  body.broadcast.dark .live-badge { background: linear-gradient(180deg, #ff5563, #d62435); box-shadow: 0 0 12px rgba(230,57,70,.6); }
+  body.broadcast.dark .live-dot { box-shadow: 0 0 8px #fff, 0 0 12px var(--live-red); }
   /* brushed-metal round/group tag */
-  body.broadcast .group-tag {
+  body.broadcast.dark .group-tag {
     background: linear-gradient(180deg, #12432c, #0a2c1e); color: var(--gold); letter-spacing: 1.5px;
     border: 1px solid rgba(245,197,24,.3); box-shadow: 0 1px 2px rgba(0,0,0,.4), 0 1px 0 rgba(255,255,255,.08) inset;
   }
 
   /* ── STEP 2: header (grass pitch) · metallic title · broadcast clock · tabs ── */
-  body.broadcast header {
+  body.broadcast.dark header {
     background:
       radial-gradient(130% 90% at 50% -25%, rgba(255,255,255,.10), transparent 60%),
       repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0 62px, rgba(0,0,0,.05) 62px 124px),
@@ -1331,45 +1331,76 @@
     border-bottom: 3px solid var(--gold);
     box-shadow: 0 3px 0 rgba(184,137,31,.5), 0 9px 20px rgba(0,0,0,.42);
   }
-  body.broadcast h1 {
+  body.broadcast.dark h1 {
     color: #f6d75f;
     text-shadow: 0 1px 0 #b8891f, 0 2px 3px rgba(0,0,0,.6), 0 0 16px rgba(245,197,24,.35);
     letter-spacing: .5px;
   }
-  body.broadcast h1 .info-btn { color: var(--gold); text-shadow: none; }
-  body.broadcast .eyebrow { color: var(--gold); text-shadow: 0 0 10px rgba(245,197,24,.4); }
-  body.broadcast .byline { text-shadow: 0 1px 4px rgba(0,0,0,.5), 0 0 12px rgba(245,197,24,.3); }
+  body.broadcast.dark h1 .info-btn { color: var(--gold); text-shadow: none; }
+  body.broadcast.dark .eyebrow { color: var(--gold); text-shadow: 0 0 10px rgba(245,197,24,.4); }
+  body.broadcast.dark .byline { text-shadow: 0 1px 4px rgba(0,0,0,.5), 0 0 12px rgba(245,197,24,.3); }
   /* broadcast clock — inset panel, glowing amber digits */
-  body.broadcast .live-clock {
+  body.broadcast.dark .live-clock {
     background: linear-gradient(180deg, #0a2a1c, #061a12);
     border: 1px solid rgba(245,197,24,.35); border-radius: 8px; padding: 6px 12px;
     box-shadow: 0 2px 6px rgba(0,0,0,.5), 0 1px 0 rgba(255,255,255,.08) inset, 0 -7px 12px rgba(0,0,0,.32) inset;
   }
-  body.broadcast .live-clock .time { color: #ffe98a; letter-spacing: 1px; text-shadow: 0 0 6px rgba(245,197,24,.6), 0 1px 1px rgba(0,0,0,.6); }
-  body.broadcast .live-clock .tz { color: rgba(245,197,24,.85); }
+  body.broadcast.dark .live-clock .time { color: #ffe98a; letter-spacing: 1px; text-shadow: 0 0 6px rgba(245,197,24,.6), 0 1px 1px rgba(0,0,0,.6); }
+  body.broadcast.dark .live-clock .tz { color: rgba(245,197,24,.85); }
   /* glossy metallic pool pill */
-  body.broadcast .pool-nav {
+  body.broadcast.dark .pool-nav {
     background: linear-gradient(180deg, #ffe37a 0%, #f5c518 50%, #d19b12 100%); color: #073d24;
     border: 1px solid rgba(120,90,15,.5);
     box-shadow: 0 2px 8px rgba(0,0,0,.35), 0 1px 0 rgba(255,255,255,.55) inset, 0 -3px 6px rgba(0,0,0,.15) inset;
   }
   /* brushed dark-metal tab bar, glowing gold active tab */
-  body.broadcast .tab-bar {
+  body.broadcast.dark .tab-bar {
     background: linear-gradient(180deg, #0c3a25, #072a1b);
     box-shadow: 0 3px 10px rgba(0,0,0,.4), 0 1px 0 rgba(255,255,255,.06) inset;
   }
-  body.broadcast .tab.active, body.broadcast .tab:hover { color: #ffe98a; text-shadow: 0 0 10px rgba(245,197,24,.5); }
+  body.broadcast.dark .tab.active, body.broadcast.dark .tab:hover { color: #ffe98a; text-shadow: 0 0 10px rgba(245,197,24,.5); }
   /* next-up "up next" broadcast panel + countdown */
-  body.broadcast .next-up-banner {
+  body.broadcast.dark .next-up-banner {
     background:
       linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0) 42%),
       linear-gradient(158deg, #0c4a2e 0%, #0a3826 60%, #0b2740 100%);
     border: 1px solid rgba(245,197,24,.28); border-radius: 12px;
     box-shadow: 0 5px 14px rgba(0,0,0,.32), 0 1px 0 rgba(255,255,255,.08) inset;
   }
-  body.broadcast .next-up-label { color: var(--gold); text-shadow: 0 0 8px rgba(245,197,24,.4); }
-  body.broadcast .next-up-time { color: #ffe98a; text-shadow: 0 0 6px rgba(245,197,24,.5); }
-  body.broadcast .next-up-countdown { color: rgba(255,255,255,.85); }
+  body.broadcast.dark .next-up-label { color: var(--gold); text-shadow: 0 0 8px rgba(245,197,24,.4); }
+  body.broadcast.dark .next-up-time { color: #ffe98a; text-shadow: 0 0 6px rgba(245,197,24,.5); }
+  body.broadcast.dark .next-up-countdown { color: rgba(255,255,255,.85); }
+
+  /* ── DAYTIME broadcast: a bright, sunny "pitch" look (applies when not dark) ── */
+  body.broadcast:not(.dark) {
+    --off-white: #e8efdf;
+    --border: rgba(10,92,54,.16);
+  }
+  body.broadcast:not(.dark) header {
+    background:
+      radial-gradient(130% 90% at 50% -25%, rgba(255,255,255,.22), transparent 60%),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.10) 0 62px, rgba(0,0,0,.05) 62px 124px),
+      linear-gradient(180deg, #1a9a54 0%, #0f8145 55%, #0a5c36 100%);
+    border-bottom: 3px solid var(--gold);
+    box-shadow: 0 3px 0 rgba(184,137,31,.4), 0 6px 16px rgba(0,0,0,.18);
+  }
+  body.broadcast:not(.dark) h1 { color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.22), 0 2px 4px rgba(0,0,0,.3); }
+  body.broadcast:not(.dark) .byline { color: var(--gold); }
+  /* light match card: real depth, a prominent green score, framed flags */
+  body.broadcast:not(.dark) .match-card {
+    background: linear-gradient(180deg, #ffffff, #f2f7ed);
+    border: 1px solid rgba(10,92,54,.18); border-radius: 14px; padding: 14px 16px;
+    box-shadow: 0 4px 12px rgba(20,50,30,.10), 0 1px 0 rgba(255,255,255,.9) inset;
+  }
+  body.broadcast:not(.dark) .match-card.live { background: linear-gradient(180deg, #ffffff, #fff2f2); border-color: rgba(230,57,70,.3); }
+  body.broadcast:not(.dark) .score-display {
+    font-size: clamp(30px, 9vw, 42px); letter-spacing: 3px; color: var(--pitch);
+    text-shadow: 0 1px 0 rgba(255,255,255,.7), 0 0 12px rgba(245,197,24,.28);
+  }
+  body.broadcast:not(.dark) .team-flag { font-size: 26px; }
+  body.broadcast:not(.dark) .flag-img { height: 1.35em; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.28); }
+  body.broadcast:not(.dark) .group-tag { background: linear-gradient(180deg, #0f8145, #0a5c36); color: var(--gold); }
+  body.broadcast:not(.dark) .live-badge { box-shadow: 0 0 10px rgba(230,57,70,.4); }
 </style>
 </head>
 <body>
@@ -1864,9 +1895,9 @@ function applyTheme() {
   const hour = parseInt(new Date().toLocaleString('en-US', {
     timeZone: tz(), hour: 'numeric', hour12: false
   }), 10);
-  // The broadcast preview is a dark theme — force dark on so it inherits dark mode's
-  // full, cohesive theming (Pool, Standings, Teams, modals) beneath the broadcast paint.
-  const dark = document.body.classList.contains('broadcast') || (hour >= 20 || hour < 7);
+  // Broadcast follows the clock: a bright "daytime pitch" look by day, the dark
+  // broadcast look at night (8pm–7am). Non-broadcast users get normal auto dark too.
+  const dark = (hour >= 20 || hour < 7);
   document.body.classList.toggle('dark', dark);
 }
 
