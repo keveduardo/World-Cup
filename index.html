@@ -4793,7 +4793,7 @@ function poolLeaderboardHTML(){
     const top = m.topper ? `<span class="lb-topper">${m.topper}</span>` : '';
     // Copy-a-burn: grab this person's current burn for the group chat.
     const roast = m.roast
-      ? `<div class="lb-roast">“${m.roast}”<button class="lb-burncopy" title="Copy this burn" data-burn="${poolEsc(m.roast)}" onclick="poolCopy(this.dataset.burn)">📋</button></div>`
+      ? `<div class="lb-roast">“${poolEsc(m.roast)}”<button class="lb-burncopy" title="Copy this burn" data-burn="${poolEsc(m.roast)}" onclick="poolCopy(this.dataset.burn)">📋</button></div>`
       : '';
     // Admin-only: show each member's personal code (their login) so you can recover
     // it for them. The Worker only sends codes to an authenticated admin.
