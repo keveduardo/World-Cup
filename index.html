@@ -2261,9 +2261,18 @@ function renderMatchCard(m, status) {
 
   let venue = m.venue || '';
   let city = venueCity(venue);
-  if (!venue && m._koVenueCode && STADIUMS[m._koVenueCode]) {
-    // Knockout fixture: API omits venue, so use the slot's stadium from KO_SCHEDULE.
-    [venue, city] = STADIUMS[m._koVenueCode];
+  // Knockout matches carry no API venue. Resolve the stadium from KO_SCHEDULE by
+  // kickoff time here so location + weather work on ANY tab — the Knockout tab set
+  // this via _koVenueCode, but the Schedule tab didn't, so KO games lost both once
+  // the group stage (whose venues come from a team-pair table) ended.
+  let koVenueCode = m._koVenueCode;
+  if (!koVenueCode && KO_SCHEDULE[m.stage]) {
+    const want = new Date(m.utcDate).getTime();
+    const slot = (KO_SCHEDULE[m.stage] || []).find(s => new Date(etToUtcISO(s.date, s.et)).getTime() === want);
+    if (slot) koVenueCode = slot.v;
+  }
+  if (!venue && koVenueCode && STADIUMS[koVenueCode]) {
+    [venue, city] = STADIUMS[koVenueCode];
   } else if (!venue) {
     const hc = lookupVenue(hn, an);
     if (hc) { venue = hc[0]; city = hc[1]; }
@@ -2276,7 +2285,7 @@ function renderMatchCard(m, status) {
 
   // Weather slot (filled async after render). Forecast up to 15 days out, and a
   // realtime "now" reading on game day (≤12h to kickoff) and while the match is live.
-  const wxCode = m._koVenueCode || lookupVenueCode(m);
+  const wxCode = koVenueCode || lookupVenueCode(m);
   const hrsToKO = (new Date(m.utcDate).getTime() - Date.now()) / 3600000;
   let wxMode = '';
   if (status === 'live') wxMode = 'now';
