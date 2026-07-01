@@ -15,6 +15,7 @@
  *   ?type=poolload&pool=CODE&me=PCODE     validate pool code + return my entry
  *   ?type=poolsave&pool=CODE&me=PCODE&name=...&picks=73:Brazil|90:...&champion=...&tiebreak=3
  *   ?type=poolboard&pool=CODE             redacted leaderboard data (locked picks only)
+ *   ?type=poolsetchamp&admin=X&name=David&champion=France   admin override (bypasses champ lock)
  *
  * Requires one KV namespace binding named WC_KV (caching + favorites + pool).
  * Set FOOTBALL_API_KEY as a secret/variable.
@@ -259,6 +260,52 @@ export default {
         } else {
           await env.WC_KV.delete('pool_player_' + target);
           payload = { ok: true, deleted: target };
+        }
+
+      } else if (type === 'poolsetchamp') {
+        // Admin-only: set/override a member's champion, DELIBERATELY bypassing the
+        // normal champion lock (for commissioner fixes — e.g. members who never got
+        // to pick). Target by personal code, or by name within a pool. Auth enforced
+        // server-side against POOL_ADMIN_CODE.
+        const target = (url.searchParams.get('target') || '').trim();      // personal code
+        const name   = (url.searchParams.get('name')   || '').trim();      // or display name
+        const champ  = (url.searchParams.get('champion') || '').trim().slice(0, 40);
+        const pool   = (url.searchParams.get('pool') || '').trim();
+        if (!isAdmin) {
+          payload = { error: 'not authorized' };
+        } else if (!target && !name) {
+          payload = { error: 'missing target (code) or name' };
+        } else {
+          let key = null, entry = null;
+          if (target) {
+            key = 'pool_player_' + target;
+            const raw = await env.WC_KV.get(key);
+            if (raw) { try { entry = JSON.parse(raw); } catch {} } else { key = null; }
+          } else {
+            // Find the unique member with this name in the given pool (default: primary).
+            const boardPool = validPool(pool) ? normPool(pool) : POOL_CODE;
+            const list = await env.WC_KV.list({ prefix: 'pool_player_' });
+            const hits = [];
+            for (const k of list.keys) {
+              const raw = await env.WC_KV.get(k.name); if (!raw) continue;
+              let e; try { e = JSON.parse(raw); } catch { continue; }
+              if (poolOf(e) !== boardPool) continue;
+              if ((e.name || '').trim().toLowerCase() === name.toLowerCase()) hits.push({ k: k.name, e });
+            }
+            if (hits.length === 1) { key = hits[0].k; entry = hits[0].e; }
+            else if (hits.length > 1) payload = { error: `multiple members named "${name}" — target by code instead` };
+            else payload = { error: `no member named "${name}" in pool "${boardPool}"` };
+          }
+          if (!payload) {
+            if (!key || !entry) {
+              payload = { error: 'member not found' };
+            } else {
+              entry.champion = champ;            // set, or clear when champion is empty
+              entry.updatedAt = Date.now();
+              await env.WC_KV.put(key, JSON.stringify(entry));
+              payload = { ok: true, name: entry.name || '', champion: champ };
+            }
+          }
         }
 
       } else if (type === 'espnsummary') {
