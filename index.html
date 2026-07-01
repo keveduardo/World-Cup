@@ -1004,7 +1004,17 @@
   .lb-badges { white-space: nowrap; }
   .lb-badge { font-size: 13px; margin-left: 1px; cursor: default; }
   /* 🗯️ roast line + 👑 avatar topper */
-  .lb-roast { font-size: 11px; font-style: italic; color: var(--muted); margin-top: 2px; line-height: 1.35; }
+  .lb-roast { font-size: 11px; font-style: italic; color: var(--muted); margin-top: 2px; line-height: 1.35;
+    display: flex; align-items: flex-start; gap: 5px; }
+  .lb-burncopy { background: none; border: none; cursor: pointer; font-size: 11px; padding: 0; opacity: .55;
+    flex: 0 0 auto; line-height: 1.2; }
+  .lb-burncopy:hover { opacity: 1; }
+  /* 📢 roast spotlight + 🪞 self-roast banners */
+  .pool-roastspot { background: rgba(245,197,24,.12); border: 1px solid var(--gold); border-radius: 10px;
+    padding: 8px 12px; margin: 0 0 12px; font-size: 12.5px; line-height: 1.5; }
+  .pool-roastspot .rs-line { margin: 1px 0; }
+  .pool-selfroast { background: var(--off-white); border: 1px dashed var(--border); border-radius: 10px;
+    padding: 8px 12px; margin: 0 0 12px; font-size: 12.5px; font-style: italic; color: var(--text); line-height: 1.45; }
   .lb-ava { position: relative; }
   .lb-topper { position: absolute; top: -10px; right: -6px; font-size: 18px; z-index: 2;
     filter: drop-shadow(0 1px 1px rgba(0,0,0,.35)); transform: rotate(12deg); pointer-events: none; }
@@ -4404,6 +4414,42 @@ function poolRoastLine(key,name){
   if(personal && r%3!==0) return personal[r%personal.length];   // 2 of 3: a custom burn
   return statusBank[r%statusBank.length];                        // otherwise a status line
 }
+// 🎯 Pick-aware burns — reference a player's actual champion ({champ}) + their vibe.
+const POOL_PICKAWARE={
+  'ppp':["has {champ} winning it all, backed by 'the math'","ran the numbers and somehow arrived at {champ}","picked {champ} — an Arsenal fan, ever drawn to eventual heartbreak"],
+  'big shrinky':["has {champ} to win it all, chosen mid sweaty AC-free walk","picked {champ}; his 4-year-old would've picked better","believes in {champ} like he believes in never touching a thermostat"],
+  'champ':["rests his entire case on {champ} winning it all","picked {champ} and is prepared to argue it in court","has {champ} as champion — the Indiana-football school of doomed confidence"],
+  'chuckles':["has {champ} winning it all, a team he cannot spell or locate","picked {champ} with the research he brings to soccer: none","diversified his whole title bet into {champ} — bold, uninformed"],
+  'losgehts-backdraft':["has {champ} to win it all and will TELL you why, at length","picked {champ} and considers the matter settled","backs {champ}, lives in Germany, still misread the football somewhere"],
+  'professor':["has {champ} winning it all — peer review pending","picked {champ} somewhere between a smoothie and a tee time","backs {champ} with the rigor of a man who skips his own reading"],
+  'aquadoc':["has {champ} winning it all, a team he couldn't name one player from","picked {champ} with the enthusiasm of a man who'd rather be swimming","prescribed himself {champ} as champion — second opinion advised"],
+};
+// 🥊 The three self-proclaimed soccer experts. When two sit adjacent, they feud.
+const POOL_KNOWITALL=['ppp','champ','losgehts-backdraft'];
+const POOL_RIVALRY=[
+  "sitting one spot {rel} {other} — and you WILL hear about it",
+  "and {other}: two of the three soccer 'experts', dead even. nature is healing 🍿",
+  "neck and neck with {other}, both certain they're the smart one",
+  "the soccer-expert cold war continues — right {rel} {other}",
+];
+function poolFill(t,o){ return t.replace(/\{(\w+)\}/g,(_,k)=>o[k]!=null?o[k]:''); }
+// Compose a burn: rivalry (if a know-it-all is next to another) → pick-aware (name
+// their champion) → the base personal/status rotation. All rotate day/result.
+function poolComposeRoast(row, statusKey, rows, i){
+  const name=row.name, lname=String(name||'').trim().toLowerCase();
+  const day=Math.floor(Date.now()/86400000);
+  const done=allMatches.filter(m=>POOL_ROUND_COUNT[m.stage] && m.status==='FINISHED').length;
+  const r=poolHash(name+statusKey)+day+done;
+  if(POOL_KNOWITALL.includes(lname) && r%4===0){
+    const above=rows[i-1], below=rows[i+1];
+    const rival=[above,below].find(x=>x && POOL_KNOWITALL.includes(String(x.name).trim().toLowerCase()));
+    if(rival){ const rel=(rival===above)?'behind':'ahead of';
+      return poolFill(POOL_RIVALRY[r%POOL_RIVALRY.length], {other:rival.name, rel}); }
+  }
+  const champ=row.champion, pb=POOL_PICKAWARE[lname];
+  if(champ && pb && r%3===1) return pb[r%pb.length].replace(/\{champ\}/g, champ);
+  return poolRoastLine(statusKey, name);
+}
 // Players who were the ONLY correct backer of a finished match's winner (🍀).
 function poolSoleUpsetCallers(){
   const out=new Set(); if(!poolBoard||!poolBoard.players) return out;
@@ -4454,8 +4500,50 @@ function poolStandingsMeta(rows, baseline){
       if(got>=need){ b.push(['🎯','Perfect '+rd.replace(/_/g,' ').toLowerCase()]); break; } } }
     const roastKey=isDead?'dead':champDead?'busted':isLeader?'leader':isLast?'last':isHeater?'heater':isCold?'cold':isOracle?'oracle':'mid';
     const topper=isLeader?'👑':(isDead||champDead)?'💀':isLast?'🤡':'';
-    return { badges:b, roast: anyResults?poolRoastLine(roastKey, r.name):'', topper };
+    return { badges:b, roast: anyResults?poolComposeRoast(r, roastKey, rows, i):'', topper };
   });
+}
+// 📢 Roast spotlight: a daily-rotating featured burn, plus an event highlight for
+// whoever's on top / dead last right now. Uses the already-computed meta roasts.
+function poolRoastSpotlightHTML(rows, meta){
+  if(!rows.length) return '';
+  const named = rows.map((r,i)=>({r,i})).filter(x=>meta[x.i] && meta[x.i].roast);
+  if(!named.length) return '';
+  const day=Math.floor(Date.now()/86400000);
+  const star=named[day%named.length];
+  let html=`<div class="pool-roastspot"><div class="rs-line"><b>📢 Roast of the day — ${poolEsc(star.r.name)}:</b> “${poolEsc(meta[star.i].roast)}”</div>`;
+  // event highlight: current 👑 leader or 🥄 last (whichever is a fresh face vs the star)
+  const anyResults=allMatches.some(m=>POOL_ROUND_COUNT[m.stage] && m.status==='FINISHED');
+  if(anyResults && rows.length>1){
+    const ev = (day%2===0) ? {r:rows[0],i:0,tag:'👑'} : {r:rows[rows.length-1],i:rows.length-1,tag:'🥄'};
+    if(ev.i!==star.i && meta[ev.i] && meta[ev.i].roast)
+      html+=`<div class="rs-line">${ev.tag} <b>${poolEsc(ev.r.name)}:</b> “${poolEsc(meta[ev.i].roast)}”</div>`;
+  }
+  return html+`</div>`;
+}
+// The logged-in player's status bucket, from the current board (for the self-roast).
+function poolStatusKeyFor(name){
+  if(!poolBoard || !poolBoard.players) return 'mid';
+  const adv=POOL_ADV||advancedSets();
+  const actualChamp = adv.FINAL&&adv.FINAL.size?[...adv.FINAL][0]:'';
+  const rows=poolBoard.players.map(p=>{ const s=poolScore(p,adv,actualChamp); return {name:p.name,champion:p.champion,...s}; });
+  rows.sort((a,b)=> b.pts-a.pts || b.correct-a.correct || a.name.localeCompare(b.name));
+  const i=rows.findIndex(r=>r.name===name); if(i<0) return 'mid';
+  const anyResults=allMatches.some(m=>POOL_ROUND_COUNT[m.stage] && m.status==='FINISHED');
+  const r=rows[i];
+  if(r.champion && POOL_DEAD.has(canonName(r.champion))) return 'busted';
+  if(anyResults && i===0) return 'leader';
+  if(anyResults && rows.length>1 && i===rows.length-1) return 'last';
+  return 'mid';
+}
+// 🪞 Self-roast: everyone gets got, including the person reading their own bracket.
+function poolSelfRoastHTML(){
+  if(!poolName) return '';
+  const anyResults=allMatches.some(m=>POOL_ROUND_COUNT[m.stage] && m.status==='FINISHED');
+  if(!anyResults) return '';
+  const rowLike={ name:poolName, champion:poolChampion, picks:poolPicks };
+  const burn=poolComposeRoast(rowLike, poolStatusKeyFor(poolName), [rowLike], 0);
+  return `<div class="pool-selfroast">🪞 <b>Today's word about you:</b> “${poolEsc(burn)}”</div>`;
 }
 // 🚨 Biggest FIFA-rank upset among finished knockout games — goofy klaxon banner.
 function poolUpsetHTML(){
@@ -4558,6 +4646,7 @@ function poolBracketHTML(){
   if(poolHelp) html+=poolHelpHTML();
   html+=poolUpsetHTML();
   html+=poolHoroscopeHTML();
+  html+=poolSelfRoastHTML();
   html+=poolStatsHTML();
   html+=poolBusterHTML();
   html+=poolNudgeHTML();
@@ -4655,6 +4744,7 @@ function poolLeaderboardHTML(){
   let html=`<div class="pool-board pool-board-redesign"><div class="pool-board-head"><h3>Leaderboard${poolLbl?` · ${poolEsc(poolLbl)}`:''}</h3>`
     + `<div class="pool-board-actions">${adminBtn}<button class="pool-mini-btn" onclick="poolLoadBoard()">↻ Refresh</button></div></div>`;
   html+=poolUpsetHTML();
+  html+=poolRoastSpotlightHTML(rows, meta);
   if(poolAdmin && !isAdmin) html+=`<div class="pool-admin-note">Admin code not accepted. <a class="pool-link" onclick="poolAdminUnlock()">Try again</a></div>`;
   if(isAdmin) html+=`<div class="pool-admin-note ok">Admin mode — you can remove members.</div>`;
   if(!rows.length){ return html+`<div class="pool-empty">No entries yet — be the first to lock in picks.</div></div>`; }
@@ -4669,7 +4759,10 @@ function poolLeaderboardHTML(){
     const m = meta[i] || { badges:[], roast:'', topper:'' };
     const bdg = m.badges.map(([e,t])=>`<span class="lb-badge" title="${t}">${e}</span>`).join('');
     const top = m.topper ? `<span class="lb-topper">${m.topper}</span>` : '';
-    const roast = m.roast ? `<div class="lb-roast">“${m.roast}”</div>` : '';
+    // Copy-a-burn: grab this person's current burn for the group chat.
+    const roast = m.roast
+      ? `<div class="lb-roast">“${m.roast}”<button class="lb-burncopy" title="Copy this burn" data-burn="${poolEsc(m.roast)}" onclick="poolCopy(this.dataset.burn)">📋</button></div>`
+      : '';
     // Admin-only: show each member's personal code (their login) so you can recover
     // it for them. The Worker only sends codes to an authenticated admin.
     const codeLine = (isAdmin && r.code)
