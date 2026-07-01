@@ -1241,6 +1241,16 @@
      Everything is scoped under body.broadcast, so the default site is untouched.
      STEP 1: the match card — depth, texture, glowing hero score, 3D-framed flags.
      ═══════════════════════════════════════════════════════════════════════ */
+  /* Broadcast palette: a deep green-tinted dark base + gold-tinted borders. Sits
+     after body.dark's variables (which broadcast also gets via forced dark), so the
+     whole app reads "broadcast" rather than neutral dark. */
+  body.broadcast {
+    --off-white: #072016;
+    --card-bg: #0d3521;
+    --text: #eef4ea;
+    --muted: #9db29c;
+    --border: rgba(245,197,24,.16);
+  }
   /* unmistakable "you're in preview mode" badge */
   body.broadcast::after {
     content: '⚡ BROADCAST PREVIEW · add ?broadcast=0 to exit';
@@ -1842,7 +1852,9 @@ function applyTheme() {
   const hour = parseInt(new Date().toLocaleString('en-US', {
     timeZone: tz(), hour: 'numeric', hour12: false
   }), 10);
-  const dark = (hour >= 20 || hour < 7);
+  // The broadcast preview is a dark theme — force dark on so it inherits dark mode's
+  // full, cohesive theming (Pool, Standings, Teams, modals) beneath the broadcast paint.
+  const dark = document.body.classList.contains('broadcast') || (hour >= 20 || hour < 7);
   document.body.classList.toggle('dark', dark);
 }
 
