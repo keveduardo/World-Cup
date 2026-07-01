@@ -1210,6 +1210,60 @@
   .pool-name-edit:hover { opacity: 1; }
   .pool-remember { background: rgba(245,197,24,.14); border: 1px solid var(--gold); border-radius: 8px;
     padding: 8px 11px; font-size: 12.5px; line-height: 1.5; color: var(--text); margin: -4px 0 12px; }
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     BROADCAST PREVIEW THEME — opt in with ?broadcast=1 (disable with ?broadcast=0).
+     Everything is scoped under body.broadcast, so the default site is untouched.
+     STEP 1: the match card — depth, texture, glowing hero score, 3D-framed flags.
+     ═══════════════════════════════════════════════════════════════════════ */
+  body.broadcast .match-card {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,0) 42%),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.022) 0 2px, transparent 2px 44px),
+      linear-gradient(158deg, #0c4a2e 0%, #0a3826 46%, #0b2740 100%);
+    border: 1px solid rgba(245,197,24,.26);
+    border-radius: 14px; padding: 14px 16px; color: var(--white);
+    box-shadow: 0 6px 16px rgba(0,0,0,.34), 0 1px 0 rgba(255,255,255,.10) inset, 0 -12px 22px rgba(0,0,0,.22) inset;
+  }
+  body.broadcast .match-card::before { width: 5px; box-shadow: 0 0 10px currentColor; }
+  body.broadcast .match-card.live::before { background: var(--live-red); color: var(--live-red); box-shadow: 0 0 12px var(--live-red); }
+  body.broadcast .match-card.upcoming::before { background: var(--gold); color: var(--gold); box-shadow: 0 0 10px rgba(245,197,24,.7); }
+  body.broadcast .match-card.completed::before { background: #9fb0a0; }
+  body.broadcast .match-card.live {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,0) 42%),
+      linear-gradient(158deg, #4a1420 0%, #2a1526 46%, #0b2740 100%);
+    border-color: rgba(230,57,70,.45);
+    box-shadow: 0 6px 20px rgba(230,57,70,.22), 0 1px 0 rgba(255,255,255,.10) inset, 0 -12px 22px rgba(0,0,0,.22) inset;
+  }
+  body.broadcast .match-card .team-name { color: var(--white); font-size: 16px; text-shadow: 0 1px 2px rgba(0,0,0,.55); }
+  body.broadcast .match-card .card-rank { color: var(--gold); opacity: .9; }
+  body.broadcast .match-card .match-meta,
+  body.broadcast .match-card .broadcast-tag,
+  body.broadcast .match-card .attendance-tag { color: #c3d0be; }
+  /* glowing hero score */
+  body.broadcast .score-display {
+    font-size: clamp(30px, 9vw, 42px); letter-spacing: 3px; color: #fff8e6;
+    text-shadow: 0 0 4px rgba(255,255,255,.4), 0 0 16px rgba(245,197,24,.55), 0 2px 3px rgba(0,0,0,.6);
+  }
+  body.broadcast .vs-display { font-size: 18px; color: rgba(245,197,24,.85); text-shadow: 0 1px 2px rgba(0,0,0,.5); }
+  body.broadcast .match-time { color: #cfe0ff; }
+  body.broadcast .match-time.done { color: #b8c6b2; }
+  body.broadcast .match-wx { color: #8fd0ff; }
+  /* 3D-framed flag "chips" */
+  body.broadcast .team-flag { font-size: 26px; }
+  body.broadcast .flag-img {
+    height: 1.35em; border-radius: 4px; border: 1px solid rgba(0,0,0,.4);
+    box-shadow: 0 2px 5px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.18) inset;
+  }
+  /* glowing live status light */
+  body.broadcast .live-badge { background: linear-gradient(180deg, #ff5563, #d62435); box-shadow: 0 0 12px rgba(230,57,70,.6); }
+  body.broadcast .live-dot { box-shadow: 0 0 8px #fff, 0 0 12px var(--live-red); }
+  /* brushed-metal round/group tag */
+  body.broadcast .group-tag {
+    background: linear-gradient(180deg, #12432c, #0a2c1e); color: var(--gold); letter-spacing: 1.5px;
+    border: 1px solid rgba(245,197,24,.3); box-shadow: 0 1px 2px rgba(0,0,0,.4), 0 1px 0 rgba(255,255,255,.08) inset;
+  }
 </style>
 </head>
 <body>
@@ -4901,6 +4955,17 @@ poolInit();
 
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
+// Broadcast preview theme (opt-in, purely cosmetic): ?broadcast=1 turns it on and
+// remembers it; ?broadcast=0 turns it off. Only adds a body class — nothing else.
+(function(){
+  try{
+    const p = new URLSearchParams(location.search).get('broadcast');
+    if (p === '1') localStorage.setItem('wc_broadcast','1');
+    else if (p === '0') localStorage.removeItem('wc_broadcast');
+    if (localStorage.getItem('wc_broadcast') === '1') document.body.classList.add('broadcast');
+  }catch(e){}
+})();
+
 document.getElementById('clockTzLabel').textContent = tzLabel();
 applyTheme();
 setInterval(applyTheme, 60000); // re-check theme each minute
