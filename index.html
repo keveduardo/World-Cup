@@ -4430,12 +4430,12 @@ const POOL_PERSONAL={
 // Rotate the burn: stable within a render, but shifts each day and after every new
 // result. Named users lean on their personal bank (~2 of every 3) with the odd
 // status line mixed in; both rotate through their full set.
-function poolRoastLine(key,name){
+function poolRoastLine(key,name,offset){
   const statusBank=POOL_ROASTS[key]||POOL_ROASTS.mid;
   const personal=POOL_PERSONAL[String(name||'').trim().toLowerCase()];
   const day=Math.floor(Date.now()/86400000);
   const done=allMatches.filter(m=>POOL_ROUND_COUNT[m.stage] && m.status==='FINISHED').length;
-  const r=poolHash(name+key)+day+done;
+  const r=poolHash(name+key)+day+done+(offset||0);
   if(personal && r%3!==0) return personal[r%personal.length];   // 2 of 3: a custom burn
   return statusBank[r%statusBank.length];                        // otherwise a status line
 }
@@ -4460,11 +4460,12 @@ const POOL_RIVALRY=[
 function poolFill(t,o){ return t.replace(/\{(\w+)\}/g,(_,k)=>o[k]!=null?o[k]:''); }
 // Compose a burn: rivalry (if a know-it-all is next to another) → pick-aware (name
 // their champion) → the base personal/status rotation. All rotate day/result.
-function poolComposeRoast(row, statusKey, rows, i){
+function poolComposeRoast(row, statusKey, rows, i, offset){
+  offset=offset||0;
   const name=row.name, lname=String(name||'').trim().toLowerCase();
   const day=Math.floor(Date.now()/86400000);
   const done=allMatches.filter(m=>POOL_ROUND_COUNT[m.stage] && m.status==='FINISHED').length;
-  const r=poolHash(name+statusKey)+day+done;
+  const r=poolHash(name+statusKey)+day+done+offset;
   if(POOL_KNOWITALL.includes(lname) && r%4===0){
     const above=rows[i-1], below=rows[i+1];
     const rival=[above,below].find(x=>x && POOL_KNOWITALL.includes(String(x.name).trim().toLowerCase()));
@@ -4473,7 +4474,18 @@ function poolComposeRoast(row, statusKey, rows, i){
   }
   const champ=row.champion, pb=POOL_PICKAWARE[lname];
   if(champ && pb && r%3===1) return pb[r%pb.length].replace(/\{champ\}/g, champ);
-  return poolRoastLine(statusKey, name);
+  return poolRoastLine(statusKey, name, offset);
+}
+// Compose a burn that isn't already shown elsewhere on the board this render. Nudges
+// the rotation offset until the line is unique (or gives up after a full sweep).
+function poolUniqueRoast(row, statusKey, rows, i, used){
+  let cand='';
+  for(let off=0; off<80; off++){
+    cand=poolComposeRoast(row, statusKey, rows, i, off);
+    if(!used.has(cand)) break;
+  }
+  used.add(cand);
+  return cand;
 }
 // Players who were the ONLY correct backer of a finished match's winner (🍀).
 function poolSoleUpsetCallers(){
@@ -4499,6 +4511,7 @@ function poolStandingsMeta(rows, baseline){
   const aliveCount=r=>{ const s=new Set(Object.values(r.picks||{}).filter(Boolean).map(canonName)); if(r.champion)s.add(canonName(r.champion)); let c=0; s.forEach(t=>{ if(!POOL_DEAD.has(t))c++; }); return c; };
   const maxBusted=Math.max(0,...rows.map(bustedCount));
   const lucky=poolSoleUpsetCallers();
+  const usedRoasts=new Set();   // no two rows show the same burn at once
   return rows.map((r,i)=>{
     const isLeader=anyResults && i===0 && (rows.length<2 || r.pts>rows[1].pts || r.correct>0);
     const isLast=anyResults && rows.length>1 && i===rows.length-1;
@@ -4528,7 +4541,7 @@ function poolStandingsMeta(rows, baseline){
       if(got>=need){ b.push(['🎯','Perfect '+rd.replace(/_/g,' ').toLowerCase()]); break; } } }
     const roastKey=isDead?'dead':champDead?'busted':isLeader?'leader':isLast?'last':movedUp?'heater':movedDown?'cold':isOracle?'oracle':'mid';
     const topper=isLeader?'👑':(isDead||champDead)?'💀':isLast?'🤡':'';
-    return { badges:b, roast: anyResults?poolComposeRoast(r, roastKey, rows, i):'', topper };
+    return { badges:b, roast: anyResults?poolUniqueRoast(r, roastKey, rows, i, usedRoasts):'', topper };
   });
 }
 // 📢 Roast spotlight: a daily-rotating featured burn, plus an event highlight for
