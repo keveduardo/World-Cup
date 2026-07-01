@@ -1761,6 +1761,7 @@ async function loadEspnLive() {
         desc: st.type?.description || '',            // 'Halftime', 'Full Time'...
         detail: st.type?.detail || '',               // longer phrase, helps disambiguate ET/pens
         clock: st.displayClock || '',                // "75'"
+        startISO: ev.date || '',                     // ESPN's (possibly rescheduled) kickoff
         period: st.period || 0,
         homeScore: parseInt(home.score, 10),
         awayScore: parseInt(away.score, 10),
@@ -1866,10 +1867,19 @@ function todayKeyPST() { return datekeyPST(new Date().toISOString()); }
 
 // ─── STATUS HELPERS ───────────────────────────────────────────────────────────
 function matchStatus(m) {
-  if (m.status === 'IN_PLAY' || m.status === 'PAUSED') return 'live';
+  // A posted final result is authoritative.
   if (m.status === 'FINISHED') return 'completed';
-  // API can lag on flipping status to live. If kickoff has passed but the match
-  // isn't finished, treat the first ~2.5 hours as "live" so it surfaces at the top.
+  // ESPN's live state is the most reliable "has play actually started" signal — trust
+  // it over football-data's status and over the kickoff-time guess. This is what
+  // handles weather delays: football-data may prematurely flip to IN_PLAY at the
+  // scheduled time, but ESPN still says 'pre' (and often carries the new kickoff).
+  const e = m._espn;
+  if (e && e.state === 'pre')  return 'upcoming';
+  if (e && e.state === 'post') return 'completed';
+  if (e && e.state === 'in')   return 'live';
+  if (m.status === 'IN_PLAY' || m.status === 'PAUSED') return 'live';
+  // No ESPN opinion: fall back to the kickoff-time guess (API can lag flipping to
+  // live), treating the first ~2.5 hours after kickoff as live.
   if (m.status === 'TIMED' || m.status === 'SCHEDULED' || !m.status) {
     const start = new Date(m.utcDate).getTime();
     const now = Date.now();
@@ -2221,9 +2231,14 @@ function renderMatchCard(m, status) {
       <div class="score-display">${hs} – ${as_}</div>
       <div class="match-time done">${endTag}</div>`;
   } else {
+    // Delayed: past the scheduled kickoff but ESPN says it hasn't started (weather,
+    // etc.). Show "Delayed" with ESPN's new time if it carries one.
+    const past = new Date(m.utcDate).getTime() < Date.now();
+    const delayed = m._espn && m._espn.state === 'pre' && past;
+    const koISO = (delayed && m._espn.startISO) ? m._espn.startISO : m.utcDate;
     center = `${grpTag}
       <div class="vs-display">VS</div>
-      <div class="match-time">${formatPST(m.utcDate)} ${tzShort()}</div>`;
+      <div class="match-time"${delayed ? ' style="color:var(--live-red)"' : ''}>${delayed ? '⏳ Delayed · ' : ''}${formatPST(koISO)} ${tzShort()}</div>`;
   }
 
   let venue = m.venue || '';
