@@ -1409,7 +1409,7 @@
   <div class="header-inner">
     <div class="header-title">
       <span class="eyebrow">⚽ FIFA World Cup 2026</span>
-      <h1>Match Tracker <button class="info-btn" onclick="showGuide()" title="About this site">i</button> <button class="info-btn" onclick="shareSite()" title="Share" style="font-style:normal">⤴</button></h1>
+      <h1>Match Tracker <button class="info-btn" onclick="showGuide()" title="About this site">i</button> <button class="info-btn" onclick="shareSite()" title="Share" style="font-style:normal">⤴</button> <button class="info-btn" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark" aria-label="Toggle light or dark theme" style="font-style:normal">🌙</button></h1>
       <span class="byline">by Aquadoc</span>
     </div>
     <div class="header-right-group">
@@ -1892,13 +1892,27 @@ function setupSync() {
 
 // ─── DARK MODE (auto: dark 8pm–7am Pacific) ──────────────────────────────────
 function applyTheme() {
-  const hour = parseInt(new Date().toLocaleString('en-US', {
-    timeZone: tz(), hour: 'numeric', hour12: false
-  }), 10);
-  // Broadcast follows the clock: a bright "daytime pitch" look by day, the dark
-  // broadcast look at night (8pm–7am). Non-broadcast users get normal auto dark too.
-  const dark = (hour >= 20 || hour < 7);
+  // A saved preference (from the header toggle) wins; otherwise follow the clock —
+  // bright "daytime pitch" by day, dark broadcast at night (8pm–7am).
+  const pref = localStorage.getItem('wc_theme');
+  let dark;
+  if (pref === 'dark') dark = true;
+  else if (pref === 'light') dark = false;
+  else {
+    const hour = parseInt(new Date().toLocaleString('en-US', {
+      timeZone: tz(), hour: 'numeric', hour12: false
+    }), 10);
+    dark = (hour >= 20 || hour < 7);
+  }
   document.body.classList.toggle('dark', dark);
+  const tb = document.getElementById('themeToggle');
+  if (tb) { tb.textContent = dark ? '☀️' : '🌙'; tb.title = dark ? 'Switch to light' : 'Switch to dark'; }
+}
+// Manual light/dark toggle — sets a saved preference that overrides the clock.
+function toggleTheme() {
+  const nowDark = document.body.classList.contains('dark');
+  try { localStorage.setItem('wc_theme', nowDark ? 'light' : 'dark'); } catch(e) {}
+  applyTheme();
 }
 
 // ─── FETCH HELPERS ────────────────────────────────────────────────────────────
