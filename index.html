@@ -1247,9 +1247,9 @@
     padding: 8px 11px; font-size: 12.5px; line-height: 1.5; color: var(--text); margin: -4px 0 12px; }
 
   /* ═══════════════════════════════════════════════════════════════════════
-     BROADCAST PREVIEW THEME — opt in with ?broadcast=1 (disable with ?broadcast=0).
-     Everything is scoped under body.broadcast, so the default site is untouched.
-     STEP 1: the match card — depth, texture, glowing hero score, 3D-framed flags.
+     BROADCAST THEME — the default look (add ?broadcast=0 for the classic theme).
+     Scoped under body.broadcast; premium 'sports broadcast' aesthetic layered over
+     dark mode: textured header, depth, glowing scores, 3D-framed flags, metal/gold.
      ═══════════════════════════════════════════════════════════════════════ */
   /* Broadcast palette: a deep green-tinted dark base + gold-tinted borders. Sits
      after body.dark's variables (which broadcast also gets via forced dark), so the
@@ -1260,16 +1260,6 @@
     --text: #eef4ea;
     --muted: #9db29c;
     --border: rgba(245,197,24,.16);
-  }
-  /* unmistakable "you're in preview mode" badge */
-  body.broadcast::after {
-    content: '⚡ BROADCAST PREVIEW · add ?broadcast=0 to exit';
-    position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);
-    background: linear-gradient(180deg, #12432c, #0a2c1e); color: var(--gold);
-    border: 1px solid rgba(245,197,24,.45); border-radius: 999px;
-    padding: 5px 14px; font-size: 11px; font-weight: 700; letter-spacing: .3px;
-    z-index: 99999; pointer-events: none; white-space: nowrap;
-    box-shadow: 0 3px 10px rgba(0,0,0,.45);
   }
   body.broadcast .match-card {
     background:
@@ -5083,12 +5073,11 @@ poolInit();
 
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
-// Broadcast preview theme (opt-in, purely cosmetic). Per-URL only — add ?broadcast=1
-// to the address to see it; remove it (or use ?broadcast=0) for the normal site. No
-// cross-tab memory, so you can keep one tab on and one off to compare.
+// Broadcast theme — now the default look for everyone. Opt out of it (classic
+// light/auto-dark theme) with ?broadcast=0. Purely cosmetic; per-URL, no memory.
 (function(){
   try{
-    if (new URLSearchParams(location.search).get('broadcast') === '1')
+    if (new URLSearchParams(location.search).get('broadcast') !== '0')
       document.body.classList.add('broadcast');
   }catch(e){}
 })();
