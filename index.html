@@ -149,7 +149,11 @@
 
   .tab.active, .tab:hover { color: var(--gold); border-bottom-color: var(--gold); }
   .tab-ico { margin-right: 5px; font-size: 13px; }
-  @media (max-width: 600px){ .tab-ico { margin-right: 3px; font-size: 12px; } }
+  @media (max-width: 600px){
+    .tab-ico { margin-right: 4px; font-size: 12px; }
+    .tab { padding: 12px 11px; font-size: 13px; }
+    .tab-xtra { display: none; }   /* "Groups & Standings" -> "Groups" so all 4 tabs fit */
+  }
 
   main { max-width: 900px; margin: 0 auto; padding: 16px; }
 
@@ -411,6 +415,12 @@
     color: var(--gold); font-size: 13px; font-weight: 700; margin-top: 0; white-space: nowrap;
   }
   body.broadcast .next-up-banner .next-up-wx { color: #8fd0ff; text-shadow: 0 0 6px rgba(143,208,255,.4); }
+  @media (max-width: 600px){
+    .next-up-banner { gap: 3px 8px; padding: 11px 13px; }
+    .next-up-game { flex-basis: 100%; font-size: 15px; }   /* own line — never squeezed */
+    .next-up-time { font-size: 14px; }
+    .next-up-banner .next-up-wx { font-size: 12px; }
+  }
 
   .filter-row { margin-bottom: 16px; }
   .grp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; }
@@ -1386,7 +1396,7 @@
 <div class="tab-bar">
   <div class="tabs">
     <button class="tab active" onclick="showView('schedule',this)"><span class="tab-ico">📅</span>Schedule</button>
-    <button class="tab" onclick="showView('groups',this)"><span class="tab-ico">📊</span>Groups &amp; Standings</button>
+    <button class="tab" onclick="showView('groups',this)"><span class="tab-ico">📊</span>Groups<span class="tab-xtra"> &amp; Standings</span></button>
     <button class="tab" onclick="showView('knockout',this)"><span class="tab-ico">🏆</span>Knockout</button>
     <button class="tab" onclick="showView('teams',this)"><span class="tab-ico">🌍</span>Teams</button>
   </div>
