@@ -1003,6 +1003,24 @@
   /* 🏅 leaderboard superlative badges */
   .lb-badges { white-space: nowrap; }
   .lb-badge { font-size: 13px; margin-left: 1px; cursor: default; }
+  /* 🗯️ roast line + 👑 avatar topper */
+  .lb-roast { font-size: 11px; font-style: italic; color: var(--muted); margin-top: 2px; line-height: 1.35; }
+  .lb-ava { position: relative; }
+  .lb-topper { position: absolute; top: -10px; right: -6px; font-size: 18px; z-index: 2;
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,.35)); transform: rotate(12deg); pointer-events: none; }
+  /* 🚨 upset alert klaxon */
+  .pool-upset { background: repeating-linear-gradient(45deg, rgba(230,57,70,.14), rgba(230,57,70,.14) 10px, rgba(245,197,24,.14) 10px, rgba(245,197,24,.14) 20px);
+    border: 1px solid var(--live-red); border-radius: 10px; padding: 9px 12px; margin: 0 0 12px;
+    font-size: 13px; text-align: center; animation: upsetflash 1.1s ease-in-out infinite; }
+  @keyframes upsetflash { 0%,100%{ opacity:1 } 50%{ opacity:.72 } }
+  /* 🔮 horoscope */
+  .pool-horo { background: var(--off-white); border: 1px dashed var(--border); border-radius: 10px;
+    padding: 8px 12px; margin: 0 0 12px; font-size: 12.5px; font-style: italic; color: var(--text); line-height: 1.45; }
+  /* 🌧️ sad confetti */
+  .confetti-bit.sad { border-radius: 50%; opacity: .8; }
+  .confetti-sadface { position: fixed; top: 12vh; left: 50%; transform: translateX(-50%);
+    font-size: 52px; animation: sadbob 2.4s ease-in-out; }
+  @keyframes sadbob { 0%{ opacity:0; transform: translate(-50%,-10px) } 20%{ opacity:1 } 80%{ opacity:1 } 100%{ opacity:0; transform: translate(-50%,10px) } }
   /* admin-only personal code line */
   .lb-code { display: flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 11px; color: var(--muted); }
   .lb-code code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--text);
@@ -3335,6 +3353,7 @@ let poolPicksOpen= false;   // leaderboard "Who picked what" section expanded
 let _poolSaveT   = null;
 let _poolDirty   = false;   // unsaved local change pending (drives the exit-time beacon)
 let _poolMyRank  = -1;      // my leaderboard index this render (for confetti)
+let _poolTotalPlayers = 0;  // player count this render (for the "dead last" sad confetti)
 let _poolChampWon= false;   // my champion won it all (for confetti)
 let _poolConfetti= new Set();// confetti reasons already celebrated this session
 
@@ -4255,23 +4274,102 @@ function poolBusterHTML(){
   return `<div class="pool-buster">${msg}</div>`;
 }
 // 🏅 Per-player superlative badges, computed from the standings + results.
-function poolSuperlatives(rows, baseline){
+// deterministic tiny hash so a player's random-flavored line stays put per render
+function poolHash(s){ let h=0; s=String(s||''); for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0; return Math.abs(h); }
+const POOL_ROASTS={
+  leader:["running away with it — insufferable already 😤","currently everyone's problem","peaked. it's all downhill from here","the bracket to beat, allegedly","built different (or just lucky)"],
+  last:["single-handedly holding up the entire table — a true foundation","in a brave, bold, confident last place","technically still alive, spiritually not","the designated driver of this pool","picks chosen by a coin. the coin is losing"],
+  busted:["champion's out — pour one out 🫗","the dream is dead, the picks remain","that +10 was never real, was it","bracket now held together by hope and duct tape"],
+  dead:["everything's eliminated. it's just vibes now 💀","technically playing, functionally spectating","the bracket flatlined. calling it","nothing left alive — pure chaos mode"],
+  heater:["climbing the board like rent's due 📈","on a heater — somebody check the thermostat","moving on up, making enemies","suddenly a threat. weird"],
+  cold:["free-falling and pretending it's fine 🧊","sliding down the board gracefully. not really","was that your good round? 😬","cooling off faster than the halftime tea"],
+  oracle:["suspiciously good at this 🔮","genius or witch, jury's out","reading the games like a menu","calling it before it happens, show-off"],
+  mid:["comfortably, aggressively mid","neither thriving nor dying","present and accounted for","just vibing in the middle","a solid 'meh' so far"],
+};
+function poolRoastLine(key,name){ const bank=POOL_ROASTS[key]||POOL_ROASTS.mid; return bank[poolHash(name+key)%bank.length]; }
+// Players who were the ONLY correct backer of a finished match's winner (🍀).
+function poolSoleUpsetCallers(){
+  const out=new Set(); if(!poolBoard||!poolBoard.players) return out;
+  const players=poolBoard.players;
+  for(const key in KO_SCHEDULE){ for(const slot of KO_SCHEDULE[key]){ const n=slot.n;
+    const m=koMatchForSlot(key,slot); if(!m||m.status!=='FINISHED') continue;
+    const w=poolWinnerOf(m); if(!w) continue; const wc=canonName(w);
+    const engaged=players.filter(p=>(p.picks||{})[n]); if(engaged.length<3) continue;
+    const backers=engaged.filter(p=>canonName(p.picks[n])===wc);
+    if(backers.length===1) out.add(backers[0].name);
+  }}
+  return out;
+}
+// Per-row leaderboard flavor: badges + a roast line + an avatar topper.
+function poolStandingsMeta(rows, baseline){
   const anyResults = allMatches.some(m=>POOL_ROUND_COUNT[m.stage] && m.status==='FINISHED');
   const maxCorrect = rows.reduce((a,r)=>Math.max(a,r.correct),0);
-  let bestGain=0; if(baseline){ rows.forEach((r,i)=>{ const b=baseline[r.name]; if(b){ const g=b.rank-i; if(g>bestGain) bestGain=g; } }); }
+  let bestGain=0, worstDrop=0;
+  if(baseline){ rows.forEach((r,i)=>{ const b=baseline[r.name]; if(b){ const g=b.rank-i; if(g>bestGain)bestGain=g; if(g<worstDrop)worstDrop=g; } }); }
   const perfectRounds = POOL_ROUNDS.map(x=>x.key).filter(r=> POOL_ROUND_COUNT[r]>=2 && poolFinishedCount(r)>=POOL_ROUND_COUNT[r]);
+  const bustedCount=r=>{ const s=new Set(); for(const n in (r.picks||{})){ const t=r.picks[n]; if(t&&POOL_DEAD.has(canonName(t))) s.add(canonName(t)); } return s.size; };
+  const aliveCount=r=>{ const s=new Set(Object.values(r.picks||{}).filter(Boolean).map(canonName)); if(r.champion)s.add(canonName(r.champion)); let c=0; s.forEach(t=>{ if(!POOL_DEAD.has(t))c++; }); return c; };
+  const maxBusted=Math.max(0,...rows.map(bustedCount));
+  const lucky=poolSoleUpsetCallers();
   return rows.map((r,i)=>{
+    const isLeader=anyResults && i===0 && (rows.length<2 || r.pts>rows[1].pts || r.correct>0);
+    const isLast=anyResults && rows.length>1 && i===rows.length-1;
+    const champDead=r.champion && POOL_DEAD.has(canonName(r.champion));
+    const isHeater=baseline && bestGain>0 && baseline[r.name] && (baseline[r.name].rank-i)===bestGain;
+    const isCold=baseline && worstDrop<0 && baseline[r.name] && (baseline[r.name].rank-i)===worstDrop;
+    const isOracle=maxCorrect>0 && r.correct===maxCorrect;
+    const bc=bustedCount(r);
+    const isClown=anyResults && bc>0 && bc===maxBusted;
+    const isDead=anyResults && r.picks && Object.keys(r.picks).length>0 && aliveCount(r)===0;
+    const isLucky=lucky.has(r.name);
     const b=[];
-    if(anyResults && i===0 && (rows.length<2 || r.pts>rows[1].pts || r.correct>0)) b.push(['👑','Pool leader']);
-    if(anyResults && rows.length>1 && i===rows.length-1) b.push(['🥄','Wooden spoon — last place']);
-    if(maxCorrect>0 && r.correct===maxCorrect) b.push(['🔮','Oracle — most correct picks']);
-    if(baseline && bestGain>0){ const bl=baseline[r.name]; if(bl && (bl.rank-i)===bestGain) b.push(['🚀','On a heater — biggest climb']); }
-    if(r.champion && POOL_DEAD.has(canonName(r.champion))) b.push(['🪦','Busted — champion eliminated']);
+    if(isLeader) b.push(['👑','Pool leader']);
+    if(isLast) b.push(['🥄','Wooden spoon — last place']);
+    if(isOracle) b.push(['🔮','Oracle — most correct picks']);
+    if(isHeater) b.push(['🚀','On a heater — biggest climb']);
+    if(isCold) b.push(['🧊','Ice cold — biggest drop']);
+    if(champDead) b.push(['🪦','Busted — champion eliminated']);
+    if(isClown) b.push(['🤡','Clown — most busted picks']);
+    if(isLucky) b.push(['🍀','Lucky duck — sole upset caller']);
+    if(isDead) b.push(['💀','Dead bracket — nothing left alive']);
     if(r.picks){ for(const rd of perfectRounds){ const need=POOL_ROUND_COUNT[rd]; let got=0;
       for(const n in r.picks){ if(roundOfMatch(n)===rd && POOL_ADV[rd] && POOL_ADV[rd].has(canonName(r.picks[n]))) got++; }
       if(got>=need){ b.push(['🎯','Perfect '+rd.replace(/_/g,' ').toLowerCase()]); break; } } }
-    return b;
+    const roastKey=isDead?'dead':champDead?'busted':isLeader?'leader':isLast?'last':isHeater?'heater':isCold?'cold':isOracle?'oracle':'mid';
+    const topper=isLeader?'👑':(isDead||champDead)?'💀':isLast?'🤡':'';
+    return { badges:b, roast: anyResults?poolRoastLine(roastKey, r.name):'', topper };
   });
+}
+// 🚨 Biggest FIFA-rank upset among finished knockout games — goofy klaxon banner.
+function poolUpsetHTML(){
+  let best=null;
+  for(const key in KO_SCHEDULE){ for(const slot of KO_SCHEDULE[key]){ const m=koMatchForSlot(key,slot);
+    if(!m||m.status!=='FINISHED') continue; const w=poolWinnerOf(m); if(!w) continue; const wc=canonName(w);
+    const loser=canonName(m.homeTeam?.name)===wc ? m.awayTeam?.name : m.homeTeam?.name;
+    const rw=fifaRank(w), rl=fifaRank(loser); if(rw==null||rl==null) continue;
+    const gap=rw-rl; if(gap>=12 && (!best||gap>best.gap)) best={gap,w,loser,rw,rl}; }}
+  if(!best) return '';
+  return `<div class="pool-upset">🚨 <b>UPSET ALERT</b> 🚨 #${best.rw} ${flag(best.w)} <b>${poolEsc(best.w)}</b> just bounced #${best.rl} ${flag(best.loser)} ${poolEsc(best.loser)}</div>`;
+}
+// 🔮 Goofy daily bracket horoscope — stable per day, varies per player.
+const POOL_HOROSCOPES=[
+  "the stars say your Round of 16 is held together by hope and duct tape.",
+  "Mercury is in retrograde and so is your bracket.",
+  "a tall stranger will ruin your semifinal. probably a center-back.",
+  "today is an excellent day to blame the referee.",
+  "your champion pick radiates a confidence it has not earned.",
+  "the vibes are immaculate. the picks are not.",
+  "trust your gut. your gut is currently 4-for-16.",
+  "a penalty shootout will test your will to live.",
+  "greatness is within reach. so is total collapse. flip a coin.",
+  "the football gods have seen your bracket and they are laughing.",
+  "avoid making eye contact with the leaderboard today.",
+  "a bold pick pays off. it is not one of yours, but still, nice for them.",
+];
+function poolHoroscopeHTML(){
+  const day=Math.floor(Date.now()/86400000);
+  const idx=(day + poolHash(poolMe||'x')) % POOL_HOROSCOPES.length;
+  return `<div class="pool-horo">🔮 <b>Bracket horoscope:</b> ${POOL_HOROSCOPES[idx]}</div>`;
 }
 // 🃏 Boldest correct call — the finished match whose winner the fewest backers
 // picked (and not everyone who engaged got it). Bragging rights.
@@ -4313,25 +4411,36 @@ function poolCinderellaHTML(){
     + `<div class="pool-funcard-b">${flag(worst.team)} <b>${poolEsc(worst.team)}</b> (FIFA #${worst.rk}) is the lowest-ranked team still standing${back}.</div></div>`;
 }
 // 🎉 Confetti — a quick celebratory burst (no libs). Fires once per reason/session.
-function poolConfetti(){
-  const colors=['#f5c518','#0e7a4a','#e63946','#2a6fdb','#ff8a00','#ffffff'];
+function poolConfetti(mode){
+  const sad = mode==='sad';
+  const colors = sad ? ['#8a95a5','#6b7280','#9aa4b2','#5b6472','#7c8595']
+                     : ['#f5c518','#0e7a4a','#e63946','#2a6fdb','#ff8a00','#ffffff'];
+  const n = sad ? 42 : 70;
   const wrap=document.createElement('div'); wrap.className='confetti-wrap';
-  for(let i=0;i<70;i++){ const c=document.createElement('span'); c.className='confetti-bit';
+  for(let i=0;i<n;i++){ const c=document.createElement('span'); c.className='confetti-bit'+(sad?' sad':'');
     c.style.left=Math.random()*100+'vw'; c.style.background=colors[i%colors.length];
-    c.style.animationDelay=(Math.random()*0.6)+'s'; c.style.animationDuration=(2.2+Math.random()*1.4)+'s';
+    c.style.animationDelay=(Math.random()*(sad?1.2:0.6))+'s';
+    c.style.animationDuration=((sad?3.6:2.2)+Math.random()*1.4)+'s';
     c.style.transform=`rotate(${Math.random()*360}deg)`; wrap.appendChild(c); }
+  if(sad){ const t=document.createElement('div'); t.className='confetti-sadface'; t.textContent='🌧️'; wrap.appendChild(t); }
   document.body.appendChild(wrap);
-  setTimeout(()=>wrap.remove(), 4200);
+  setTimeout(()=>wrap.remove(), sad?5200:4200);
 }
 function poolMaybeConfetti(){
   if(typeof currentView==='undefined' || currentView!=='pool') return;
   if(_poolChampWon && !_poolConfetti.has('champ')){ _poolConfetti.add('champ'); poolConfetti(); return; }
   const anyResults = allMatches.some(m=>POOL_ROUND_COUNT[m.stage] && m.status==='FINISHED');
-  if(anyResults && _poolMyRank===0 && !_poolConfetti.has('lead')){ _poolConfetti.add('lead'); poolConfetti(); }
+  if(anyResults && _poolMyRank===0 && !_poolConfetti.has('lead')){ _poolConfetti.add('lead'); poolConfetti(); return; }
+  // 🌧️ the comedic downgrade: champion busted, or dead last
+  const champBust = poolChampion && POOL_DEAD.has(canonName(poolChampion));
+  const deadLast = anyResults && _poolTotalPlayers>1 && _poolMyRank===_poolTotalPlayers-1;
+  if((champBust||deadLast) && !_poolConfetti.has('sad')){ _poolConfetti.add('sad'); poolConfetti('sad'); }
 }
 function poolBracketHTML(){
   let html=`<div class="pool-bracket-top"><button class="pool-info-btn" onclick="poolToggleHelp()">ⓘ How the pool works</button></div>`;
   if(poolHelp) html+=poolHelpHTML();
+  html+=poolUpsetHTML();
+  html+=poolHoroscopeHTML();
   html+=poolStatsHTML();
   html+=poolBusterHTML();
   html+=poolNudgeHTML();
@@ -4415,10 +4524,11 @@ function poolLeaderboardHTML(){
     rows.sort((a,b)=> b.pts-a.pts || b.correct-a.correct || (tbDelta(a)-tbDelta(b) || 0) || a.name.localeCompare(b.name));
   }
   const mvBaseline = rows.length ? poolMomentumBaseline(rows) : null;
-  const badges = poolSuperlatives(rows, mvBaseline);
-  // remember my standing this render so confetti can fire on a win / 1st place
+  const meta = poolStandingsMeta(rows, mvBaseline);
+  // remember my standing this render so confetti can fire on a win / 1st / last place
   const myI = rows.findIndex(r=>r.name===poolName);
-  _poolMyRank = myI; _poolChampWon = !!(actualChamp && poolChampion && canonName(poolChampion)===canonName(actualChamp));
+  _poolMyRank = myI; _poolTotalPlayers = rows.length;
+  _poolChampWon = !!(actualChamp && poolChampion && canonName(poolChampion)===canonName(actualChamp));
   const adminBtn = isAdmin
     ? `<button class="pool-mini-btn" onclick="poolAdminExit()">🔓 Admin: exit</button>`
     : `<button class="pool-mini-btn" onclick="poolAdminUnlock()">🔧 Admin</button>`;
@@ -4427,6 +4537,7 @@ function poolLeaderboardHTML(){
   const poolLbl = poolNm ? poolNm.charAt(0).toUpperCase()+poolNm.slice(1) : '';
   let html=`<div class="pool-board pool-board-redesign"><div class="pool-board-head"><h3>Leaderboard${poolLbl?` · ${poolEsc(poolLbl)}`:''}</h3>`
     + `<div class="pool-board-actions">${adminBtn}<button class="pool-mini-btn" onclick="poolLoadBoard()">↻ Refresh</button></div></div>`;
+  html+=poolUpsetHTML();
   if(poolAdmin && !isAdmin) html+=`<div class="pool-admin-note">Admin code not accepted. <a class="pool-link" onclick="poolAdminUnlock()">Try again</a></div>`;
   if(isAdmin) html+=`<div class="pool-admin-note ok">Admin mode — you can remove members.</div>`;
   if(!rows.length){ return html+`<div class="pool-empty">No entries yet — be the first to lock in picks.</div></div>`; }
@@ -4438,7 +4549,10 @@ function poolLeaderboardHTML(){
     const rm = (isAdmin && r.code) ? `<button class="lb-remove" title="Remove ${poolEsc(r.name)}" data-code="${poolEsc(r.code)}" data-name="${poolEsc(r.name)}" onclick="poolRemove(this)">🗑</button>` : '';
     const tb = (finalTotal!=null && r.tiebreak!=null && r.tiebreak!=='') ? ` · ⚖️${poolEsc(String(r.tiebreak))}` : '';
     const mv = poolMomentumHTML(mvBaseline, r.name, i, r.pts);
-    const bdg = (badges[i]||[]).map(([e,t])=>`<span class="lb-badge" title="${t}">${e}</span>`).join('');
+    const m = meta[i] || { badges:[], roast:'', topper:'' };
+    const bdg = m.badges.map(([e,t])=>`<span class="lb-badge" title="${t}">${e}</span>`).join('');
+    const top = m.topper ? `<span class="lb-topper">${m.topper}</span>` : '';
+    const roast = m.roast ? `<div class="lb-roast">“${m.roast}”</div>` : '';
     // Admin-only: show each member's personal code (their login) so you can recover
     // it for them. The Worker only sends codes to an authenticated admin.
     const codeLine = (isAdmin && r.code)
@@ -4446,8 +4560,8 @@ function poolLeaderboardHTML(){
         + `<button class="pool-mini-btn" data-code="${poolEsc(r.code)}" onclick="poolCopy(this.dataset.code)">copy</button></span>`
       : '';
     html+=`<div class="lb-row${me}"><div class="lb-pos">${pos}${mv}</div>`
-      + `<div class="lb-ava">${CAV.svg(r.avatar,{size:46})}</div>`
-      + `<div class="lb-name">${poolEsc(r.name)}${bdg?` <span class="lb-badges">${bdg}</span>`:''}${ch}${codeLine}</div>`
+      + `<div class="lb-ava">${top}${CAV.svg(r.avatar,{size:46})}</div>`
+      + `<div class="lb-name">${poolEsc(r.name)}${bdg?` <span class="lb-badges">${bdg}</span>`:''}${ch}${roast}${codeLine}</div>`
       + `<div class="lb-score"><span class="lb-pts">${r.pts}</span><small>pts · ${r.correct}✓${tb}</small></div>${rm}</div>`;
   });
   const tbHint = finalTotal!=null ? ' Ties broken by closest Final-goals guess (⚖️).' : '';
