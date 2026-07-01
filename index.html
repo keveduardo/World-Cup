@@ -423,7 +423,18 @@
   }
 
   .filter-row { margin-bottom: 16px; }
-  .grp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; }
+  .grp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; margin-top: 10px; }
+  .grp-toggle {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: .5px;
+    text-transform: uppercase; background: white; border: 1px solid var(--border); border-radius: 20px;
+    padding: 5px 12px; cursor: pointer; color: var(--text);
+  }
+  .grp-toggle.filtered { background: var(--pitch); color: var(--gold); border-color: var(--pitch); }
+  body.dark .grp-toggle { background: #1b231c; border-color: var(--border); color: var(--text); }
+  body.dark .grp-toggle.filtered { background: var(--pitch); color: var(--gold); }
+  body.broadcast .grp-toggle { background: linear-gradient(180deg, #12432c, #0a2c1e); color: var(--white);
+    border: 1px solid rgba(245,197,24,.22); box-shadow: 0 1px 2px rgba(0,0,0,.35), 0 1px 0 rgba(255,255,255,.06) inset; }
+  body.broadcast .grp-toggle.filtered { background: linear-gradient(180deg, #ffe37a, #f5c518, #d19b12); color: #073d24; border-color: rgba(120,90,15,.5); }
   .grp-badge {
     font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 800;
     letter-spacing: .5px; text-transform: uppercase;
@@ -436,7 +447,7 @@
   .grp-badge.active, .grp-badge:hover { background: var(--pitch); color: var(--gold); border-color: var(--pitch); }
   body.dark .grp-badge { background: #1b231c; border-color: var(--border); }
   body.dark .grp-badge.active, body.dark .grp-badge:hover { background: var(--pitch); color: var(--gold); }
-  .filter-controls { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .filter-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   /* broadcast: metallic group badges */
   body.broadcast .grp-badge { background: linear-gradient(180deg, #12432c, #0a2c1e); color: var(--white);
     border: 1px solid rgba(245,197,24,.22); box-shadow: 0 1px 2px rgba(0,0,0,.35), 0 1px 0 rgba(255,255,255,.06) inset; }
@@ -1732,6 +1743,7 @@ function matchVenueText(m) {
 let allMatches   = [];
 let standingsMap = {}; // group letter → sorted rows
 let activeFilter = 'all';
+let groupsOpen = false;   // group filter grid collapsed by default
 let scheduleSections = { past: false, future: false }; // collapsed by default
 let refreshTimer = null;
 let currentView  = 'schedule';
@@ -2148,19 +2160,24 @@ function renderSchedule() {
   const nextUpEl    = document.getElementById('next-up-container');
   const filterRowEl = document.getElementById('filter-row');
 
-  // Group filter — compact grid of A–L badges (faster to scan than a long pill row)
+  // Group filter — a collapsed "Groups" toggle keeps Sync / device on one line;
+  // tap it to reveal the A–L grid. Picking a group (or All) collapses it again.
   const groups = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+  const grpLabel = activeFilter === 'all' ? 'Groups' : 'Grp ' + activeFilter;
   filterRowEl.innerHTML =
-    `<div class="grp-grid">`
-    + `<button class="grp-badge all ${activeFilter==='all'?'active':''}" onclick="setFilter('all')">All</button>`
-    + groups.map(g => `<button class="grp-badge ${activeFilter===g?'active':''}" onclick="setFilter('${g}')">${g}</button>`).join('')
-    + `</div>`
-    + `<div class="filter-controls">`
+    `<div class="filter-controls">`
+    + `<button class="grp-toggle ${activeFilter!=='all'?'filtered':''}" onclick="toggleGroups()">${groupsOpen?'▾':'▸'} ${grpLabel}</button>`
     + `<button class="sync-btn" onclick="setupSync()">${syncCode ? '☁ Synced' : '☁ Sync'}</button>`
     + `<select class="filter-btn" style="appearance:auto" onchange="setTZ(this.value)">`
     + `${TZ_OPTIONS.map(o => `<option value="${o.id}" ${o.id===userTZ?'selected':''}>🕐 ${o.label}</option>`).join('')}`
     + `</select>`
-    + `</div>`;
+    + `</div>`
+    + (groupsOpen
+        ? `<div class="grp-grid">`
+          + `<button class="grp-badge all ${activeFilter==='all'?'active':''}" onclick="setFilter('all')">All</button>`
+          + groups.map(g => `<button class="grp-badge ${activeFilter===g?'active':''}" onclick="setFilter('${g}')">${g}</button>`).join('')
+          + `</div>`
+        : '');
 
   // Filter
   let matches = allMatches.filter(m =>
@@ -2521,7 +2538,8 @@ function renderMatchCard(m, status) {
     </div>`;
 }
 
-function setFilter(f) { activeFilter = f; renderSchedule(); }
+function setFilter(f) { activeFilter = f; groupsOpen = false; renderSchedule(); }
+function toggleGroups() { groupsOpen = !groupsOpen; renderSchedule(); }
 
 // ─── RENDER GROUPS ────────────────────────────────────────────────────────────
 function computeStandingsFromMatches() {
