@@ -3636,6 +3636,21 @@ const I18N_ES = {
   "Your champion":"Tu campeón", "none picked":"sin elegir",
   "Worth 0 points — only breaks ties on the leaderboard. Locks at the Final kickoff.":"Vale 0 puntos — solo desempata en la tabla. Se bloquea al inicio de la Final.",
   "Sign out of the pool on this browser?\n\nYour picks are saved — log back in anytime with your personal code.":"¿Cerrar sesión de la Polla en este navegador?\n\nTus pronósticos quedan guardados — vuelve a entrar cuando quieras con tu código personal.",
+  // pool join / login screen
+  "🔮 Join the Pool":"🔮 Únete a la Polla",
+  "First time here? Enter the shared pool code, your name, and a personal code — that code is all you'll need to get back in later, even on a new device. Then build your player.":"¿Primera vez? Ingresa el código compartido de la Polla, tu nombre y un código personal — ese código es lo único que necesitarás para volver a entrar, incluso en otro dispositivo. Luego crea tu jugador.",
+  "🎲 Randomize":"🎲 Aleatorio", "Fine-tune your player after you join.":"Personaliza tu jugador después de unirte.",
+  "Pool code":"Código de la Polla", "shared family code":"código familiar compartido",
+  "Your name":"Tu nombre", "e.g. Kevin":"ej. Kevin", "Personal code":"Código personal",
+  "(required — this is your login)":"(obligatorio — es tu acceso)",
+  "choose a code you'll remember":"elige un código que recuerdes",
+  "⚠️ <b>Write this down.</b> Your personal code is the only way back into your bracket — there's no password reset.":"⚠️ <b>Anótalo.</b> Tu código personal es la única forma de volver a tu cuadro — no hay recuperación de contraseña.",
+  "Create my bracket":"Crear mi cuadro", "Already signed up?":"¿Ya te registraste?",
+  "Log in with your personal code":"Entra con tu código personal",
+  "🔮 Knockout Prediction Pool":"🔮 Polla de Eliminación",
+  "Enter your personal code to open your bracket.":"Ingresa tu código personal para abrir tu cuadro.",
+  "your code":"tu código", "Open my bracket":"Abrir mi cuadro",
+  "New here?":"¿Nuevo por aquí?", "Sign up":"Regístrate", "to join the pool.":"para unirte a la Polla.",
 };
 function t(s){ return lang === 'es' ? (I18N_ES[s] || s) : s; }
 function applyI18n(){
@@ -5228,26 +5243,26 @@ function poolHeaderHTML(){
 function poolJoinHTML(){
   if(poolJoinMode==='signup'){
     const a=caGet();
-    return `<div class="pool-join pool-join-wide"><h3>🔮 Join the Pool</h3>`
-      + `<p class="pool-join-sub">First time here? Enter the shared pool code, your name, and a personal code — that code is all you'll need to get back in later, even on a new device. Then build your player.</p>`
+    return `<div class="pool-join pool-join-wide"><h3>${t('🔮 Join the Pool')}</h3>`
+      + `<p class="pool-join-sub">${t('First time here? Enter the shared pool code, your name, and a personal code — that code is all you\'ll need to get back in later, even on a new device. Then build your player.')}</p>`
       + `<div class="pool-join-grid">`
         + `<div class="pool-join-ava"><div class="ca-stage sm">${CAV.svg(a,{size:150})}</div>`
-          + `<button class="pool-mini-btn" onclick="caRandom()">🎲 Randomize</button>`
-          + `<div class="pool-join-avahint">Fine-tune your player after you join.</div></div>`
+          + `<button class="pool-mini-btn" onclick="caRandom()">${t('🎲 Randomize')}</button>`
+          + `<div class="pool-join-avahint">${t('Fine-tune your player after you join.')}</div></div>`
         + `<div class="pool-join-form">`
-          + `<label class="pool-field"><span>Pool code</span><input id="poolCodeInput" placeholder="shared family code" value="${poolEsc(poolPool)}"></label>`
-          + `<label class="pool-field"><span>Your name</span><input id="poolNameInput" placeholder="e.g. Kevin" value="${poolEsc(poolName)}"></label>`
-          + `<label class="pool-field"><span>Personal code <small>(required — this is your login)</small></span><input id="poolMeInput" placeholder="choose a code you'll remember" value="${poolEsc(poolMe)}"></label>`
-          + `<div class="pool-remember">⚠️ <b>Write this down.</b> Your personal code is the only way back into your bracket — there's no password reset.</div>`
-          + `<button class="pool-go" onclick="poolSignupSubmit()">Create my bracket</button>`
+          + `<label class="pool-field"><span>${t('Pool code')}</span><input id="poolCodeInput" placeholder="${t('shared family code')}" value="${poolEsc(poolPool)}"></label>`
+          + `<label class="pool-field"><span>${t('Your name')}</span><input id="poolNameInput" placeholder="${t('e.g. Kevin')}" value="${poolEsc(poolName)}"></label>`
+          + `<label class="pool-field"><span>${t('Personal code')} <small>${t('(required — this is your login)')}</small></span><input id="poolMeInput" placeholder="${t('choose a code you\'ll remember')}" value="${poolEsc(poolMe)}"></label>`
+          + `<div class="pool-remember">${t('⚠️ <b>Write this down.</b> Your personal code is the only way back into your bracket — there\'s no password reset.')}</div>`
+          + `<button class="pool-go" onclick="poolSignupSubmit()">${t('Create my bracket')}</button>`
         + `</div></div>`
-      + `<div class="pool-join-note">Already signed up? <a class="pool-link" onclick="poolSetJoinMode('login')">Log in with your personal code</a></div></div>`;
+      + `<div class="pool-join-note">${t('Already signed up?')} <a class="pool-link" onclick="poolSetJoinMode('login')">${t('Log in with your personal code')}</a></div></div>`;
   }
-  return `<div class="pool-join"><h3>🔮 Knockout Prediction Pool</h3>`
-    + `<p class="pool-join-sub">Enter your personal code to open your bracket.</p>`
-    + `<label class="pool-field"><span>Personal code</span><input id="poolMeInput" placeholder="your code" value="${poolEsc(poolMe)}"></label>`
-    + `<button class="pool-go" onclick="poolLoginSubmit()">Open my bracket</button>`
-    + `<div class="pool-join-note">New here? <a class="pool-link" onclick="poolSetJoinMode('signup')">Sign up</a> to join the pool.</div></div>`;
+  return `<div class="pool-join"><h3>${t('🔮 Knockout Prediction Pool')}</h3>`
+    + `<p class="pool-join-sub">${t('Enter your personal code to open your bracket.')}</p>`
+    + `<label class="pool-field"><span>${t('Personal code')}</span><input id="poolMeInput" placeholder="${t('your code')}" value="${poolEsc(poolMe)}"></label>`
+    + `<button class="pool-go" onclick="poolLoginSubmit()">${t('Open my bracket')}</button>`
+    + `<div class="pool-join-note">${t('New here?')} <a class="pool-link" onclick="poolSetJoinMode('signup')">${t('Sign up')}</a> ${t('to join the pool.')}</div></div>`;
 }
 function renderPool(){
   const c=document.getElementById('view-pool');
