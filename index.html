@@ -3655,6 +3655,13 @@ const I18N_ES = {
   "👥 Pool picks":"👥 Pronósticos del grupo", "possible":"posibles",
   "Teams set when the group stage clinches":"Los equipos se definen al cerrarse la fase de grupos",
   "Pick the earlier matches first":"Elige primero los partidos anteriores",
+  // leaderboard chrome
+  "✓ You're all set — every pick that's open right now is in.":"✓ Todo listo — ya ingresaste todos los pronósticos abiertos por ahora.",
+  "matches":"partidos", "match":"partido", "your":"tu", "champion":"campeón",
+  "Still open:":"Aún abierto:", "Picks lock as games kick off":"Los pronósticos se bloquean al comenzar los partidos",
+  "next at":"el próximo", "in":"en",
+  "pts":"pts", "still alive":"aún vivos", "max possible":"máx. posible",
+  "🔍 Who picked what":"🔍 Quién eligió qué", "unlocked":"desbloqueados", "unlocks at kickoff":"se abre al inicio",
 };
 function t(s){ return lang === 'es' ? (I18N_ES[s] || s) : s; }
 function applyI18n(){
@@ -3743,7 +3750,9 @@ const POOL_ORDER = { LAST_32:0, LAST_16:1, QUARTER_FINALS:2, SEMI_FINALS:3, THIR
 const POOL_START = { familia:'LAST_16' };
 function poolStartRound(){ return POOL_START[(poolPool||'').toLowerCase()] || 'LAST_32'; }
 function poolActiveRounds(){ const s=POOL_ORDER[poolStartRound()]||0; return POOL_ROUNDS.filter(r=>POOL_ORDER[r.key]>=s); }
-function poolStartLabel(){ return poolStartRound()==='LAST_16' ? 'Round-of-16' : 'Round-of-32'; }
+function poolStartLabel(){ const r=poolStartRound();
+  if(lang==='es') return r==='LAST_16' ? 'Octavos' : 'Dieciseisavos';
+  return r==='LAST_16' ? 'Round-of-16' : 'Round-of-32'; }
 
 let poolPool     = localStorage.getItem('wc_pool_pool') || '';
 let poolMe       = localStorage.getItem('wc_pool_me')   || '';
@@ -4479,7 +4488,7 @@ function poolRevealHTML(n){
       + `${CAV.svg(CAV.norm(p.avatar),{size:24})}<span class="pr-nm">${poolEsc(p.name)}</span></span>`).join('');
     html+=`<div class="pr-grp ${state}">`
       + `<div class="pr-team"><span class="pf">${flag(team)}</span>`
-      + `<span data-team="${poolEsc(team)}">${poolEsc(team)}</span>${mark}`
+      + `<span data-team="${poolEsc(team)}">${poolEsc(teamName(team))}</span>${mark}`
       + `<span class="pr-cnt">${ps.length}</span></div>`
       + `<div class="pr-people">${people}</div></div>`;
   });
@@ -4490,15 +4499,15 @@ function poolPicksSectionHTML(){
   const locked=[];
   poolActiveRounds().forEach(({key,label})=>{ (KO_SCHEDULE[key]||[]).slice().sort((a,b)=>poolKickMs(a.n)-poolKickMs(b.n))
     .forEach(s=>{ if(matchLocked(s.n)) locked.push({n:s.n,label}); }); });
-  const sub = locked.length ? `${locked.length} match${locked.length>1?'es':''} unlocked` : 'unlocks at kickoff';
+  const sub = locked.length ? `${locked.length} ${locked.length>1?t('matches'):t('match')} ${t('unlocked')}` : t('unlocks at kickoff');
   let html=`<div class="pr-section"><button class="pr-section-h" onclick="poolTogglePicks()">`
-    + `<span>${poolPicksOpen?'▾':'▸'} 🔍 Who picked what</span><small>${sub}</small></button>`;
+    + `<span>${poolPicksOpen?'▾':'▸'} ${t('🔍 Who picked what')}</span><small>${sub}</small></button>`;
   if(!poolPicksOpen) return html+`</div>`;
-  if(!locked.length) return html+`<div class="pr-empty">Everyone's picks stay hidden until each match kicks off — check back after the first ${poolStartLabel()} match.</div></div>`;
+  if(!locked.length) return html+`<div class="pr-empty">${lang==='es'?`Los pronósticos de todos quedan ocultos hasta que cada partido comienza — vuelve tras el primer partido de ${poolStartLabel()}.`:`Everyone's picks stay hidden until each match kicks off — check back after the first ${poolStartLabel()} match.`}</div></div>`;
   let last='';
   locked.forEach(s=>{
-    if(s.label!==last){ html+=`<div class="pr-round">${s.label}</div>`; last=s.label; }
-    html+=`<div class="pr-match"><div class="pr-match-h">Match ${s.n}</div>${poolRevealHTML(s.n)}</div>`;
+    if(s.label!==last){ html+=`<div class="pr-round">${t(s.label)}</div>`; last=s.label; }
+    html+=`<div class="pr-match"><div class="pr-match-h">${t('Match')} ${s.n}</div>${poolRevealHTML(s.n)}</div>`;
   });
   return html+`</div>`;
 }
@@ -4602,6 +4611,23 @@ function poolTiebreakHTML(){
 }
 function poolToggleHelp(){ poolHelp=!poolHelp; renderPool(); }
 function poolHelpHTML(){
+  if(lang==='es'){
+    const sw = poolStartRound()==='LAST_16' ? 'Octavos' : 'Dieciseisavos';
+    const pts = poolActiveRounds().filter(r=>r.key!=='THIRD_PLACE').map(r=>({LAST_32:'R32',LAST_16:'R16',QUARTER_FINALS:'CF',SEMI_FINALS:'SF',FINAL:'Final'}[r.key]+' '+POOL_WEIGHTS[r.key])).join(' · ');
+    return `<div class="pool-help">`
+      + `<div class="pool-help-h">Cómo funciona la Polla <button class="pool-help-x" onclick="poolToggleHelp()" aria-label="Cerrar">✕</button></div>`
+      + `<ul class="pool-help-list">`
+      + `<li><b>Es un predictor progresivo, no un cuadro que llenas todo de una vez.</b> Eliges cada partido antes de que <i>ese</i> partido comience, ronda por ronda. No bloqueas todo tu cuadro al inicio — las rondas siguientes quedan abiertas.</li>`
+      + `<li><b>Tus pronósticos avanzan solos.</b> Tu ganador se precarga en la ronda siguiente. En cuanto un partido se define, la próxima ronda muestra al ganador <b>real</b> para elegir — así un pronóstico fallido nunca te deja varado.</li>`
+      + `<li><b>Todos eligen cada ronda con la misma información</b> (los resultados reales de la ronda anterior), así el formato progresivo es justo.</li>`
+      + `<li><b>Cada partido se bloquea a su hora de inicio.</b> Puedes cambiar un pronóstico hasta que empiece — después queda congelado.</li>`
+      + `<li><b>Elige tu campeón</b> (🏆) por un bono de <b>+${POOL_CHAMP_BONUS}</b>. Es un pronóstico <b>aparte</b> — no tiene que coincidir con quién avanzas hasta la Final. Se bloquea al primer partido de ${sw}.</li>`
+      + `<li><b>Desempate:</b> predice el <b>total de goles en la Final</b> (⚖️). Vale 0 puntos — solo separa a jugadores empatados. Se bloquea al inicio de la Final.</li>`
+      + `<li><b>Puntos por acierto:</b> ${pts} · 3° ${POOL_WEIGHTS.THIRD_PLACE}. Las rondas posteriores valen más.</li>`
+      + `<li><b>Nada de copiar:</b> los pronósticos de todos quedan ocultos en la Tabla hasta que cada partido comienza.</li>`
+      + `<li><b>Hazla tuya:</b> toca la pestaña <b>🎨 Jugador</b> (o tu avatar, arriba a la izquierda) para crear tu personaje.</li>`
+      + `</ul></div>`;
+  }
   return `<div class="pool-help">`
     + `<div class="pool-help-h">How the pool works <button class="pool-help-x" onclick="poolToggleHelp()" aria-label="Close">✕</button></div>`
     + `<ul class="pool-help-list">`
@@ -4636,16 +4662,16 @@ function poolFmtIn(ms){
 function poolNudgeHTML(){
   const open=poolOpenPicks();
   const champOpen=!poolChampion && !championLocked();
-  if(!open.length && !champOpen) return `<div class="pool-nudge done">✓ You're all set — every pick that's open right now is in.</div>`;
+  if(!open.length && !champOpen) return `<div class="pool-nudge done">${t("✓ You're all set — every pick that's open right now is in.")}</div>`;
   let next=Infinity; open.forEach(n=>{ next=Math.min(next, poolKickMs(n)); });
   if(champOpen) next=Math.min(next, poolChampLockMs());
   const when=isFinite(next)
-    ? `${new Date(next).toLocaleString('en-US',{timeZone:tz(),weekday:'short',hour:'numeric',minute:'2-digit'})} ${tzShort()} (in ${poolFmtIn(next)})`
+    ? `${new Date(next).toLocaleString(localeTag(),{timeZone:tz(),weekday:'short',hour:'numeric',minute:'2-digit'})} ${tzShort()} (${t('in')} ${poolFmtIn(next)})`
     : '';
   const bits=[];
-  if(open.length) bits.push(`<b>${open.length}</b> match${open.length!==1?'es':''}`);
-  if(champOpen) bits.push(`your <b>champion</b>`);
-  return `<div class="pool-nudge warn">⚠️ Still open: ${bits.join(' + ')}. Picks lock as games kick off${when?` — next at <b>${when}</b>`:''}.</div>`;
+  if(open.length) bits.push(`<b>${open.length}</b> ${open.length!==1?t('matches'):t('match')}`);
+  if(champOpen) bits.push(`${t('your')} <b>${t('champion')}</b>`);
+  return `<div class="pool-nudge warn">⚠️ ${t('Still open:')} ${bits.join(' + ')}. ${t('Picks lock as games kick off')}${when?` — ${t('next at')} <b>${when}</b>`:''}.</div>`;
 }
 // Your running stake: points banked, how many of your teams are still alive, and
 // the ceiling you could still reach. Banked matches what the leaderboard shows.
@@ -4664,9 +4690,9 @@ function poolMyStats(){
 function poolStatsHTML(){
   const s=poolMyStats();
   return `<div class="pool-stats">`
-    + `<span class="ps-item"><b>${s.pts}</b> pts</span>`
-    + `<span class="ps-item"><b>${s.alive}</b> still alive</span>`
-    + `<span class="ps-item"><b>${s.max}</b> max possible</span></div>`;
+    + `<span class="ps-item"><b>${s.pts}</b> ${t('pts')}</span>`
+    + `<span class="ps-item"><b>${s.alive}</b> ${t('still alive')}</span>`
+    + `<span class="ps-item"><b>${s.max}</b> ${t('max possible')}</span></div>`;
 }
 // 💥 Bracket-buster callout — when a pick you needed has died. Cheeky, personal.
 function poolBusterHTML(){
