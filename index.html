@@ -1433,12 +1433,12 @@
 <header>
   <div class="header-inner">
     <div class="header-title">
-      <span class="eyebrow">⚽ FIFA World Cup 2026</span>
-      <h1>Match Tracker <button class="info-btn" onclick="showGuide()" title="About this site">i</button> <button class="info-btn" onclick="shareSite()" title="Share" style="font-style:normal">⤴</button> <button class="info-btn" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark" aria-label="Toggle light or dark theme" style="font-style:normal">🌙</button></h1>
+      <span class="eyebrow">⚽ <span data-i18n="FIFA World Cup 2026">FIFA World Cup 2026</span></span>
+      <h1>Match Tracker <button class="info-btn" onclick="showGuide()" title="About this site">i</button> <button class="info-btn" onclick="shareSite()" title="Share" style="font-style:normal">⤴</button> <button class="info-btn" id="themeToggle" onclick="toggleTheme()" title="Toggle light / dark" aria-label="Toggle light or dark theme" style="font-style:normal">🌙</button> <button class="info-btn" id="langToggle" onclick="toggleLang()" title="English / Español" aria-label="Switch language" style="font-style:normal;font-size:11px;font-weight:800">ES</button></h1>
       <span class="byline">by Aquadoc</span>
     </div>
     <div class="header-right-group">
-      <button class="pool-nav" onclick="showView('pool', null)" title="Knockout prediction pool">Pool <span class="nv-new">NEW</span></button>
+      <button class="pool-nav" onclick="showView('pool', null)" title="Knockout prediction pool"><span data-i18n="Pool">Pool</span> <span class="nv-new" data-i18n="NEW">NEW</span></button>
       <div class="header-right">
       <div class="live-clock">
         <div class="time" id="clock">--:-- --</div>
@@ -1452,10 +1452,10 @@
 
 <div class="tab-bar">
   <div class="tabs">
-    <button class="tab active" onclick="showView('schedule',this)"><span class="tab-ico">📅</span>Schedule</button>
-    <button class="tab" onclick="showView('groups',this)"><span class="tab-ico">📊</span>Groups<span class="tab-xtra"> &amp; Standings</span></button>
-    <button class="tab" onclick="showView('knockout',this)"><span class="tab-ico">🏆</span>Knockout</button>
-    <button class="tab" onclick="showView('teams',this)"><span class="tab-ico">🌍</span>Teams</button>
+    <button class="tab active" onclick="showView('schedule',this)"><span class="tab-ico">📅</span><span data-i18n="Schedule">Schedule</span></button>
+    <button class="tab" onclick="showView('groups',this)"><span class="tab-ico">📊</span><span data-i18n="Groups">Groups</span><span class="tab-xtra" data-i18n=" &amp; Standings"> &amp; Standings</span></button>
+    <button class="tab" onclick="showView('knockout',this)"><span class="tab-ico">🏆</span><span data-i18n="Knockout">Knockout</span></button>
+    <button class="tab" onclick="showView('teams',this)"><span class="tab-ico">🌍</span><span data-i18n="Teams">Teams</span></button>
   </div>
 </div>
 
@@ -1803,6 +1803,8 @@ let groupsOpen = false;   // group filter grid collapsed by default
 let scheduleSections = { past: false, future: false }; // collapsed by default
 let refreshTimer = null;
 let currentView  = 'schedule';
+let lang         = localStorage.getItem('wc_lang') || 'en';   // 'en' | 'es'
+function localeTag(){ return lang === 'es' ? 'es-US' : 'en-US'; }
 let nextKickoff  = null; // for countdown
 
 // ─── TIMEZONE PREFERENCE (defaults to device timezone) ───────────────────────
@@ -2113,13 +2115,13 @@ function scheduleNext() {
 // ─── TIME UTILS ───────────────────────────────────────────────────────────────
 function formatPST(isoString) {
   if (!isoString) return '';
-  return new Date(isoString).toLocaleTimeString('en-US',{
+  return new Date(isoString).toLocaleTimeString(localeTag(),{
     timeZone: tz(), hour:'numeric', minute:'2-digit', hour12:true
   });
 }
 
 function formatDatePST(isoString) {
-  return new Date(isoString).toLocaleDateString('en-US',{
+  return new Date(isoString).toLocaleDateString(localeTag(),{
     timeZone: tz(), weekday:'short', month:'short', day:'numeric'
   });
 }
@@ -3050,7 +3052,7 @@ function renderKnockout() {
 
     const note = confirmed >= slots.length ? '' :
       confirmed > 0 ? ` · ${confirmed} confirmed` : ' · teams TBD';
-    html += `<div class="section-head"><h2>${label}</h2><span class="count">${slots.length} match${slots.length>1?'es':''}${note}</span></div>` + body;
+    html += `<div class="section-head"><h2>${t(label)}</h2><span class="count">${slots.length} match${slots.length>1?'es':''}${note}</span></div>` + body;
   });
 
   if (!html) html = '<div class="loading-spinner">Knockout schedule loading…</div>';
@@ -3579,6 +3581,35 @@ function renderCurrentView() {
   else if (currentView === 'knockout') renderKnockout();
   else if (currentView === 'teams') renderTeams();
   else if (currentView === 'pool') renderPool();
+}
+
+// ─── LANGUAGE (app chrome; English ⇆ Spanish) ────────────────────────────────
+// t('English') returns the Spanish string when lang==='es', else the English key
+// itself — so any string not yet translated safely falls back to English. Static
+// markup uses data-i18n="English"; dynamic (rendered) strings call t('English').
+const I18N_ES = {
+  // nav + header
+  "Schedule":"Calendario", "Groups":"Grupos", " & Standings":" y Clasificación",
+  "Knockout":"Eliminatorias", "Teams":"Equipos",
+  "FIFA World Cup 2026":"Copa Mundial FIFA 2026", "Pool":"Quiniela", "NEW":"NUEVO",
+  // knockout round labels
+  "Round of 32":"Dieciseisavos", "Round of 16":"Octavos", "Quarterfinals":"Cuartos de Final",
+  "Semifinals":"Semifinales", "Third Place":"Tercer Puesto", "🏆 Final":"🏆 Final",
+  // schedule / common chrome
+  "Next Up":"Próximo", "All":"Todos", "Earlier Results":"Resultados Anteriores",
+};
+function t(s){ return lang === 'es' ? (I18N_ES[s] || s) : s; }
+function applyI18n(){
+  document.querySelectorAll('[data-i18n]').forEach(el=>{ el.textContent = t(el.getAttribute('data-i18n')); });
+  const lt = document.getElementById('langToggle'); if(lt) lt.textContent = (lang === 'es' ? 'EN' : 'ES');
+  document.documentElement.lang = lang;
+}
+function toggleLang(){
+  lang = (lang === 'es') ? 'en' : 'es';
+  localStorage.setItem('wc_lang', lang);
+  applyI18n();
+  updateClock();
+  renderCurrentView();
 }
 
 // ─── CLOCK ───────────────────────────────────────────────────────────────────
@@ -5220,6 +5251,7 @@ poolInit();
 })();
 
 document.getElementById('clockTzLabel').textContent = tzLabel();
+applyI18n();   // translate static chrome to the saved language
 applyTheme();
 setInterval(applyTheme, 60000); // re-check theme each minute
 updateClock();
