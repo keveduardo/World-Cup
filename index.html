@@ -1382,7 +1382,7 @@
   }
   /* DAYTIME tab bar: light, green text/icons, green active underline (like a broadcast lower-third) */
   body.broadcast:not(.dark) .tab-bar {
-    background: #ffffff;
+    background: #eef6e7;   /* a lighter shade of green than the field header */
     border-bottom: 1px solid rgba(10,92,54,.14);
     box-shadow: 0 2px 8px rgba(20,50,30,.08);
   }
@@ -1404,13 +1404,16 @@
   }
   body.broadcast:not(.dark) h1 { color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.22), 0 2px 4px rgba(0,0,0,.3); }
   body.broadcast:not(.dark) .byline { color: var(--gold); }
-  /* light match card: real depth, a prominent green score, framed flags */
+  /* each card is its own light "mini pitch": pale grass green with faint mowing
+     stripes, depth, a prominent green score, framed flags */
   body.broadcast:not(.dark) .match-card {
-    background: linear-gradient(180deg, #ffffff, #f2f7ed);
-    border: 1px solid rgba(10,92,54,.18); border-radius: 14px; padding: 14px 16px;
-    box-shadow: 0 4px 12px rgba(20,50,30,.10), 0 1px 0 rgba(255,255,255,.9) inset;
+    background:
+      repeating-linear-gradient(90deg, rgba(11,110,55,.07) 0 42px, rgba(11,110,55,.02) 42px 84px),
+      linear-gradient(180deg, #edf7e6 0%, #ddf0d3 100%);
+    border: 1px solid rgba(10,92,54,.22); border-radius: 14px; padding: 14px 16px;
+    box-shadow: 0 4px 12px rgba(20,50,30,.10), 0 1px 0 rgba(255,255,255,.65) inset;
   }
-  body.broadcast:not(.dark) .match-card.live { background: linear-gradient(180deg, #ffffff, #fff2f2); border-color: rgba(230,57,70,.3); }
+  body.broadcast:not(.dark) .match-card.live { border-color: rgba(230,57,70,.4); }
   body.broadcast:not(.dark) .score-display {
     font-size: clamp(30px, 9vw, 42px); letter-spacing: 3px; color: var(--pitch);
     text-shadow: 0 1px 0 rgba(255,255,255,.7), 0 0 12px rgba(245,197,24,.28);
