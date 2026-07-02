@@ -66,6 +66,16 @@ function championLockMs() {
   for (let n = 73; n <= 88; n++) if (KO_TIMES[n]) min = Math.min(min, koKickoffMs(n));
   return min;
 }
+// The 'familia' pool starts at the Round of 16, so its champion locks at the first
+// R16 kickoff (matches 89-96) instead. Per-pool so each board redacts correctly.
+function r16LockMs() {
+  let min = Infinity;
+  for (let n = 89; n <= 96; n++) if (KO_TIMES[n]) min = Math.min(min, koKickoffMs(n));
+  return min;
+}
+function champLockFor(pool) {
+  return String(pool || '').toLowerCase() === 'familia' ? r16LockMs() : championLockMs();
+}
 function parsePicks(str) {
   const out = {};
   (str || '').split('|').filter(Boolean).forEach(p => {
@@ -93,7 +103,7 @@ export default {
     // belongs to whichever code they signed up with (stored on their entry).
     // Legacy entries have no `pool` field → they belong to POOL_CODE ('bubblers').
     // Override the full set with a comma-separated POOL_CODES var if needed.
-    const POOL_CODES = String(env.POOL_CODES || (POOL_CODE + ',family'))
+    const POOL_CODES = String(env.POOL_CODES || (POOL_CODE + ',family,familia'))
       .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
     const normPool  = (c) => String(c || '').trim().toLowerCase();
     const validPool = (c) => POOL_CODES.includes(normPool(c));
@@ -141,7 +151,7 @@ export default {
           if (raw) { try { entry = JSON.parse(raw); } catch {} }
         }
         if (entry) entry.pool = poolOf(entry);   // normalize (legacy → bubblers)
-        payload = { ok: true, now: Date.now(), championLock: championLockMs(), entry };
+        payload = { ok: true, now: Date.now(), championLock: champLockFor(entry ? entry.pool : ''), entry };
 
       } else if (type === 'poolsave') {
         const pool = (url.searchParams.get('pool') || '').trim();
@@ -181,8 +191,9 @@ export default {
             for (const n of Object.keys(cur.picks)) {
               if (now < koKickoffMs(+n) && !(n in incoming)) delete cur.picks[n];
             }
-            // Champion is editable until the first R32 kickoff.
-            if (champIn && now < championLockMs()) cur.champion = champIn.slice(0, 40);
+            // Champion is editable until this pool's champion lock (R32 kickoff, or
+            // R16 kickoff for the late-starting 'familia' pool).
+            if (champIn && now < champLockFor(cur.pool)) cur.champion = champIn.slice(0, 40);
             // Tiebreaker (predicted total goals in the Final) — editable until the
             // Final kicks off. Empty string clears it.
             if (url.searchParams.has('tiebreak') && now < koKickoffMs(104)) {
@@ -216,7 +227,7 @@ export default {
           payload = { error: 'not authorized' };
         } else {
           const now       = Date.now();
-          const champLock = championLockMs();
+          const champLock = champLockFor(boardPool);
           const list      = await env.WC_KV.list({ prefix: 'pool_player_' });
           const players   = [];
           for (const k of list.keys) {

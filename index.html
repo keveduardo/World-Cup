@@ -3626,6 +3626,14 @@ const POOL_ROUNDS = [
   { key:'THIRD_PLACE', label:'Third Place' },
   { key:'FINAL', label:'🏆 Final' },
 ];
+// Per-pool starting round. Most pools run the full bracket (Round of 32 →); the
+// 'familia' pool joins late and starts at the Round of 16 (picks the REAL R16
+// field, since R32 is already decided). Default: full bracket.
+const POOL_ORDER = { LAST_32:0, LAST_16:1, QUARTER_FINALS:2, SEMI_FINALS:3, THIRD_PLACE:4, FINAL:5 };
+const POOL_START = { familia:'LAST_16' };
+function poolStartRound(){ return POOL_START[(poolPool||'').toLowerCase()] || 'LAST_32'; }
+function poolActiveRounds(){ const s=POOL_ORDER[poolStartRound()]||0; return POOL_ROUNDS.filter(r=>POOL_ORDER[r.key]>=s); }
+function poolStartLabel(){ return poolStartRound()==='LAST_16' ? 'Round-of-16' : 'Round-of-32'; }
 
 let poolPool     = localStorage.getItem('wc_pool_pool') || '';
 let poolMe       = localStorage.getItem('wc_pool_me')   || '';
@@ -3665,7 +3673,7 @@ function roundOfMatch(n){ n=+n;
 function koSlot(n){ for(const k in KO_SCHEDULE){ const s=KO_SCHEDULE[k].find(x=>x.n===+n); if(s) return s; } return null; }
 function poolKickMs(n){ const s=koSlot(n); return s ? new Date(etToUtcISO(s.date,s.et)).getTime() : Infinity; }
 function matchLocked(n){ return Date.now() >= poolKickMs(n); }
-function poolChampLockMs(){ let min=Infinity; KO_SCHEDULE.LAST_32.forEach(s=>{ min=Math.min(min, new Date(etToUtcISO(s.date,s.et)).getTime()); }); return min; }
+function poolChampLockMs(){ let min=Infinity; (KO_SCHEDULE[poolStartRound()]||KO_SCHEDULE.LAST_32).forEach(s=>{ min=Math.min(min, new Date(etToUtcISO(s.date,s.et)).getTime()); }); return min; }
 function championLocked(){ return Date.now() >= poolChampLockMs(); }
 // Tiebreaker (predicted total goals in the Final) is editable right up to the Final kickoff.
 function tiebreakLocked(){ return Date.now() >= poolKickMs(104); }
@@ -3889,13 +3897,13 @@ async function poolLoginSubmit(){
   try{ const r=await fetch(`${PROXY}?type=poolload&me=${encodeURIComponent(me)}`); d=await r.json(); }
   catch(e){ alert('Could not reach the pool. Try again.'); return; }
   if(!d || !d.entry){ alert('No bracket found for that code. If you are new, tap “Sign up”.'); return; }
-  poolMe=me; poolPool='';
+  poolMe=me; poolPool=(d.entry.pool||'');   // the Worker returns the member's pool (needed for the per-pool start round)
   poolPicks=d.entry.picks||{}; poolChampion=d.entry.champion||''; poolName=d.entry.name||'';
   poolTiebreak=d.entry.tiebreak!=null?String(d.entry.tiebreak):'';
   poolAvatar=CAV.norm(d.entry.avatar);
   localStorage.setItem('wc_pool_me', poolMe);
   localStorage.setItem('wc_pool_name', poolName);
-  localStorage.removeItem('wc_pool_pool');
+  localStorage.setItem('wc_pool_pool', poolPool);
   poolSub='bracket'; renderPool(); poolLoadBoard();
 }
 async function poolSignupSubmit(){
@@ -4370,13 +4378,13 @@ function poolRevealHTML(n){
 // Leaderboard section: every match that has kicked off, grouped by round.
 function poolPicksSectionHTML(){
   const locked=[];
-  POOL_ROUNDS.forEach(({key,label})=>{ (KO_SCHEDULE[key]||[]).slice().sort((a,b)=>poolKickMs(a.n)-poolKickMs(b.n))
+  poolActiveRounds().forEach(({key,label})=>{ (KO_SCHEDULE[key]||[]).slice().sort((a,b)=>poolKickMs(a.n)-poolKickMs(b.n))
     .forEach(s=>{ if(matchLocked(s.n)) locked.push({n:s.n,label}); }); });
   const sub = locked.length ? `${locked.length} match${locked.length>1?'es':''} unlocked` : 'unlocks at kickoff';
   let html=`<div class="pr-section"><button class="pr-section-h" onclick="poolTogglePicks()">`
     + `<span>${poolPicksOpen?'▾':'▸'} 🔍 Who picked what</span><small>${sub}</small></button>`;
   if(!poolPicksOpen) return html+`</div>`;
-  if(!locked.length) return html+`<div class="pr-empty">Everyone's picks stay hidden until each match kicks off — check back after the first Round-of-32 match.</div></div>`;
+  if(!locked.length) return html+`<div class="pr-empty">Everyone's picks stay hidden until each match kicks off — check back after the first ${poolStartLabel()} match.</div></div>`;
   let last='';
   locked.forEach(s=>{
     if(s.label!==last){ html+=`<div class="pr-round">${s.label}</div>`; last=s.label; }
@@ -4463,7 +4471,7 @@ function poolChampionHTML(){
   const inner = locked
     ? `<div class="pool-champ-locked">${poolChampion ? flag(poolChampion)+' '+poolEsc(poolChampion) : '—'}<span class="pool-lock">🔒 locked</span></div>${res}`
     : `<select class="pool-select" onchange="poolSetChampion(this.value)">${opts}</select>`
-      + `<div class="pool-hint">A separate <b>+${POOL_CHAMP_BONUS}</b> bonus — it doesn't have to match who you advance through the Final. Locks at the first Round-of-32 kickoff.</div>`;
+      + `<div class="pool-hint">A separate <b>+${POOL_CHAMP_BONUS}</b> bonus — it doesn't have to match who you advance through the Final. Locks at the first ${poolStartLabel()} kickoff.</div>`;
   return `<div class="pool-champ"><div class="pool-champ-label">🏆 Tournament Champion<span class="pool-champ-bonus">+${POOL_CHAMP_BONUS} bonus</span></div>${inner}</div>`;
 }
 // Tiebreaker: predicted total goals in the Final. Worth 0 points — only separates
@@ -4491,9 +4499,9 @@ function poolHelpHTML(){
     + `<li><b>Your picks flow forward.</b> Your Round-of-32 winner is pre-filled into the Round of 16. The moment a game is actually decided, the next round shows the <b>real</b> winner to pick from — so a busted pick never strands you.</li>`
     + `<li><b>Everyone picks each round with the same info</b> (the previous round's real results), so the rolling format stays fair.</li>`
     + `<li><b>Each match locks at its kickoff.</b> You can change a pick any time before that match starts — after that it's frozen.</li>`
-    + `<li><b>Pick your champion</b> (🏆) for a <b>+${POOL_CHAMP_BONUS}</b> bonus. It's a <b>separate</b> pick — it needn't match who you advance through the Final. Locks at the first Round-of-32 kickoff.</li>`
+    + `<li><b>Pick your champion</b> (🏆) for a <b>+${POOL_CHAMP_BONUS}</b> bonus. It's a <b>separate</b> pick — it needn't match who you advance through the Final. Locks at the first ${poolStartLabel()} kickoff.</li>`
     + `<li><b>Tiebreaker:</b> predict the <b>total goals in the Final</b> (⚖️). Worth 0 points — it only separates players tied on score. Locks at the Final kickoff.</li>`
-    + `<li><b>Points per correct advancer:</b> R32 ${POOL_WEIGHTS.LAST_32} · R16 ${POOL_WEIGHTS.LAST_16} · QF ${POOL_WEIGHTS.QUARTER_FINALS} · SF ${POOL_WEIGHTS.SEMI_FINALS} · 3rd ${POOL_WEIGHTS.THIRD_PLACE} · Final ${POOL_WEIGHTS.FINAL}. Later rounds are worth more.</li>`
+    + `<li><b>Points per correct advancer:</b> ${poolActiveRounds().filter(r=>r.key!=='THIRD_PLACE').map(r=>({LAST_32:'R32',LAST_16:'R16',QUARTER_FINALS:'QF',SEMI_FINALS:'SF',FINAL:'Final'}[r.key]+' '+POOL_WEIGHTS[r.key])).join(' · ')} · 3rd ${POOL_WEIGHTS.THIRD_PLACE}. Later rounds are worth more.</li>`
     + `<li><b>No copying:</b> everyone's picks stay hidden on the Leaderboard until each match kicks off.</li>`
     + `<li><b>Make it yours:</b> tap the <b>🎨 Player</b> tab (or your avatar, top-left) to build your character.</li>`
     + `</ul></div>`;
@@ -4803,7 +4811,7 @@ function poolStandingsMeta(rows, baseline){
   const maxCorrect = rows.reduce((a,r)=>Math.max(a,r.correct),0);
   let bestGain=0, worstDrop=0;
   if(baseline){ rows.forEach((r,i)=>{ const b=baseline[r.name]; if(b){ const g=b.rank-i; if(g>bestGain)bestGain=g; if(g<worstDrop)worstDrop=g; } }); }
-  const perfectRounds = POOL_ROUNDS.map(x=>x.key).filter(r=> POOL_ROUND_COUNT[r]>=2 && poolFinishedCount(r)>=POOL_ROUND_COUNT[r]);
+  const perfectRounds = poolActiveRounds().map(x=>x.key).filter(r=> POOL_ROUND_COUNT[r]>=2 && poolFinishedCount(r)>=POOL_ROUND_COUNT[r]);
   const bustedCount=r=>{ const s=new Set(); for(const n in (r.picks||{})){ const t=r.picks[n]; if(t&&POOL_DEAD.has(canonName(t))) s.add(canonName(t)); } return s.size; };
   const aliveCount=r=>{ const s=new Set(Object.values(r.picks||{}).filter(Boolean).map(canonName)); if(r.champion)s.add(canonName(r.champion)); let c=0; s.forEach(t=>{ if(!POOL_DEAD.has(t))c++; }); return c; };
   const maxBusted=Math.max(0,...rows.map(bustedCount));
@@ -4990,7 +4998,7 @@ function poolBracketHTML(){
   html+=poolNudgeHTML();
   html+=poolChampionHTML();
   html+=poolTiebreakHTML();
-  POOL_ROUNDS.forEach(({key,label})=>{
+  poolActiveRounds().forEach(({key,label})=>{
     const slots=KO_SCHEDULE[key]||[];
     const wt=POOL_WEIGHTS[key];
     html+=`<div class="pool-round-head"><h2>${label}</h2><span class="wt">${wt} pt${wt>1?'s':''} each</span></div>`;
