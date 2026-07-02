@@ -3014,8 +3014,8 @@ let koView = localStorage.getItem('wc_ko_view') || 'list';   // 'list' | 'tree'
 function setKoView(v){ koView=v; localStorage.setItem('wc_ko_view', v); renderKnockout(); }
 function koViewToggle(){
   return `<div class="ko-viewtoggle">`
-    + `<button class="ko-vt ${koView==='list'?'on':''}" onclick="setKoView('list')">📋 List</button>`
-    + `<button class="ko-vt ${koView==='tree'?'on':''}" onclick="setKoView('tree')">🗺 Bracket</button></div>`;
+    + `<button class="ko-vt ${koView==='list'?'on':''}" onclick="setKoView('list')">${t('📋 List')}</button>`
+    + `<button class="ko-vt ${koView==='tree'?'on':''}" onclick="setKoView('tree')">${t('🗺 Bracket')}</button></div>`;
 }
 
 function renderKnockout() {
@@ -3597,7 +3597,7 @@ const I18N_ES = {
   // nav + header
   "Schedule":"Calendario", "Groups":"Grupos", " & Standings":" y Posiciones",
   "Knockout":"Eliminación", "Teams":"Equipos",
-  "FIFA World Cup 2026":"Copa Mundial FIFA 2026", "Pool":"Quiniela", "NEW":"NUEVO",
+  "FIFA World Cup 2026":"Copa Mundial FIFA 2026", "Pool":"Polla", "NEW":"NUEVO",
   // knockout round labels
   "Round of 32":"Dieciseisavos", "Round of 16":"Octavos", "Quarterfinals":"Cuartos de Final",
   "Semifinals":"Semifinales", "Third Place":"Tercer Puesto", "🏆 Final":"🏆 Final",
@@ -3623,6 +3623,19 @@ const I18N_ES = {
   // teams tab
   "Search teams…":"Buscar equipos…", "No teams match your search.":"Ningún equipo coincide con tu búsqueda.",
   "Favorite":"Favorito",
+  // pool (la Polla) — structural chrome (the burns stay in English)
+  "Picks":"Pronósticos", "🗺 My bracket":"🗺 Mi cuadro", "Leaderboard":"Tabla", "🎨 Player":"🎨 Jugador",
+  "📋 List":"📋 Lista", "🗺 Bracket":"🗺 Cuadro",
+  "🏆 Tournament Champion":"🏆 Campeón del Torneo", "bonus":"bono",
+  "⚖️ Tiebreaker — total goals in the Final":"⚖️ Desempate — goles totales en la Final",
+  "goal":"gol", "goals":"goles", "locked":"bloqueado", "e.g. 3":"ej. 3",
+  "Final had":"La Final tuvo", "your guess":"tu pronóstico", "off by":"diferencia de",
+  "Sign out":"Cerrar sesión",
+  "Sign out on this browser — your picks stay saved":"Cierra sesión en este navegador — tus pronósticos quedan guardados",
+  "Edit your player":"Edita tu jugador",
+  "Your champion":"Tu campeón", "none picked":"sin elegir",
+  "Worth 0 points — only breaks ties on the leaderboard. Locks at the Final kickoff.":"Vale 0 puntos — solo desempata en la tabla. Se bloquea al inicio de la Final.",
+  "Sign out of the pool on this browser?\n\nYour picks are saved — log back in anytime with your personal code.":"¿Cerrar sesión de la Polla en este navegador?\n\nTus pronósticos quedan guardados — vuelve a entrar cuando quieras con tu código personal.",
 };
 function t(s){ return lang === 'es' ? (I18N_ES[s] || s) : s; }
 function applyI18n(){
@@ -3890,7 +3903,7 @@ function poolEditName(){
 function poolLeave(){
   // Sign out on THIS browser only — server data is untouched, so logging back in
   // with the personal code restores everything. Lets a household share a device.
-  if(!confirm('Sign out of the pool on this browser?\n\nYour picks are saved — log back in anytime with your personal code.')) return;
+  if(!confirm(t('Sign out of the pool on this browser?\n\nYour picks are saved — log back in anytime with your personal code.'))) return;
   flushPoolSave();   // flush any pending save for the current person first
   ['wc_pool_pool','wc_pool_me','wc_pool_name'].forEach(k=>localStorage.removeItem(k));
   poolPool=''; poolMe=''; poolName=''; poolPicks={}; poolChampion=''; poolBoard=null; poolAvatar=null; poolSub='bracket'; poolJoinMode='login';
@@ -4527,10 +4540,10 @@ function poolChampionHTML(){
   const opts=['<option value="">— pick a champion —</option>'].concat(
     poolChampList().map(t=>`<option value="${poolEsc(t)}" ${t===poolChampion?'selected':''}>${poolEsc(t)}</option>`)).join('');
   const inner = locked
-    ? `<div class="pool-champ-locked">${poolChampion ? flag(poolChampion)+' '+poolEsc(poolChampion) : '—'}<span class="pool-lock">🔒 locked</span></div>${res}`
+    ? `<div class="pool-champ-locked">${poolChampion ? flag(poolChampion)+' '+poolEsc(poolChampion) : '—'}<span class="pool-lock">🔒 ${t('locked')}</span></div>${res}`
     : `<select class="pool-select" onchange="poolSetChampion(this.value)">${opts}</select>`
       + `<div class="pool-hint">A separate <b>+${POOL_CHAMP_BONUS}</b> bonus — it doesn't have to match who you advance through the Final. Locks at the first ${poolStartLabel()} kickoff.</div>`;
-  return `<div class="pool-champ"><div class="pool-champ-label">🏆 Tournament Champion<span class="pool-champ-bonus">+${POOL_CHAMP_BONUS} bonus</span></div>${inner}</div>`;
+  return `<div class="pool-champ"><div class="pool-champ-label">${t('🏆 Tournament Champion')}<span class="pool-champ-bonus">+${POOL_CHAMP_BONUS} ${t('bonus')}</span></div>${inner}</div>`;
 }
 // Tiebreaker: predicted total goals in the Final. Worth 0 points — only separates
 // players who finish level. Locks at the Final kickoff (you have until then to set it).
@@ -4540,13 +4553,13 @@ function poolTiebreakHTML(){
   let res='';
   if(actual!=null && poolTiebreak!==''){
     const d=Math.abs(+poolTiebreak-actual);
-    res=`<div class="pool-champ-res ${d===0?'correct':''}">Final had <b>${actual}</b> goal${actual!==1?'s':''} · your guess <b>${poolEsc(poolTiebreak)}</b> — off by ${d}</div>`;
+    res=`<div class="pool-champ-res ${d===0?'correct':''}">${t('Final had')} <b>${actual}</b> ${actual!==1?t('goals'):t('goal')} · ${t('your guess')} <b>${poolEsc(poolTiebreak)}</b> — ${t('off by')} ${d}</div>`;
   }
   const inner = locked
-    ? `<div class="pool-champ-locked">${poolTiebreak!==''?`${poolEsc(poolTiebreak)} goals`:'—'}<span class="pool-lock">🔒 locked</span></div>${res}`
-    : `<input type="number" inputmode="numeric" min="0" max="20" class="pool-tb-input" value="${poolEsc(poolTiebreak)}" placeholder="e.g. 3" oninput="poolSetTiebreak(this.value)">`
-      + `<div class="pool-hint">Worth 0 points — only breaks ties on the leaderboard. Locks at the Final kickoff.</div>`;
-  return `<div class="pool-champ"><div class="pool-champ-label">⚖️ Tiebreaker — total goals in the Final</div>${inner}</div>`;
+    ? `<div class="pool-champ-locked">${poolTiebreak!==''?`${poolEsc(poolTiebreak)} ${t('goals')}`:'—'}<span class="pool-lock">🔒 ${t('locked')}</span></div>${res}`
+    : `<input type="number" inputmode="numeric" min="0" max="20" class="pool-tb-input" value="${poolEsc(poolTiebreak)}" placeholder="${t('e.g. 3')}" oninput="poolSetTiebreak(this.value)">`
+      + `<div class="pool-hint">${t('Worth 0 points — only breaks ties on the leaderboard. Locks at the Final kickoff.')}</div>`;
+  return `<div class="pool-champ"><div class="pool-champ-label">${t('⚖️ Tiebreaker — total goals in the Final')}</div>${inner}</div>`;
 }
 function poolToggleHelp(){ poolHelp=!poolHelp; renderPool(); }
 function poolHelpHTML(){
@@ -5085,7 +5098,7 @@ function poolMyBracketHTML(){
   let html=poolStatsHTML()
     + poolBusterHTML()
     + `<div class="bt-hint">Your predicted bracket — your pick highlighted, ✓/✗ as games finish. Scroll sideways →</div>`
-    + `<div class="pool-champ" style="margin-bottom:12px"><div class="pool-champ-label">🏆 Your champion: ${poolChampion?flag(poolChampion)+' '+poolEsc(poolChampion):'<span style="color:var(--muted)">— none picked —</span>'}</div></div>`
+    + `<div class="pool-champ" style="margin-bottom:12px"><div class="pool-champ-label">🏆 ${t('Your champion')}: ${poolChampion?flag(poolChampion)+' '+poolEsc(poolChampion):`<span style="color:var(--muted)">— ${t('none picked')} —</span>`}</div></div>`
     + `<div class="bt-scroll"><div class="bt-grid">`;
   cols.forEach(([stage,label])=>{
     const ms=(KO_SCHEDULE[stage]||[]).slice().sort((a,b)=>(key[a.n]??0)-(key[b.n]??0));
@@ -5201,16 +5214,16 @@ function poolChampDistHTML(){
 function poolHeaderHTML(){
   const a=caGet();
   return `<div class="pool-hdr pool-hdr-redesign">`
-    + `<div class="pool-hdr-id"><button class="pool-hdr-ava" onclick="poolSetSub('avatar')" title="Edit your player" aria-label="Edit your player">${CAV.svg(a,{size:50})}<span class="pool-hdr-ava-edit">✏️</span></button>`
+    + `<div class="pool-hdr-id"><button class="pool-hdr-ava" onclick="poolSetSub('avatar')" title="${t('Edit your player')}" aria-label="${t('Edit your player')}">${CAV.svg(a,{size:50})}<span class="pool-hdr-ava-edit">✏️</span></button>`
       + `<div class="pool-hdr-l"><span class="pool-you">${poolEsc(poolName)} <button class="pool-name-edit" onclick="poolEditName()" title="Edit your name" aria-label="Edit your name">✏️</button></span>`
       + `<span class="pool-code">code: <b>${poolEsc(poolMe)}</b> <button class="pool-mini-btn" onclick="poolCopyCode()">copy</button></span></div></div>`
     + `<span id="poolSaveFlash" class="pool-save-flash"></span>`
     + `<div class="pool-subtabs">`
-    + `<button class="pool-st ${poolSub==='bracket'?'active':''}" onclick="poolSetSub('bracket')">Picks</button>`
-    + `<button class="pool-st ${poolSub==='mybracket'?'active':''}" onclick="poolSetSub('mybracket')">🗺 My bracket</button>`
-    + `<button class="pool-st ${poolSub==='leaderboard'?'active':''}" onclick="poolSetSub('leaderboard')">Leaderboard</button>`
-    + `<button class="pool-st pool-st-player ${poolSub==='avatar'?'active':''}" onclick="poolSetSub('avatar')">🎨 Player</button></div>`
-    + `<button class="pool-leave" onclick="poolLeave()" title="Sign out on this browser — your picks stay saved">Sign out</button></div>`;
+    + `<button class="pool-st ${poolSub==='bracket'?'active':''}" onclick="poolSetSub('bracket')">${t('Picks')}</button>`
+    + `<button class="pool-st ${poolSub==='mybracket'?'active':''}" onclick="poolSetSub('mybracket')">${t('🗺 My bracket')}</button>`
+    + `<button class="pool-st ${poolSub==='leaderboard'?'active':''}" onclick="poolSetSub('leaderboard')">${t('Leaderboard')}</button>`
+    + `<button class="pool-st pool-st-player ${poolSub==='avatar'?'active':''}" onclick="poolSetSub('avatar')">${t('🎨 Player')}</button></div>`
+    + `<button class="pool-leave" onclick="poolLeave()" title="${t('Sign out on this browser — your picks stay saved')}">${t('Sign out')}</button></div>`;
 }
 function poolJoinHTML(){
   if(poolJoinMode==='signup'){
