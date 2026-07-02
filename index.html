@@ -1807,6 +1807,7 @@ let activeFilter = 'all';
 let groupsOpen = false;   // group filter grid collapsed by default
 let scheduleSections = { past: false, future: false }; // collapsed by default
 let koPastOpen = {}; // knockout: per-round "earlier days" expanded? (collapsed by default)
+let poolPastOpen = {}; // pool picks: per-round "already-played" expanded? (collapsed by default)
 let refreshTimer = null;
 let currentView  = 'schedule';
 let lang         = localStorage.getItem('wc_lang') || 'en';   // 'en' | 'es'
@@ -2478,6 +2479,7 @@ function toggleSection(which) {
   renderSchedule();
 }
 function toggleKoPast(key) { koPastOpen[key] = !koPastOpen[key]; renderKnockout(); }
+function togglePoolPast(key) { poolPastOpen[key] = !poolPastOpen[key]; renderPool(); }
 
 function jumpToToday() {
   const el = document.getElementById('today-divider');
@@ -5160,11 +5162,21 @@ function poolBracketHTML(){
   html+=poolChampionHTML();
   html+=poolTiebreakHTML();
   poolActiveRounds().forEach(({key,label})=>{
-    const slots=KO_SCHEDULE[key]||[];
+    const slots=(KO_SCHEDULE[key]||[]).slice().sort((a,b)=>poolKickMs(a.n)-poolKickMs(b.n));
     const wt=POOL_WEIGHTS[key];
     html+=`<div class="pool-round-head"><h2>${t(label)}</h2><span class="wt">${wt} pt${wt>1?'s':''} ${t('each')}</span></div>`;
-    // Chronological (as played), not by bracket match-number.
-    slots.slice().sort((a,b)=>poolKickMs(a.n)-poolKickMs(b.n)).forEach(s=>{ html+=poolSlotHTML(s); });
+    // Already-kicked-off matches (pick frozen) collapse by default so the next
+    // still-open pick sits at the top; the rest show directly.
+    const played = slots.filter(s=>matchLocked(s.n));
+    const open   = slots.filter(s=>!matchLocked(s.n));
+    if(played.length){
+      const isOpen = poolPastOpen[key];
+      html+=`<div class="collapse-header" onclick="togglePoolPast('${key}')">`
+        + `<span>◂ ${t('Earlier Results')}</span>`
+        + `<span class="collapse-meta">${played.length} ${played.length!==1?t('matches'):t('match')} ${isOpen?'▲':'▼'}</span></div>`;
+      if(isOpen) played.forEach(s=>{ html+=poolSlotHTML(s); });
+    }
+    open.forEach(s=>{ html+=poolSlotHTML(s); });
   });
   return html;
 }
