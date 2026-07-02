@@ -1465,7 +1465,7 @@
     <div id="error-container"></div>
     <div class="filter-row" id="filter-row"></div>
     <div id="today-bar" class="today-bar"></div>
-    <div id="schedule-list"><div class="loading-spinner">Loading matches…</div></div>
+    <div id="schedule-list"><div class="loading-spinner" data-i18n="Loading matches…">Loading matches…</div></div>
     <div class="last-updated" id="lastUpdated"></div>
   </div>
 
@@ -1830,9 +1830,11 @@ function tzLabel() {
   // For 'auto', show the live abbreviation (e.g. "Eastern (EDT)"); else the named label
   if (userTZ === 'auto') {
     const abbr = tzShort();
-    return abbr ? abbr + ' (device)' : 'Device Time';
+    return abbr ? abbr + (lang==='es'?' (disp.)':' (device)') : (lang==='es'?'Hora del dispositivo':'Device Time');
   }
-  return (TZ_OPTIONS.find(o => o.id === userTZ)?.label || 'Pacific') + ' Time';
+  const label = TZ_OPTIONS.find(o => o.id === userTZ)?.label || 'Pacific';
+  const ES = {Pacific:'Hora del Pacífico',Mountain:'Hora de la Montaña',Arizona:'Hora de Arizona',Central:'Hora Central',Eastern:'Hora del Este'};
+  return lang==='es' ? (ES[label] || label) : (label + ' Time');
 }
 
 function tz() {
@@ -2219,6 +2221,12 @@ function matchClock(m) {
   return { label: t('2nd Half'), detail: `90+'` };
 }
 
+// KO stage → card tag. English keeps the raw "LAST 32"; Spanish gets the round name.
+function koStageTag(stage){
+  const map={LAST_32:'Round of 32',LAST_16:'Round of 16',QUARTER_FINALS:'Quarterfinals',SEMI_FINALS:'Semifinals',THIRD_PLACE:'Third Place',FINAL:'Final'};
+  const raw=(stage||'').replace(/_/g,' ');
+  return (lang==='es' && map[stage]) ? t(map[stage]) : raw;
+}
 function groupOfMatch(m) {
   // Handles "GROUP_A", "Group A", or "A"
   const raw = String(m.group || '');
@@ -2247,7 +2255,7 @@ function renderSchedule() {
     + `<button class="grp-toggle ${activeFilter!=='all'?'filtered':''}" onclick="toggleGroups()">${groupsOpen?'▾':'▸'} ${grpLabel}</button>`
     + `<button class="sync-btn" onclick="setupSync()">${syncCode ? '☁ '+t('Synced') : '☁ '+t('Sync')}</button>`
     + `<select class="filter-btn" style="appearance:auto" onchange="setTZ(this.value)">`
-    + `${TZ_OPTIONS.map(o => `<option value="${o.id}" ${o.id===userTZ?'selected':''}>🕐 ${o.label}</option>`).join('')}`
+    + `${TZ_OPTIONS.map(o => `<option value="${o.id}" ${o.id===userTZ?'selected':''}>🕐 ${t(o.label)}</option>`).join('')}`
     + `</select>`
     + `</div>`
     + (groupsOpen
@@ -2364,7 +2372,7 @@ function renderSchedule() {
       </div>`;
     }).join('');
     myTeamsHtml = `<div class="my-teams-section">
-      <div class="my-teams-title">⭐ My Teams</div>${rows}
+      <div class="my-teams-title">⭐ ${t('My Teams')}</div>${rows}
     </div>`;
   }
 
@@ -2395,14 +2403,14 @@ function renderSchedule() {
     if (todayCount > 0) {
       const done = todayMatches.filter(m => tStatus(m) === 'completed').length;
       const liveN = todayMatches.filter(m => tStatus(m) === 'live').length;
-      let summary = `${todayCount} match${todayCount>1?'es':''} today`;
-      if (liveN) summary += ` · ${liveN} live`;
-      if (done) summary += ` · ${done} final`;
+      let summary = `${todayCount} ${todayCount>1?t('matches'):t('match')} ${t('today')}`;
+      if (liveN) summary += ` · ${liveN} ${t('live')}`;
+      if (done) summary += ` · ${done} ${t('final')}`;
       todayBar.innerHTML = `<span class="today-count">📅 ${summary}</span>`;
     } else {
       const nextUp = futureOther[0];
       todayBar.innerHTML = nextUp
-        ? `<span class="today-count">No matches today · next on ${formatDatePST(nextUp.utcDate)}</span>`
+        ? `<span class="today-count">${t('No matches today · next on')} ${formatDatePST(nextUp.utcDate)}</span>`
         : '';
     }
   }
@@ -2414,8 +2422,8 @@ function renderSchedule() {
     const open = scheduleSections.past;
     const days = new Set(pastOther.map(m => datekeyPST(m.utcDate))).size;
     html += `<div class="collapse-header" onclick="toggleSection('past')">
-      <span>◂ Earlier Results</span>
-      <span class="collapse-meta">${pastOther.length} games · ${days} day${days>1?'s':''} ${open?'▲':'▼'}</span>
+      <span>◂ ${t('Earlier Results')}</span>
+      <span class="collapse-meta">${pastOther.length} ${pastOther.length!==1?t('games'):t('game')} · ${days} ${days>1?t('days'):t('day')} ${open?'▲':'▼'}</span>
     </div>`;
     if (open) {
       let lastDate = null;
@@ -2434,7 +2442,7 @@ function renderSchedule() {
   if (todaySorted.length) {
     html += `<div class="date-divider today" id="today-divider">
       <span class="date-label" style="color:var(--pitch)">${formatDatePST(todaySorted[0].utcDate)}</span>
-      <span class="today-pill">Today</span>
+      <span class="today-pill">${t('Today')}</span>
     </div>`;
     todaySorted.forEach(m => { html += renderMatchCard(m, matchStatus(m)); });
   }
@@ -2444,8 +2452,8 @@ function renderSchedule() {
     const open = scheduleSections.future;
     const days = new Set(futureOther.map(m => datekeyPST(m.utcDate))).size;
     html += `<div class="collapse-header" onclick="toggleSection('future')">
-      <span>▸ Upcoming Matches</span>
-      <span class="collapse-meta">${futureOther.length} games · ${days} day${days>1?'s':''} ${open?'▲':'▼'}</span>
+      <span>▸ ${t('Upcoming Matches')}</span>
+      <span class="collapse-meta">${futureOther.length} ${futureOther.length!==1?t('games'):t('game')} · ${days} ${days>1?t('days'):t('day')} ${open?'▲':'▼'}</span>
     </div>`;
     if (open) {
       let lastDate = null;
@@ -2460,7 +2468,7 @@ function renderSchedule() {
     }
   }
 
-  if (!html) html = `<div class="loading-spinner">No matches found.</div>`;
+  if (!html) html = `<div class="loading-spinner">${t('No matches found.')}</div>`;
   container.innerHTML = html;
   loadMatchWeather(); // fill in weather for matches within 24h
 }
@@ -2490,7 +2498,7 @@ function renderMatchCard(m, status) {
     ? `<span class="group-tag clickable" onclick="goToGroup('${grp}')">${t('GRP')} ${grp} ›</span>`
     : m._koNum
     ? `<span class="group-tag">${t('MATCH')} ${m._koNum}</span>`
-    : `<span class="group-tag">${(m.stage||'').replace(/_/g,' ')}</span>`;
+    : `<span class="group-tag">${koStageTag(m.stage)}</span>`;
 
   // Score helper: on-pitch score (shootout goals excluded — see matchDisplayScore)
   const _ds = matchDisplayScore(m);
@@ -3163,7 +3171,7 @@ function renderKnockoutTree(){
   });
   html+=`</div></div>`;
   const tp=(KO_SCHEDULE.THIRD_PLACE||[])[0];
-  if(tp) html+=`<div class="bt-thirdwrap"><div class="bt-colhead">Third place</div>${koTreeMatch(tp.n)}</div>`;
+  if(tp) html+=`<div class="bt-thirdwrap"><div class="bt-colhead">${t('Third place')}</div>${koTreeMatch(tp.n)}</div>`;
   return html;
 }
 
@@ -3178,7 +3186,7 @@ async function showMatchDetail(eventId, hn, an) {
       <span class="team-modal-flag">⚽</span>
       <div style="flex:1">
         <div class="team-modal-title">${hn} vs ${an}</div>
-        <div class="team-modal-group">Match Details</div>
+        <div class="team-modal-group">${t('Match Details')}</div>
       </div>
       <button class="modal-close" onclick="closeTeamModal()">✕</button>
     </div>
@@ -3226,7 +3234,7 @@ function renderMatchDetailBody(data, hn, an) {
   });
 
   if (events.length) {
-    html += `<div class="section-head"><h2>Key Events</h2></div>`;
+    html += `<div class="section-head"><h2>${t('Key Events')}</h2></div>`;
     events.forEach(ev => {
       html += `<div class="event-row">
         <span class="event-clock">${ev.clock}</span>
@@ -3254,12 +3262,12 @@ function renderMatchDetailBody(data, hn, an) {
     if (rows.length) {
       const t0 = teams[0].team?.displayName || hn;
       const t1 = teams[1].team?.displayName || an;
-      html += `<div class="section-head"><h2>Match Stats</h2></div>`;
+      html += `<div class="section-head"><h2>${t('Match Stats')}</h2></div>`;
       html += `<div class="stat-head"><span>${t0}</span><span></span><span>${t1}</span></div>`;
       rows.forEach(([k,label]) => {
         html += `<div class="stat-row">
           <span class="stat-h">${homeStats[k] ?? '–'}</span>
-          <span class="stat-label">${label}</span>
+          <span class="stat-label">${t(label)}</span>
           <span class="stat-a">${awayStats[k] ?? '–'}</span>
         </div>`;
       });
@@ -3590,6 +3598,19 @@ const I18N_ES = {
   "Semifinals":"Semifinales", "Third Place":"Tercer Puesto", "🏆 Final":"🏆 Final",
   // schedule / common chrome
   "Next Up":"Próximo", "All":"Todos", "Earlier Results":"Resultados Anteriores",
+  "Upcoming Matches":"Próximos Partidos", "Today":"Hoy", "games":"partidos", "game":"partido",
+  "No matches found.":"No se encontraron partidos.", "Loading matches…":"Cargando partidos…",
+  "today":"hoy", "live":"en vivo", "final":"final", "My Teams":"Mis Equipos",
+  "No matches today · next on":"No hay partidos hoy · próximo el",
+  // match-details modal + stats
+  "Key Events":"Eventos Clave", "Match Stats":"Estadísticas del Partido",
+  "Possession":"Posesión", "Shots":"Tiros", "On Target":"A Puerta", "Corners":"Córners",
+  "Fouls":"Faltas", "Yellow Cards":"Tarjetas Amarillas", "Third place":"Tercer puesto",
+  "Admin code not accepted.":"Código de administrador no aceptado.", "Try again":"Intentar de nuevo",
+  // timezone labels
+  "Pacific":"Pacífico", "Mountain":"Montaña", "Arizona":"Arizona", "Central":"Central",
+  "Eastern":"Este", "My device":"Mi dispositivo",
+  "Hora del Pacífico":"Hora del Pacífico",
   "now":"ahora", "roof":"techo", "Sync":"Sincronizar", "Synced":"Sincronizado",
   "TBD":"Por definir", "Kickoff in":"Comienza en", "Kicking off…":"¡Comenzando…!",
   // match clock + card status
@@ -3660,6 +3681,7 @@ function toggleLang(){
   lang = (lang === 'es') ? 'en' : 'es';
   localStorage.setItem('wc_lang', lang);
   applyI18n();
+  const tzl = document.getElementById('clockTzLabel'); if(tzl) tzl.textContent = tzLabel();
   updateClock();
   renderCurrentView();
 }
@@ -5207,7 +5229,7 @@ function poolLeaderboardHTML(){
     + `<div class="pool-board-actions">${adminBtn}<button class="pool-mini-btn" onclick="poolLoadBoard()">↻ Refresh</button></div></div>`;
   html+=poolUpsetHTML();
   html+=poolRoastSpotlightHTML(rows, meta);
-  if(poolAdmin && !isAdmin) html+=`<div class="pool-admin-note">Admin code not accepted. <a class="pool-link" onclick="poolAdminUnlock()">Try again</a></div>`;
+  if(poolAdmin && !isAdmin) html+=`<div class="pool-admin-note">${t('Admin code not accepted.')} <a class="pool-link" onclick="poolAdminUnlock()">${t('Try again')}</a></div>`;
   if(isAdmin) html+=`<div class="pool-admin-note ok">Admin mode — you can remove members.</div>`;
   if(!rows.length){ return html+`<div class="pool-empty">No entries yet — be the first to lock in picks.</div></div>`; }
   html+=`<div class="lb-list">`;
