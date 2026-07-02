@@ -3165,7 +3165,7 @@ function renderKnockoutTree(){
   let html=`<div class="bt-hint">Real teams fill in as the tournament unfolds; the advancing side is highlighted. Scroll sideways →</div><div class="bt-scroll"><div class="bt-grid">`;
   cols.forEach(([stage,label])=>{
     const ms=(KO_SCHEDULE[stage]||[]).slice().sort((a,b)=>(key[a.n]??0)-(key[b.n]??0));
-    html+=`<div class="bt-col"><div class="bt-colhead">${label}</div><div class="bt-colbody">`;
+    html+=`<div class="bt-col"><div class="bt-colhead">${t(label)}</div><div class="bt-colbody">`;
     ms.forEach(s=>{ html+=koTreeMatch(s.n); });
     html+=`</div></div>`;
   });
@@ -3672,6 +3672,9 @@ const I18N_ES = {
   "Enter your personal code to open your bracket.":"Ingresa tu código personal para abrir tu cuadro.",
   "your code":"tu código", "Open my bracket":"Abrir mi cuadro",
   "New here?":"¿Nuevo por aquí?", "Sign up":"Regístrate", "to join the pool.":"para unirte a la Polla.",
+  "How the pool works":"Cómo funciona la Polla", "each":"c/u", "code:":"código:", "copy":"copiar",
+  "Edit your name":"Edita tu nombre",
+  "R32":"16avos", "R16":"8vos", "QF":"4tos", "SF":"Semis", "3rd place":"Tercer puesto",
   "Champion":"Campeón", "— pick a champion —":"— elige un campeón —", "Match":"Partido",
   "👥 Pool picks":"👥 Pronósticos del grupo", "possible":"posibles",
   "Teams set when the group stage clinches":"Los equipos se definen al cerrarse la fase de grupos",
@@ -5146,7 +5149,7 @@ function poolMaybeConfetti(){
   if((champBust||deadLast) && !_poolConfetti.has('sad')){ _poolConfetti.add('sad'); poolConfetti('sad'); }
 }
 function poolBracketHTML(){
-  let html=`<div class="pool-bracket-top"><button class="pool-info-btn" onclick="poolToggleHelp()">ⓘ How the pool works</button></div>`;
+  let html=`<div class="pool-bracket-top"><button class="pool-info-btn" onclick="poolToggleHelp()">ⓘ ${t('How the pool works')}</button></div>`;
   if(poolHelp) html+=poolHelpHTML();
   html+=poolUpsetHTML();
   html+=poolHoroscopeHTML();
@@ -5159,7 +5162,7 @@ function poolBracketHTML(){
   poolActiveRounds().forEach(({key,label})=>{
     const slots=KO_SCHEDULE[key]||[];
     const wt=POOL_WEIGHTS[key];
-    html+=`<div class="pool-round-head"><h2>${label}</h2><span class="wt">${wt} pt${wt>1?'s':''} each</span></div>`;
+    html+=`<div class="pool-round-head"><h2>${t(label)}</h2><span class="wt">${wt} pt${wt>1?'s':''} ${t('each')}</span></div>`;
     // Chronological (as played), not by bracket match-number.
     slots.slice().sort((a,b)=>poolKickMs(a.n)-poolKickMs(b.n)).forEach(s=>{ html+=poolSlotHTML(s); });
   });
@@ -5189,13 +5192,13 @@ function poolMyBracketHTML(){
     + `<div class="bt-scroll"><div class="bt-grid">`;
   cols.forEach(([stage,label])=>{
     const ms=(KO_SCHEDULE[stage]||[]).slice().sort((a,b)=>(key[a.n]??0)-(key[b.n]??0));
-    html+=`<div class="bt-col"><div class="bt-colhead">${label}</div><div class="bt-colbody">`;
+    html+=`<div class="bt-col"><div class="bt-colhead">${t(label)}</div><div class="bt-colbody">`;
     ms.forEach(s=>{ html+=poolMyTreeMatch(s.n); });
     html+=`</div></div>`;
   });
   html+=`</div></div>`;
   const tp=(KO_SCHEDULE.THIRD_PLACE||[])[0];
-  if(tp) html+=`<div class="bt-thirdwrap"><div class="bt-colhead">3rd place</div>${poolMyTreeMatch(tp.n)}</div>`;
+  if(tp) html+=`<div class="bt-thirdwrap"><div class="bt-colhead">${t('3rd place')}</div>${poolMyTreeMatch(tp.n)}</div>`;
   return html;
 }
 // Movement since the previous batch of results. We snapshot standings per results-
@@ -5263,7 +5266,7 @@ function poolLeaderboardHTML(){
     // it for them. The Worker only sends codes to an authenticated admin.
     const codeLine = (isAdmin && r.code)
       ? `<span class="lb-code">🔑 <code data-code="${poolEsc(r.code)}">${poolEsc(r.code)}</code>`
-        + `<button class="pool-mini-btn" data-code="${poolEsc(r.code)}" onclick="poolCopy(this.dataset.code)">copy</button></span>`
+        + `<button class="pool-mini-btn" data-code="${poolEsc(r.code)}" onclick="poolCopy(this.dataset.code)">${t('copy')}</button></span>`
       : '';
     html+=`<div class="lb-row${me}"><div class="lb-pos">${pos}</div>`
       + `<div class="lb-ava">${top}${CAV.svg(r.avatar,{size:46})}</div>`
@@ -5302,8 +5305,8 @@ function poolHeaderHTML(){
   const a=caGet();
   return `<div class="pool-hdr pool-hdr-redesign">`
     + `<div class="pool-hdr-id"><button class="pool-hdr-ava" onclick="poolSetSub('avatar')" title="${t('Edit your player')}" aria-label="${t('Edit your player')}">${CAV.svg(a,{size:50})}<span class="pool-hdr-ava-edit">✏️</span></button>`
-      + `<div class="pool-hdr-l"><span class="pool-you">${poolEsc(poolName)} <button class="pool-name-edit" onclick="poolEditName()" title="Edit your name" aria-label="Edit your name">✏️</button></span>`
-      + `<span class="pool-code">code: <b>${poolEsc(poolMe)}</b> <button class="pool-mini-btn" onclick="poolCopyCode()">copy</button></span></div></div>`
+      + `<div class="pool-hdr-l"><span class="pool-you">${poolEsc(poolName)} <button class="pool-name-edit" onclick="poolEditName()" title="${t('Edit your name')}" aria-label="${t('Edit your name')}">✏️</button></span>`
+      + `<span class="pool-code">${t('code:')} <b>${poolEsc(poolMe)}</b> <button class="pool-mini-btn" onclick="poolCopyCode()">${t('copy')}</button></span></div></div>`
     + `<span id="poolSaveFlash" class="pool-save-flash"></span>`
     + `<div class="pool-subtabs">`
     + `<button class="pool-st ${poolSub==='bracket'?'active':''}" onclick="poolSetSub('bracket')">${t('Picks')}</button>`
