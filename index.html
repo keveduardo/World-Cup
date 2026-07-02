@@ -1766,6 +1766,11 @@ function wxNow(b) {
   return { temp: b.cur.temp, icon: wxIcon(b.cur.wcode, b.cur.isDay), roof: b.roof };
 }
 
+// Temperature label — °F normally, °C when the app is in Spanish (Latin America
+// uses Celsius). Upstream values are Fahrenheit, so convert on display.
+function wxTemp(f) {
+  return lang === 'es' ? Math.round((f - 32) * 5 / 9) + '°C' : Math.round(f) + '°F';
+}
 // Fill weather into every slot the renderers emitted. data-wx-mode picks the
 // reading: "now" for live/game-day cards, "forecast" for everything further out.
 async function loadMatchWeather() {
@@ -1777,10 +1782,10 @@ async function loadMatchWeather() {
     const b = await fetchVenueWx(code);
     const wx = mode === 'now' ? wxNow(b) : wxAtKickoff(b, whenISO);
     if (!wx) continue;
-    const tag = mode === 'now' ? ' · now' : '';
+    const tag = mode === 'now' ? ` · ${t('now')}` : '';
     el.innerHTML = wx.roof
-      ? `${wx.icon} ${wx.temp}°F${tag} · 🏟 roof`
-      : `${wx.icon} ${wx.temp}°F${tag}`;
+      ? `${wx.icon} ${wxTemp(wx.temp)}${tag} · 🏟 ${t('roof')}`
+      : `${wx.icon} ${wxTemp(wx.temp)}${tag}`;
   }
 }
 
@@ -2204,13 +2209,13 @@ function matchClock(m) {
   let minute = (typeof m.minute === 'number') ? m.minute : elapsedMin;
   if (minute < 0) minute = 0;
 
-  if (minute <= 45) return { label: `1st Half`, detail: `${minute}'` };
-  if (minute <= 47) return { label: `1st Half`, detail: `45+'` };
-  if (minute < 60)  return { label: `Half Time`, detail: '' };
+  if (minute <= 45) return { label: t('1st Half'), detail: `${minute}'` };
+  if (minute <= 47) return { label: t('1st Half'), detail: `45+'` };
+  if (minute < 60)  return { label: t('Half Time'), detail: '' };
   // crude: assume ~15min break, second half starts ~60min after KO
   const secondHalfMin = 45 + Math.max(0, minute - 60);
-  if (secondHalfMin <= 90) return { label: `2nd Half`, detail: `${secondHalfMin}'` };
-  return { label: `2nd Half`, detail: `90+'` };
+  if (secondHalfMin <= 90) return { label: t('2nd Half'), detail: `${secondHalfMin}'` };
+  return { label: t('2nd Half'), detail: `90+'` };
 }
 
 function groupOfMatch(m) {
@@ -2235,18 +2240,18 @@ function renderSchedule() {
   // Group filter — a collapsed "Groups" toggle keeps Sync / device on one line;
   // tap it to reveal the A–L grid. Picking a group (or All) collapses it again.
   const groups = ['A','B','C','D','E','F','G','H','I','J','K','L'];
-  const grpLabel = activeFilter === 'all' ? 'Groups' : 'Grp ' + activeFilter;
+  const grpLabel = activeFilter === 'all' ? t('Groups') : t('GRP') + ' ' + activeFilter;
   filterRowEl.innerHTML =
     `<div class="filter-controls">`
     + `<button class="grp-toggle ${activeFilter!=='all'?'filtered':''}" onclick="toggleGroups()">${groupsOpen?'▾':'▸'} ${grpLabel}</button>`
-    + `<button class="sync-btn" onclick="setupSync()">${syncCode ? '☁ Synced' : '☁ Sync'}</button>`
+    + `<button class="sync-btn" onclick="setupSync()">${syncCode ? '☁ '+t('Synced') : '☁ '+t('Sync')}</button>`
     + `<select class="filter-btn" style="appearance:auto" onchange="setTZ(this.value)">`
     + `${TZ_OPTIONS.map(o => `<option value="${o.id}" ${o.id===userTZ?'selected':''}>🕐 ${o.label}</option>`).join('')}`
     + `</select>`
     + `</div>`
     + (groupsOpen
         ? `<div class="grp-grid">`
-          + `<button class="grp-badge all ${activeFilter==='all'?'active':''}" onclick="setFilter('all')">All</button>`
+          + `<button class="grp-badge all ${activeFilter==='all'?'active':''}" onclick="setFilter('all')">${t('All')}</button>`
           + groups.map(g => `<button class="grp-badge ${activeFilter===g?'active':''}" onclick="setFilter('${g}')">${g}</button>`).join('')
           + `</div>`
         : '');
@@ -2283,9 +2288,9 @@ function renderSchedule() {
     const apiLive = (m.status === 'IN_PLAY' || m.status === 'PAUSED') || !!m._espn;
     bannerHtml = `
       <div class="next-up-banner" style="background:var(--live-red)">
-        <span class="next-up-label" style="color:white">🔴 ${clk.detail || 'LIVE'}</span>
+        <span class="next-up-label" style="color:white">🔴 ${clk.detail || t('LIVE')}</span>
         <span class="next-up-game">${flag(hn)} ${hn} ${hs} – ${as_} ${an} ${flag(an)}</span>
-        <div class="next-up-countdown">${clk.label}${!apiLive ? ' · awaiting score from API' : ''}${liveVenueTxt ? ' · 🏟 ' + liveVenueTxt : ''}</div>
+        <div class="next-up-countdown">${clk.label}${!apiLive ? ' · '+t('awaiting score from API') : ''}${liveVenueTxt ? ' · 🏟 ' + liveVenueTxt : ''}</div>
       </div>`;
   } else if (upcoming.length > 0) {
     const m = upcoming[0];
@@ -2301,7 +2306,7 @@ function renderSchedule() {
       ? `<span class="next-up-wx match-wx" data-wx-code="${wxCode}" data-wx-when="${m.utcDate}" data-wx-mode="${wxMode}">⛅ …</span>` : '';
     bannerHtml = `
       <div class="next-up-banner">
-        <span class="next-up-label">Next Up</span>
+        <span class="next-up-label">${t('Next Up')}</span>
         <span class="next-up-game">${flag(hn)} ${hn} vs ${an} ${flag(an)}</span>
         <span class="next-up-time">${formatPST(m.utcDate)} ${tzShort()}</span>
         ${wxChip}
@@ -2480,9 +2485,9 @@ function renderMatchCard(m, status) {
   const an  = m.awayTeam?.name || m.awayTeam?.shortName || 'TBD';
   const grp = groupOfMatch(m);
   const grpTag = grp
-    ? `<span class="group-tag clickable" onclick="goToGroup('${grp}')">GRP ${grp} ›</span>`
+    ? `<span class="group-tag clickable" onclick="goToGroup('${grp}')">${t('GRP')} ${grp} ›</span>`
     : m._koNum
-    ? `<span class="group-tag">MATCH ${m._koNum}</span>`
+    ? `<span class="group-tag">${t('MATCH')} ${m._koNum}</span>`
     : `<span class="group-tag">${(m.stage||'').replace(/_/g,' ')}</span>`;
 
   // Score helper: on-pitch score (shootout goals excluded — see matchDisplayScore)
@@ -2493,12 +2498,12 @@ function renderMatchCard(m, status) {
   // Extra time / penalty shootout annotations
   const pens = m.score?.penalties;
   const dur  = m.score?.duration;
-  let endTag = 'FT';
+  let endTag = t('FT');
   let penLine = '';
   if (dur === 'PENALTY_SHOOTOUT' && pens && pens.home != null) {
-    endTag = `${pens.home} – ${pens.away} pens`;
+    endTag = `${pens.home} – ${pens.away} ${t('pens')}`;
   } else if (dur === 'EXTRA_TIME') {
-    endTag = 'AET';
+    endTag = t('AET');
   }
 
   let center = '';
@@ -2507,9 +2512,9 @@ function renderMatchCard(m, status) {
     const clk = matchClock(m);
     const scoreKnown = (m.score?.fullTime?.home != null) || apiLive;
     center = `${grpTag}
-      <span class="live-badge"><span class="live-dot"></span>${clk.detail || 'LIVE'}</span>
+      <span class="live-badge"><span class="live-dot"></span>${clk.detail || t('LIVE')}</span>
       <div class="score-display">${hs} – ${as_}</div>
-      <div class="match-time" style="color:var(--live-red)">${clk.label}${!scoreKnown ? ' · awaiting score' : ''}</div>`;
+      <div class="match-time" style="color:var(--live-red)">${clk.label}${!scoreKnown ? ' · '+t('awaiting score') : ''}</div>`;
   } else if (status === 'completed') {
     center = `${grpTag}
       <div class="score-display">${hs} – ${as_}</div>
@@ -2521,8 +2526,8 @@ function renderMatchCard(m, status) {
     const delayed = m._espn && m._espn.state === 'pre' && past;
     const koISO = (delayed && m._espn.startISO) ? m._espn.startISO : m.utcDate;
     center = `${grpTag}
-      <div class="vs-display">VS</div>
-      <div class="match-time"${delayed ? ' style="color:var(--live-red)"' : ''}>${delayed ? '⏳ Delayed · ' : ''}${formatPST(koISO)} ${tzShort()}</div>`;
+      <div class="vs-display">${t('VS')}</div>
+      <div class="match-time"${delayed ? ' style="color:var(--live-red)"' : ''}>${delayed ? '⏳ '+t('Delayed')+' · ' : ''}${formatPST(koISO)} ${tzShort()}</div>`;
   }
 
   let venue = m.venue || '';
@@ -2575,14 +2580,14 @@ function renderMatchCard(m, status) {
   // Attendance (ESPN), shown for live/completed games once available
   const att = m._espn?.attendance;
   const attHtml = (att && att > 0 && status !== 'upcoming')
-    ? `<div class="attendance-tag">👥 ${att.toLocaleString()} fans</div>` : '';
+    ? `<div class="attendance-tag">👥 ${att.toLocaleString()} ${t('fans')}</div>` : '';
 
   // Match Details button (live or completed games with an ESPN id)
   const eid = m._espnId || '';
   const detailBtn = (eid && (status === 'live' || status === 'completed'))
     ? `<button class="detail-btn ${status==='completed'?'done':''}"
         onclick="showMatchDetail('${eid}','${hn.replace(/'/g,"\\'")}','${an.replace(/'/g,"\\'")}')">
-        ${status === 'live' ? '⚽ Live Match Details' : '📊 Match Details'}</button>`
+        ${status === 'live' ? '⚽ '+t('Live Match Details') : '📊 '+t('Match Details')}</button>`
     : '';
 
   return `
@@ -2983,8 +2988,8 @@ function renderPlaceholderKO(slot) {
         ${koSideHTML(slot.home, slot)}
       </div>
       <div class="match-center">
-        <span class="group-tag">${slot.n ? 'MATCH ' + slot.n : 'TBD'}</span>
-        <div class="vs-display">VS</div>
+        <span class="group-tag">${slot.n ? t('MATCH') + ' ' + slot.n : t('TBD')}</span>
+        <div class="vs-display">${t('VS')}</div>
         <div class="match-time">${formatPST(iso)} ${tzShort()}</div>
         <div class="match-meta">${formatDatePST(iso)}${meta ? ' · 🏟 ' + meta : ''}</div>
       </div>
@@ -3587,16 +3592,26 @@ function renderCurrentView() {
 // t('English') returns the Spanish string when lang==='es', else the English key
 // itself — so any string not yet translated safely falls back to English. Static
 // markup uses data-i18n="English"; dynamic (rendered) strings call t('English').
+// Latin-American (Colombian) Spanish.
 const I18N_ES = {
   // nav + header
-  "Schedule":"Calendario", "Groups":"Grupos", " & Standings":" y Clasificación",
-  "Knockout":"Eliminatorias", "Teams":"Equipos",
+  "Schedule":"Calendario", "Groups":"Grupos", " & Standings":" y Posiciones",
+  "Knockout":"Eliminación", "Teams":"Equipos",
   "FIFA World Cup 2026":"Copa Mundial FIFA 2026", "Pool":"Quiniela", "NEW":"NUEVO",
   // knockout round labels
   "Round of 32":"Dieciseisavos", "Round of 16":"Octavos", "Quarterfinals":"Cuartos de Final",
   "Semifinals":"Semifinales", "Third Place":"Tercer Puesto", "🏆 Final":"🏆 Final",
   // schedule / common chrome
   "Next Up":"Próximo", "All":"Todos", "Earlier Results":"Resultados Anteriores",
+  "now":"ahora", "roof":"techo", "Sync":"Sincronizar", "Synced":"Sincronizado",
+  "TBD":"Por definir", "Kickoff in":"Comienza en", "Kicking off…":"¡Comenzando…!",
+  // match clock + card status
+  "1st Half":"1er Tiempo", "Half Time":"Entretiempo", "2nd Half":"2do Tiempo",
+  "LIVE":"EN VIVO", "VS":"VS", "FT":"FIN", "AET":"TE", "pens":"pen",
+  "Delayed":"Aplazado", "awaiting score":"esperando marcador",
+  "awaiting score from API":"esperando marcador de la API",
+  "Live Match Details":"Detalles en Vivo", "Match Details":"Detalles del Partido",
+  "GRP":"GPO", "MATCH":"PARTIDO", "fans":"hinchas",
 };
 function t(s){ return lang === 'es' ? (I18N_ES[s] || s) : s; }
 function applyI18n(){
@@ -3624,17 +3639,18 @@ function updateCountdown() {
   const el = document.getElementById('nextCountdown');
   if (!el || !nextKickoff) return;
   const diff = nextKickoff - new Date();
-  if (diff <= 0) { el.textContent = 'Kicking off…'; return; }
+  if (diff <= 0) { el.textContent = t('Kicking off…'); return; }
   const h = Math.floor(diff / 3600000);
   const m = Math.floor((diff % 3600000) / 60000);
   const s = Math.floor((diff % 60000) / 1000);
+  const ki = t('Kickoff in');
   if (h >= 24) {
     const d = Math.floor(h / 24);
-    el.textContent = `⏱ Kickoff in ${d}d ${h % 24}h ${m}m`;
+    el.textContent = `⏱ ${ki} ${d}d ${h % 24}h ${m}m`;
   } else if (h > 0) {
-    el.textContent = `⏱ Kickoff in ${h}h ${m}m ${s}s`;
+    el.textContent = `⏱ ${ki} ${h}h ${m}m ${s}s`;
   } else {
-    el.textContent = `⏱ Kickoff in ${m}m ${s}s`;
+    el.textContent = `⏱ ${ki} ${m}m ${s}s`;
   }
 }
 
