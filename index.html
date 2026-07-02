@@ -1918,10 +1918,10 @@ function setupSync() {
   if (syncCode) {
     localStorage.setItem('wc_sync_code', syncCode);
     syncLoad();
-    alert(`Sync enabled with code "${syncCode}".\nEnter the same code on your other devices.`);
+    alert(`${t('Sync enabled with code')} "${syncCode}".\n${t('Enter the same code on your other devices.')}`);
   } else {
     localStorage.removeItem('wc_sync_code');
-    alert('Sync turned off. Favorites stay on this device only.');
+    alert(t('Sync turned off. Favorites stay on this device only.'));
   }
 }
 
@@ -3488,7 +3488,7 @@ async function shareSite() {
   };
   try {
     if (navigator.share) { await navigator.share(data); }
-    else { await navigator.clipboard.writeText(data.url); alert('Link copied to clipboard!'); }
+    else { await navigator.clipboard.writeText(data.url); alert(t('Link copied to clipboard!')); }
   } catch(e) { /* cancelled */ }
 }
 
@@ -3500,7 +3500,7 @@ async function shareTeam(name) {
   };
   try {
     if (navigator.share) { await navigator.share(data); }
-    else { await navigator.clipboard.writeText(data.url); alert('Link copied to clipboard!'); }
+    else { await navigator.clipboard.writeText(data.url); alert(t('Link copied to clipboard!')); }
   } catch(e) { /* cancelled */ }
 }
 
@@ -3610,7 +3610,20 @@ const I18N_ES = {
   // timezone labels
   "Pacific":"Pacífico", "Mountain":"Montaña", "Arizona":"Arizona", "Central":"Central",
   "Eastern":"Este", "My device":"Mi dispositivo",
-  "Hora del Pacífico":"Hora del Pacífico",
+  // alerts / dialogs
+  "Sync enabled with code":"Sincronización activada con el código",
+  "Enter the same code on your other devices.":"Ingresa el mismo código en tus otros dispositivos.",
+  "Sync turned off. Favorites stay on this device only.":"Sincronización desactivada. Tus favoritos quedan solo en este dispositivo.",
+  "Link copied to clipboard!":"¡Enlace copiado!",
+  "Your name can't be empty.":"Tu nombre no puede estar vacío.",
+  "Could not remove member:":"No se pudo eliminar al miembro:",
+  "Network error removing member.":"Error de red al eliminar al miembro.",
+  "Enter your personal code.":"Ingresa tu código personal.",
+  "Could not reach the pool. Try again.":"No se pudo conectar con la Polla. Inténtalo de nuevo.",
+  "No bracket found for that code. If you are new, tap “Sign up”.":"No se encontró ningún cuadro con ese código. Si eres nuevo, toca “Regístrate”.",
+  "Please fill in the pool code, your name, and a personal code.":"Completa el código de la Polla, tu nombre y un código personal.",
+  "That personal code is already in use. If it is yours, tap “Log in”; otherwise pick a different code.":"Ese código personal ya está en uso. Si es tuyo, toca “Entrar”; si no, elige otro código.",
+  "That pool code did not work. Double-check it with whoever set up the pool.":"Ese código de la Polla no funcionó. Verifícalo con quien creó la Polla.",
   "now":"ahora", "roof":"techo", "Sync":"Sincronizar", "Synced":"Sincronizado",
   "TBD":"Por definir", "Kickoff in":"Comienza en", "Kicking off…":"¡Comenzando…!",
   // match clock + card status
@@ -3950,7 +3963,7 @@ function poolEditName(){
   const v=prompt('Edit your display name:', poolName||'');
   if(v==null) return;
   const name=v.trim().slice(0,40);
-  if(!name){ alert('Your name can\'t be empty.'); return; }
+  if(!name){ alert(t("Your name can't be empty.")); return; }
   if(name===poolName) return;
   poolName=name; localStorage.setItem('wc_pool_name', poolName);
   savePool();        // immediate upsert; worker updates the stored name
@@ -4014,17 +4027,17 @@ function poolRemove(btn){
   if(!code) return;
   if(!confirm('Remove "'+name+'" from the pool?\n\nThis permanently deletes their bracket and avatar. This cannot be undone.')) return;
   fetch(`${PROXY}?type=pooldelete&admin=${encodeURIComponent(poolAdmin)}&target=${encodeURIComponent(code)}`)
-    .then(r=>r.json()).then(d=>{ if(d&&d.ok){ poolLoadBoard(); } else { alert('Could not remove member: '+((d&&d.error)||'error')); } })
-    .catch(()=>alert('Network error removing member.'));
+    .then(r=>r.json()).then(d=>{ if(d&&d.ok){ poolLoadBoard(); } else { alert(t('Could not remove member:')+' '+((d&&d.error)||'error')); } })
+    .catch(()=>alert(t('Network error removing member.')));
 }
 function poolSetJoinMode(m){ poolJoinMode=m; renderPool(); }
 async function poolLoginSubmit(){
   const me=document.getElementById('poolMeInput').value.trim();
-  if(!me){ alert('Enter your personal code.'); return; }
+  if(!me){ alert(t('Enter your personal code.')); return; }
   let d;
   try{ const r=await fetch(`${PROXY}?type=poolload&me=${encodeURIComponent(me)}`); d=await r.json(); }
-  catch(e){ alert('Could not reach the pool. Try again.'); return; }
-  if(!d || !d.entry){ alert('No bracket found for that code. If you are new, tap “Sign up”.'); return; }
+  catch(e){ alert(t('Could not reach the pool. Try again.')); return; }
+  if(!d || !d.entry){ alert(t('No bracket found for that code. If you are new, tap “Sign up”.')); return; }
   poolMe=me; poolPool=(d.entry.pool||'');   // the Worker returns the member's pool (needed for the per-pool start round)
   poolPicks=d.entry.picks||{}; poolChampion=d.entry.champion||''; poolName=d.entry.name||'';
   poolTiebreak=d.entry.tiebreak!=null?String(d.entry.tiebreak):'';
@@ -4038,19 +4051,19 @@ async function poolSignupSubmit(){
   const pool=document.getElementById('poolCodeInput').value.trim();
   const name=document.getElementById('poolNameInput').value.trim();
   const me=document.getElementById('poolMeInput').value.trim();
-  if(!pool || !name || !me){ alert('Please fill in the pool code, your name, and a personal code.'); return; }
+  if(!pool || !name || !me){ alert(t('Please fill in the pool code, your name, and a personal code.')); return; }
   // make sure the personal code isn't already taken
   let chk;
   try{ const r=await fetch(`${PROXY}?type=poolload&me=${encodeURIComponent(me)}`); chk=await r.json(); }
-  catch(e){ alert('Could not reach the pool. Try again.'); return; }
-  if(chk && chk.entry){ alert('That personal code is already in use. If it is yours, tap “Log in”; otherwise pick a different code.'); return; }
+  catch(e){ alert(t('Could not reach the pool. Try again.')); return; }
+  if(chk && chk.entry){ alert(t('That personal code is already in use. If it is yours, tap “Log in”; otherwise pick a different code.')); return; }
   // create the entry (Worker requires the pool code for a new entry)
   let res;
   try{
     const u=`${PROXY}?type=poolsave&pool=${encodeURIComponent(pool)}&me=${encodeURIComponent(me)}&name=${encodeURIComponent(name)}&picks=&champion=&avatar=${encodeURIComponent(JSON.stringify(CAV.norm(poolAvatar)))}`;
     res=await (await fetch(u)).json();
-  }catch(e){ alert('Could not reach the pool. Try again.'); return; }
-  if(!res || res.error){ alert('That pool code did not work. Double-check it with whoever set up the pool.'); return; }
+  }catch(e){ alert(t('Could not reach the pool. Try again.')); return; }
+  if(!res || res.error){ alert(t('That pool code did not work. Double-check it with whoever set up the pool.')); return; }
   poolPool=pool; poolMe=me; poolName=name; poolPicks={}; poolChampion='';
   localStorage.setItem('wc_pool_me', poolMe);
   localStorage.setItem('wc_pool_name', poolName);
