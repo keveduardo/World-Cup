@@ -1017,6 +1017,10 @@
   .bt-team.lost .bt-nm { text-decoration: line-through; color: var(--muted); }
   .bt-score { text-align: center; font-size: 11px; font-weight: 700; color: var(--muted); margin-top: 3px; }
   .bt-score.live { color: var(--live-red); display: flex; align-items: center; justify-content: center; gap: 4px; }
+  .bt-meta { margin-top: 5px; padding-top: 5px; border-top: 1px dashed var(--border);
+    font-size: 9.5px; line-height: 1.35; color: var(--muted); text-align: center; }
+  .bt-wx { color: var(--upcoming); font-weight: 700; white-space: nowrap; }
+  body.dark .bt-wx { color: #6db3ff; }
 
   /* Live / final score line inside a pool slot */
   .pool-live { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px;
@@ -3011,6 +3015,7 @@ function renderKnockout() {
   const container = document.getElementById('knockout-list');
   if (koView === 'tree') {
     container.innerHTML = koViewToggle() + renderKnockoutTree();
+    loadMatchWeather();   // fill temperatures into the bracket meta lines
     return;
   }
   const stages = [
@@ -3096,14 +3101,27 @@ function koTreeMatch(n){
   const slot=koSlot(n); if(!slot) return '<div class="bt-match"></div>';
   const m=koMatchForSlot(roundOfMatch(n), slot);
   const win=(m && m.status==='FINISHED') ? canonName(poolWinnerOf(m)||'') : null;
+  const st = m ? matchStatus(m) : 'upcoming';
   let live='';
-  if(m){ const st=matchStatus(m); const ds=matchDisplayScore(m); const pens=m.score?.penalties;
+  if(m){ const ds=matchDisplayScore(m); const pens=m.score?.penalties;
     if(st==='live' && typeof ds.home==='number'){ const c=matchClock(m); const tag=[c.label,c.detail].filter(Boolean).join(' ');
       live=`<div class="bt-score live"><span class="pool-live-dot"></span>${ds.home}–${ds.away}${tag?` ${tag}`:''}</div>`; }
     else if(st==='completed' && typeof ds.home==='number'){ const pk=(pens&&typeof pens.home==='number')?` (${pens.home}–${pens.away}p)`:'';
       live=`<div class="bt-score">${ds.home}–${ds.away}${pk}</div>`; } }
+  // Date · time · venue · weather — all known from the schedule, even before teams
+  // resolve. Mirrors the card view: weather only for live/upcoming (never past).
+  const iso  = etToUtcISO(slot.date, slot.et);
+  const stad = STADIUMS[slot.v] || ['',''];
+  const loc  = stad[1] || stad[0] || '';
+  const hrs  = (new Date(iso).getTime() - Date.now()) / 3600000;
+  let wxMode = '';
+  if (st === 'live') wxMode = 'now';
+  else if (st !== 'completed' && hrs > 0) wxMode = hrs <= 12 ? 'now' : (hrs <= 15 * 24 ? 'forecast' : '');
+  const wx = (slot.v && wxMode)
+    ? ` · <span class="bt-wx match-wx" data-wx-code="${slot.v}" data-wx-when="${iso}" data-wx-mode="${wxMode}">⛅</span>` : '';
+  const meta = `<div class="bt-meta">${formatDatePST(iso)} · ${formatPST(iso)} ${tzShort()}${loc ? ' · '+loc : ''}${wx}</div>`;
   return `<div class="bt-match"><span class="bt-no">M${n}</span>`
-    + koTreeSide(slot.home, slot, win) + koTreeSide(slot.away, slot, win) + live + `</div>`;
+    + koTreeSide(slot.home, slot, win) + koTreeSide(slot.away, slot, win) + live + meta + `</div>`;
 }
 function renderKnockoutTree(){
   const key=koOrderKeys();
