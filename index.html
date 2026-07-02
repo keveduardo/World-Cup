@@ -3411,73 +3411,39 @@ function showGuide() {
   const overlay = document.getElementById('teamModalOverlay');
   const modal   = document.getElementById('teamModal');
 
+  const es = lang === 'es';
+  const title = es ? 'Cómo funciona este sitio' : 'How This Site Works';
+  const sub   = es ? 'Rastreador del Mundial 2026 · por Aquadoc' : 'World Cup 2026 Tracker · by Aquadoc';
+  const items = es ? [
+    ['🔴','Marcadores en vivo','Los marcadores y las posiciones se actualizan solos — cada minuto durante los partidos en vivo, cada 5 minutos el resto del tiempo. Los partidos en vivo siempre suben al inicio del calendario.'],
+    ['👆','Toca cualquier equipo','Toca el nombre de un equipo en cualquier parte — calendario, posiciones, donde sea — para ver su historial, resultados y próximos partidos. Toca equipos dentro de ese panel para seguir explorando.'],
+    ['⭐','Favoritos','En el panel de cualquier equipo, toca la estrella ☆ para marcarlo. Tus equipos quedan fijados en una tarjeta "Mis equipos" arriba del calendario con su próximo partido o marcador en vivo.'],
+    ['☁️','Sincroniza entre dispositivos','Toca "☁ Sincronizar" junto a los filtros de grupo e inventa un código (como "familia-perez"). Ingresa el mismo código en tus otros dispositivos y tus favoritos y zona horaria te siguen. Sin cuenta.'],
+    ['🕐','Tu zona horaria','Todas las horas están en hora del Pacífico por defecto. Usa el menú 🕐 junto a los filtros para cambiar a Montaña, Central, Este, Arizona o la hora local de tu dispositivo — cada hora de inicio se actualiza al instante.'],
+    ['🥉','Carrera por el tercer puesto','Nuevo en el formato de 48 equipos: 8 de los 12 terceros avanzan a los Dieciseisavos. El tablero arriba de Grupos y Posiciones los clasifica en tiempo real — ✅ dentro, ❌ fuera. Se pone emocionante en los últimos partidos de grupo.'],
+    ['🌙','Modo claro / oscuro','Toca 🌙/☀️ arriba para cambiar cuando quieras. Por defecto es automático: oscuro de 8 p. m. a 7 a. m. en tu zona horaria.'],
+    ['🌐','Idioma','Toca ES/EN arriba para cambiar entre español e inglés. En español las temperaturas se muestran en °C.'],
+  ] : [
+    ['🔴','Live Scores','Scores and standings update automatically — every minute during live games, every 5 minutes otherwise. Live matches always float to the top of the schedule.'],
+    ['👆','Tap Any Team','Tap a team name anywhere — schedule, standings, anywhere — to see their full record, results, and upcoming matches. Tap teams inside that panel to keep exploring.'],
+    ['⭐','Favorites','In any team\'s panel, tap the ☆ star to favorite them. Your teams get pinned in a "My Teams" card at the top of the schedule showing their next kickoff or live score.'],
+    ['☁️','Sync Across Devices','Tap "☁ Sync" near the group filters and make up a code (like "smith-family"). Enter the same code on your other devices and your favorites and timezone follow you. No account needed.'],
+    ['🕐','Your Timezone','All times default to Pacific. Use the 🕐 dropdown next to the filters to switch to Mountain, Central, Eastern, Arizona, or your device\'s local time — every kickoff time updates instantly.'],
+    ['🥉','Third-Place Race','New for the 48-team format: 8 of the 12 third-place teams advance to the Round of 32. The tracker at the top of Groups & Standings ranks all 12 in real time — ✅ in, ❌ out. Watch this get wild in the final group games.'],
+    ['🌙','Light / Dark Mode','Tap 🌙/☀️ up top to switch anytime. Defaults to automatic: dark from 8 PM to 7 AM in your timezone.'],
+    ['🌐','Language','Tap ES/EN up top to switch between English and Spanish. In Spanish, temperatures show in °C.'],
+  ];
   modal.innerHTML = `
     <div class="team-modal-header">
       <span class="team-modal-flag">⚽</span>
       <div style="flex:1">
-        <div class="team-modal-title">How This Site Works</div>
-        <div class="team-modal-group">World Cup 2026 Tracker · by Aquadoc</div>
+        <div class="team-modal-title">${title}</div>
+        <div class="team-modal-group">${sub}</div>
       </div>
       <button class="modal-close" onclick="closeTeamModal()">✕</button>
     </div>
     <div class="team-modal-body">
-
-      <div class="guide-item">
-        <span class="guide-icon">🔴</span>
-        <div>
-          <div class="guide-title">Live Scores</div>
-          <div class="guide-text">Scores and standings update automatically — every minute during live games, every 5 minutes otherwise. Live matches always float to the top of the schedule.</div>
-        </div>
-      </div>
-
-      <div class="guide-item">
-        <span class="guide-icon">👆</span>
-        <div>
-          <div class="guide-title">Tap Any Team</div>
-          <div class="guide-text">Tap a team name anywhere — schedule, standings, anywhere — to see their full record, results, and upcoming matches. Tap teams inside that panel to keep exploring.</div>
-        </div>
-      </div>
-
-      <div class="guide-item">
-        <span class="guide-icon">⭐</span>
-        <div>
-          <div class="guide-title">Favorites</div>
-          <div class="guide-text">In any team's panel, tap the ☆ star to favorite them. Your teams get pinned in a "My Teams" card at the top of the schedule showing their next kickoff or live score.</div>
-        </div>
-      </div>
-
-      <div class="guide-item">
-        <span class="guide-icon">☁️</span>
-        <div>
-          <div class="guide-title">Sync Across Devices</div>
-          <div class="guide-text">Tap "☁ Sync" near the group filters and make up a code (like "smith-family"). Enter the same code on your other devices and your favorites and timezone follow you. No account needed.</div>
-        </div>
-      </div>
-
-      <div class="guide-item">
-        <span class="guide-icon">🕐</span>
-        <div>
-          <div class="guide-title">Your Timezone</div>
-          <div class="guide-text">All times default to Pacific. Use the 🕐 dropdown next to the filters to switch to Mountain, Central, Eastern, Arizona, or your device's local time — every kickoff time updates instantly.</div>
-        </div>
-      </div>
-
-      <div class="guide-item">
-        <span class="guide-icon">🥉</span>
-        <div>
-          <div class="guide-title">Third-Place Race</div>
-          <div class="guide-text">New for the 48-team format: 8 of the 12 third-place teams advance to the Round of 32. The tracker at the top of Groups & Standings ranks all 12 in real time — ✅ in, ❌ out. Watch this get wild in the final group games.</div>
-        </div>
-      </div>
-
-      <div class="guide-item">
-        <span class="guide-icon">🌙</span>
-        <div>
-          <div class="guide-title">Auto Dark Mode</div>
-          <div class="guide-text">The site switches to dark mode from 8 PM to 7 AM in your chosen timezone. Easy on the eyes for those late kickoffs.</div>
-        </div>
-      </div>
-
+      ${items.map(([ic,tt,dd])=>`<div class="guide-item"><span class="guide-icon">${ic}</span><div><div class="guide-title">${tt}</div><div class="guide-text">${dd}</div></div></div>`).join('')}
     </div>`;
 
   overlay.classList.add('open');
