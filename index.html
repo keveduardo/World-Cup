@@ -2289,7 +2289,7 @@ function renderSchedule() {
     bannerHtml = `
       <div class="next-up-banner" style="background:var(--live-red)">
         <span class="next-up-label" style="color:white">🔴 ${clk.detail || t('LIVE')}</span>
-        <span class="next-up-game">${flag(hn)} ${hn} ${hs} – ${as_} ${an} ${flag(an)}</span>
+        <span class="next-up-game">${flag(hn)} ${teamName(hn)} ${hs} – ${as_} ${teamName(an)} ${flag(an)}</span>
         <div class="next-up-countdown">${clk.label}${!apiLive ? ' · '+t('awaiting score from API') : ''}${liveVenueTxt ? ' · 🏟 ' + liveVenueTxt : ''}</div>
       </div>`;
   } else if (upcoming.length > 0) {
@@ -2307,7 +2307,7 @@ function renderSchedule() {
     bannerHtml = `
       <div class="next-up-banner">
         <span class="next-up-label">${t('Next Up')}</span>
-        <span class="next-up-game">${flag(hn)} ${hn} vs ${an} ${flag(an)}</span>
+        <span class="next-up-game">${flag(hn)} ${teamName(hn)} vs ${teamName(an)} ${flag(an)}</span>
         <span class="next-up-time">${formatPST(m.utcDate)} ${tzShort()}</span>
         ${wxChip}
         ${venueTxt ? `<div class="next-up-countdown">🏟 ${venueTxt}</div>` : ''}
@@ -2594,7 +2594,7 @@ function renderMatchCard(m, status) {
     <div class="match-card ${status}">
       <div class="team-block" data-team="${hn.replace(/"/g,'&quot;')}">
         <span class="team-flag">${flag(hn)}</span>
-        <span class="team-name">${hn}${favMark(hn)}</span>
+        <span class="team-name">${teamName(hn)}${favMark(hn)}</span>
         ${fifaRank(hn) ? `<span class="card-rank">🌍 #${fifaRank(hn)}</span>` : ''}
         ${formHtml(homeForm)}
       </div>
@@ -2608,7 +2608,7 @@ function renderMatchCard(m, status) {
       </div>
       <div class="team-block right" data-team="${an.replace(/"/g,'&quot;')}">
         <span class="team-flag">${flag(an)}</span>
-        <span class="team-name">${an}${favMark(an)}</span>
+        <span class="team-name">${teamName(an)}${favMark(an)}</span>
         ${fifaRank(an) ? `<span class="card-rank">🌍 #${fifaRank(an)}</span>` : ''}
         ${formHtml(awayForm)}
       </div>
@@ -2697,7 +2697,7 @@ function renderGroups() {
                 <td><span class="rank-num ${i < 8 ? 'q1' : ''}">${i+1}</span></td>
                 <td><div class="team-row" data-team="${r.team.replace(/"/g,'&quot;')}">
                   <span class="team-row-flag">${flag(r.team)}</span>
-                  <span class="team-row-name" data-team="${r.team.replace(/"/g,'&quot;')}">${r.team}${favMark(r.team)}</span>
+                  <span class="team-row-name" data-team="${r.team.replace(/"/g,'&quot;')}">${teamName(r.team)}${favMark(r.team)}</span>
                 </div></td>
                 <td>${r.grp}</td>
                 <td>${r.mp}</td>
@@ -2769,7 +2769,7 @@ function renderGroups() {
                 <td><span class="rank-num ${i===0?'q1':i===1?'q2':''}">${i+1}</span></td>
                 <td><div class="team-row" data-team="${r.team.replace(/"/g,'&quot;')}">
                   <span class="team-row-flag">${flag(r.team)}</span>
-                  <span class="team-row-name" data-team="${r.team.replace(/"/g,'&quot;')}">${r.team}${favMark(r.team)}</span>
+                  <span class="team-row-name" data-team="${r.team.replace(/"/g,'&quot;')}">${teamName(r.team)}${favMark(r.team)}</span>
                   ${fifaRank(r.team) ? `<span class="rank-chip">#${fifaRank(r.team)}</span>` : ''}
                   ${clinched[i].clinchedFirst ? `<span class="clinch-icon" title="${t('Won the group')}">🥇</span>`
                     : clinched[i].clinchedTop2 ? `<span class="clinch-icon" title="${t('Clinched a spot in the next round')}">✅</span>` : ''}
@@ -2943,7 +2943,7 @@ function resolveThirdForWinner(winnerLetter){
 function koTeamHTML(team, title){
   const dt = team.replace(/"/g,'&quot;');
   return `<span class="team-flag" data-team="${dt}">${flag(team)}</span>`
-    + `<span class="team-name" data-team="${dt}">${team} <span class="ko-clinch" title="${title}">✓</span></span>`;
+    + `<span class="team-name" data-team="${dt}">${teamName(team)} <span class="ko-clinch" title="${title}">✓</span></span>`;
 }
 function koSideHTML(desc, slot){
   // Resolve the exact team as soon as it's known — the SAME resolver the bracket
@@ -2970,7 +2970,7 @@ function koPossibleStrip(slot){
     if(seen.has(desc)) return; seen.add(desc);
     const info = resolveKOSlot(desc);
     if(info && !info.clinched && info.possible.length>1 && info.possible.length<info.groupSize){
-      const list = info.possible.map(t=>`<span data-team="${t.replace(/"/g,'&quot;')}">${flag(t)} ${t}</span>`).join(' · ');
+      const list = info.possible.map(x=>`<span data-team="${x.replace(/"/g,'&quot;')}">${flag(x)} ${teamName(x)}</span>`).join(' · ');
       parts.push(`<div class="ko-poss"><b>${desc}</b> · ${info.possible.length} possible: ${list}</div>`);
     }
   });
@@ -3101,7 +3101,7 @@ function koResolveSide(desc, slot){
 function koTreeSide(desc, slot, win){
   const team=koResolveSide(desc, slot);
   if(team){ const dt=team.replace(/"/g,'&quot;'); const won=win&&canonName(team)===win;
-    return `<span class="bt-team${won?' won':''}" data-team="${dt}">${flag(team)}<span class="bt-nm">${team}</span></span>`; }
+    return `<span class="bt-team${won?' won':''}" data-team="${dt}">${flag(team)}<span class="bt-nm">${teamName(team)}</span></span>`; }
   return `<span class="bt-team tbd">${desc}</span>`;
 }
 function koTreeMatch(n){
@@ -3393,7 +3393,7 @@ function renderTeams() {
   const tiles = teams.map(name => `
     <div class="team-tile" data-team="${name.replace(/"/g,'&quot;')}">
       ${flag(name)}
-      <span class="team-tile-name">${name}</span>
+      <span class="team-tile-name">${teamName(name)}</span>
       <span class="team-tile-grp">${t('GRP')} ${groupOfTeam(name) || '?'}${fifaRank(name) ? ' · #' + fifaRank(name) : ''}</span>
       <button class="tile-star ${isFav(name)?'on':''}" data-fav="${name.replace(/"/g,'&quot;')}" title="${t('Favorite')}">${isFav(name)?'★':'☆'}</button>
     </div>`).join('');
@@ -3651,6 +3651,10 @@ const I18N_ES = {
   "Enter your personal code to open your bracket.":"Ingresa tu código personal para abrir tu cuadro.",
   "your code":"tu código", "Open my bracket":"Abrir mi cuadro",
   "New here?":"¿Nuevo por aquí?", "Sign up":"Regístrate", "to join the pool.":"para unirte a la Polla.",
+  "Champion":"Campeón", "— pick a champion —":"— elige un campeón —", "Match":"Partido",
+  "👥 Pool picks":"👥 Pronósticos del grupo", "possible":"posibles",
+  "Teams set when the group stage clinches":"Los equipos se definen al cerrarse la fase de grupos",
+  "Pick the earlier matches first":"Elige primero los partidos anteriores",
 };
 function t(s){ return lang === 'es' ? (I18N_ES[s] || s) : s; }
 function applyI18n(){
@@ -3665,6 +3669,26 @@ function toggleLang(){
   updateClock();
   renderCurrentView();
 }
+// Country names in Spanish (all feed variants covered). teamName() localizes the
+// DISPLAY only — data-team attributes, picks, canonName etc. keep the feed name.
+const TEAM_ES = {
+  "Mexico":"México", "South Africa":"Sudáfrica", "South Korea":"Corea del Sur", "Korea Republic":"Corea del Sur",
+  "Czechia":"Chequia", "Czech Republic":"Chequia", "Canada":"Canadá",
+  "Bosnia-Herzegovina":"Bosnia y Herzegovina", "Bosnia and Herzegovina":"Bosnia y Herzegovina",
+  "Qatar":"Catar", "Switzerland":"Suiza", "Brazil":"Brasil", "Morocco":"Marruecos", "Haiti":"Haití",
+  "Scotland":"Escocia", "United States":"Estados Unidos", "USA":"Estados Unidos", "Paraguay":"Paraguay",
+  "Australia":"Australia", "Türkiye":"Turquía", "Turkey":"Turquía", "Germany":"Alemania",
+  "Curaçao":"Curazao", "Curacao":"Curazao", "Ivory Coast":"Costa de Marfil", "Ivoire":"Costa de Marfil",
+  "Ecuador":"Ecuador", "Netherlands":"Países Bajos", "Japan":"Japón", "Sweden":"Suecia", "Tunisia":"Túnez",
+  "Belgium":"Bélgica", "Egypt":"Egipto", "Iran":"Irán", "New Zealand":"Nueva Zelanda", "Spain":"España",
+  "Cape Verde":"Cabo Verde", "Cabo Verde":"Cabo Verde", "Cape Verde Islands":"Cabo Verde",
+  "Saudi Arabia":"Arabia Saudita", "Uruguay":"Uruguay", "France":"Francia", "Senegal":"Senegal",
+  "Iraq":"Irak", "Norway":"Noruega", "Argentina":"Argentina", "Algeria":"Argelia", "Austria":"Austria",
+  "Jordan":"Jordania", "Portugal":"Portugal", "DR Congo":"RD Congo", "Congo DR":"RD Congo",
+  "Uzbekistan":"Uzbekistán", "Colombia":"Colombia", "England":"Inglaterra", "Croatia":"Croacia",
+  "Ghana":"Ghana", "Panama":"Panamá",
+};
+function teamName(n){ if (lang !== 'es' || !n) return n || ''; return TEAM_ES[n] || TEAM_ES[canonName(n)] || n; }
 
 // ─── CLOCK ───────────────────────────────────────────────────────────────────
 function updateClock() {
@@ -4430,7 +4454,7 @@ function poolTeamBtn(n, team, picked, locked, correct){
   const mark = picked && correct==='yes' ? '<span class="rk ok">✓</span>'
              : picked && correct==='no'  ? '<span class="rk no">✗</span>' : '';
   return `<button class="${cls.join(' ')}" data-t="${poolEsc(team)}" ${click}>`
-    + `<span class="pf">${flag(team)}</span><span class="pn">${poolEsc(team)}</span>${mark}</button>`;
+    + `<span class="pf">${flag(team)}</span><span class="pn">${poolEsc(teamName(team))}</span>${mark}</button>`;
 }
 // ── pick reveal (others' picks, unlocked per match at kickoff) ──
 // The Worker only sends a player's pick for a match AFTER its kickoff, so this can
@@ -4499,7 +4523,7 @@ function poolSlotHTML(slot){
   const when=ko.toLocaleString('en-US',{ timeZone: tz(), month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
   let body;
   if(!cands || (!cands[0] && !cands[1])){
-    let msg = (n>=73&&n<=88) ? 'Teams set when the group stage clinches' : 'Pick the earlier matches first';
+    let msg = (n>=73&&n<=88) ? t('Teams set when the group stage clinches') : t('Pick the earlier matches first');
     let extra = '';
     if(n>=73&&n<=88){
       const s=koSlot(n);
@@ -4507,9 +4531,9 @@ function poolSlotHTML(slot){
         const info=resolveKOSlot(desc);
         if(!info) return;
         if(info.clinched){
-          extra += `<div class="pool-poss"><b>${desc}</b>: <span data-team="${info.clinched.replace(/"/g,'&quot;')}">${flag(info.clinched)} ${info.clinched}</span> ✓</div>`;
+          extra += `<div class="pool-poss"><b>${desc}</b>: <span data-team="${info.clinched.replace(/"/g,'&quot;')}">${flag(info.clinched)} ${teamName(info.clinched)}</span> ✓</div>`;
         } else if(info.possible.length>1 && info.possible.length<info.groupSize){
-          extra += `<div class="pool-poss"><b>${desc}</b> · ${info.possible.length} possible: ${info.possible.map(t=>'<span data-team="'+t.replace(/"/g,'&quot;')+'">'+flag(t)+' '+t+'</span>').join(' · ')}</div>`;
+          extra += `<div class="pool-poss"><b>${desc}</b> · ${info.possible.length} ${t('possible')}: ${info.possible.map(x=>'<span data-team="'+x.replace(/"/g,'&quot;')+'">'+flag(x)+' '+teamName(x)+'</span>').join(' · ')}</div>`;
         }
       });
     }
@@ -4524,11 +4548,11 @@ function poolSlotHTML(slot){
   let reveal='';
   if(locked){
     const open=!!poolReveal[n];
-    reveal=`<button class="pr-toggle" onclick="poolToggleReveal(${n})">${open?'▾':'▸'} 👥 Pool picks</button>`
+    reveal=`<button class="pr-toggle" onclick="poolToggleReveal(${n})">${open?'▾':'▸'} ${t('👥 Pool picks')}</button>`
       + (open ? `<div class="pr-box">${poolRevealHTML(n)}</div>` : '');
   }
   return `<div class="pool-slot ${locked?'locked':''}">`
-    + `<div class="pool-slot-top"><span>Match ${n}</span><span>${locked?'🔒 ':''}${when} ${tzShort()}</span></div>${body}${poolMatchLine(n)}${reveal}</div>`;
+    + `<div class="pool-slot-top"><span>${t('Match')} ${n}</span><span>${locked?'🔒 ':''}${when} ${tzShort()}</span></div>${body}${poolMatchLine(n)}${reveal}</div>`;
 }
 // Champion options: only teams that can still win it. Once the full R32 field is
 // seeded, that's the 32 knockout teams (excludes group-stage casualties) minus any
@@ -4550,12 +4574,12 @@ function poolChampionHTML(){
   const actual = POOL_ADV && POOL_ADV.FINAL && POOL_ADV.FINAL.size ? [...POOL_ADV.FINAL][0] : '';
   let res='';
   if(actual){ const ok=poolChampion && canonName(poolChampion)===canonName(actual);
-    res=`<div class="pool-champ-res ${ok?'correct':'wrong'}">Champion: ${flag(actual)} ${poolEsc(actual)}`
-      + `${poolChampion ? (ok ? ' — your pick ✓ +'+POOL_CHAMP_BONUS : ' — you picked '+poolEsc(poolChampion)+' ✗') : ''}</div>`; }
-  const opts=['<option value="">— pick a champion —</option>'].concat(
-    poolChampList().map(t=>`<option value="${poolEsc(t)}" ${t===poolChampion?'selected':''}>${poolEsc(t)}</option>`)).join('');
+    res=`<div class="pool-champ-res ${ok?'correct':'wrong'}">${t('Champion')}: ${flag(actual)} ${poolEsc(teamName(actual))}`
+      + `${poolChampion ? (ok ? ' — your pick ✓ +'+POOL_CHAMP_BONUS : ' — you picked '+poolEsc(teamName(poolChampion))+' ✗') : ''}</div>`; }
+  const opts=[`<option value="">${t('— pick a champion —')}</option>`].concat(
+    poolChampList().map(nm=>`<option value="${poolEsc(nm)}" ${nm===poolChampion?'selected':''}>${poolEsc(teamName(nm))}</option>`)).join('');
   const inner = locked
-    ? `<div class="pool-champ-locked">${poolChampion ? flag(poolChampion)+' '+poolEsc(poolChampion) : '—'}<span class="pool-lock">🔒 ${t('locked')}</span></div>${res}`
+    ? `<div class="pool-champ-locked">${poolChampion ? flag(poolChampion)+' '+poolEsc(teamName(poolChampion)) : '—'}<span class="pool-lock">🔒 ${t('locked')}</span></div>${res}`
     : `<select class="pool-select" onchange="poolSetChampion(this.value)">${opts}</select>`
       + `<div class="pool-hint">A separate <b>+${POOL_CHAMP_BONUS}</b> bonus — it doesn't have to match who you advance through the Final. Locks at the first ${poolStartLabel()} kickoff.</div>`;
   return `<div class="pool-champ"><div class="pool-champ-label">${t('🏆 Tournament Champion')}<span class="pool-champ-bonus">+${POOL_CHAMP_BONUS} ${t('bonus')}</span></div>${inner}</div>`;
@@ -4650,7 +4674,7 @@ function poolBusterHTML(){
   const dead = new Set(); Object.values(poolPicks).forEach(t=>{ if(t && POOL_DEAD.has(canonName(t))) dead.add(canonName(t)); });
   if(!champOut && !dead.size) return '';
   let msg;
-  if(champOut) msg = `💥 Your champion ${flag(poolChampion)} <b>${poolEsc(poolChampion)}</b> is out — there goes your +${POOL_CHAMP_BONUS}.`;
+  if(champOut) msg = `💥 Your champion ${flag(poolChampion)} <b>${poolEsc(teamName(poolChampion))}</b> is out — there goes your +${POOL_CHAMP_BONUS}.`;
   else msg = `💥 <b>${dead.size}</b> of your picked team${dead.size!==1?'s have':' has'} been knocked out.`;
   return `<div class="pool-buster">${msg}</div>`;
 }
@@ -5103,7 +5127,7 @@ function poolMyTreeMatch(n){
     const res = picked ? poolTeamResult(n,team) : '';
     const cls=['bt-team']; if(picked) cls.push('mine'); if(res==='yes') cls.push('won'); if(res==='no') cls.push('lost');
     const mark = res==='yes' ? ' ✓' : res==='no' ? ' ✗' : '';
-    return `<span class="${cls.join(' ')}" data-team="${team.replace(/"/g,'&quot;')}">${flag(team)}<span class="bt-nm">${team}${mark}</span></span>`;
+    return `<span class="${cls.join(' ')}" data-team="${team.replace(/"/g,'&quot;')}">${flag(team)}<span class="bt-nm">${teamName(team)}${mark}</span></span>`;
   };
   return `<div class="bt-match"><span class="bt-no">M${n}</span>${side(c?c[0]:null)}${side(c?c[1]:null)}</div>`;
 }
@@ -5113,7 +5137,7 @@ function poolMyBracketHTML(){
   let html=poolStatsHTML()
     + poolBusterHTML()
     + `<div class="bt-hint">Your predicted bracket — your pick highlighted, ✓/✗ as games finish. Scroll sideways →</div>`
-    + `<div class="pool-champ" style="margin-bottom:12px"><div class="pool-champ-label">🏆 ${t('Your champion')}: ${poolChampion?flag(poolChampion)+' '+poolEsc(poolChampion):`<span style="color:var(--muted)">— ${t('none picked')} —</span>`}</div></div>`
+    + `<div class="pool-champ" style="margin-bottom:12px"><div class="pool-champ-label">🏆 ${t('Your champion')}: ${poolChampion?flag(poolChampion)+' '+poolEsc(teamName(poolChampion)):`<span style="color:var(--muted)">— ${t('none picked')} —</span>`}</div></div>`
     + `<div class="bt-scroll"><div class="bt-grid">`;
   cols.forEach(([stage,label])=>{
     const ms=(KO_SCHEDULE[stage]||[]).slice().sort((a,b)=>(key[a.n]??0)-(key[b.n]??0));
