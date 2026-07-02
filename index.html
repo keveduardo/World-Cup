@@ -5198,7 +5198,10 @@ async function poolInit(){
   if(poolMe){
     try{ const r=await fetch(`${PROXY}?type=poolload&me=${encodeURIComponent(poolMe)}`);
       const d=await r.json();
-      if(d && d.entry){ poolPicks=d.entry.picks||{}; poolChampion=d.entry.champion||''; poolTiebreak=d.entry.tiebreak!=null?String(d.entry.tiebreak):''; if(d.entry.name) poolName=d.entry.name; poolAvatar=CAV.norm(d.entry.avatar); }
+      if(d && d.entry){ poolPicks=d.entry.picks||{}; poolChampion=d.entry.champion||''; poolTiebreak=d.entry.tiebreak!=null?String(d.entry.tiebreak):''; if(d.entry.name) poolName=d.entry.name; poolAvatar=CAV.norm(d.entry.avatar);
+        // Self-heal the pool from the server (authoritative) so the per-pool start
+        // round / champion lock is always right — even if an older client blanked it.
+        if(d.entry.pool){ poolPool=d.entry.pool; localStorage.setItem('wc_pool_pool', poolPool); } }
     }catch(e){}
   }
   if(typeof currentView!=='undefined' && currentView==='pool') renderPool();
