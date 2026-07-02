@@ -1378,11 +1378,16 @@
   }
   body.broadcast:not(.dark) header {
     background:
-      radial-gradient(130% 90% at 50% -25%, rgba(255,255,255,.22), transparent 60%),
-      repeating-linear-gradient(90deg, rgba(255,255,255,.10) 0 62px, rgba(0,0,0,.05) 62px 124px),
-      linear-gradient(180deg, #1a9a54 0%, #0f8145 55%, #0a5c36 100%);
+      /* sunny stadium sheen, top-center */
+      radial-gradient(120% 80% at 50% -15%, rgba(255,255,255,.34), transparent 55%),
+      /* mowing stripes — clear alternating vertical bands = a real pitch */
+      repeating-linear-gradient(90deg, rgba(255,255,255,.16) 0 58px, rgba(4,56,25,.16) 58px 116px),
+      /* fine grass grain */
+      repeating-linear-gradient(0deg, rgba(0,0,0,.055) 0 2px, transparent 2px 6px),
+      /* fresh grass base, brighter up top, deeper at the boot */
+      linear-gradient(180deg, #28ae54 0%, #159644 55%, #0a6d32 100%);
     border-bottom: 3px solid var(--gold);
-    box-shadow: 0 3px 0 rgba(184,137,31,.4), 0 6px 16px rgba(0,0,0,.18);
+    box-shadow: 0 3px 0 rgba(184,137,31,.45), 0 8px 20px rgba(0,0,0,.22);
   }
   body.broadcast:not(.dark) h1 { color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.22), 0 2px 4px rgba(0,0,0,.3); }
   body.broadcast:not(.dark) .byline { color: var(--gold); }
