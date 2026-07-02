@@ -1375,7 +1375,20 @@
   body.broadcast:not(.dark) {
     --off-white: #e8efdf;
     --border: rgba(10,92,54,.16);
+    /* fresher, livelier accent green (was dark-forest #0a5c36) so the Next-Up bar,
+       section heads, active filters and card scores all read bright, not muddy */
+    --pitch: #0f7e40;
+    --pitch-light: #14934f;
   }
+  /* DAYTIME tab bar: light, green text/icons, green active underline (like a broadcast lower-third) */
+  body.broadcast:not(.dark) .tab-bar {
+    background: #ffffff;
+    border-bottom: 1px solid rgba(10,92,54,.14);
+    box-shadow: 0 2px 8px rgba(20,50,30,.08);
+  }
+  body.broadcast:not(.dark) .tab { color: #5c7a64; }
+  body.broadcast:not(.dark) .tab.active,
+  body.broadcast:not(.dark) .tab:hover { color: var(--pitch); border-bottom-color: var(--pitch); }
   body.broadcast:not(.dark) header {
     background:
       /* sunny stadium sheen, top-center */
