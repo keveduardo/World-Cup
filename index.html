@@ -1806,6 +1806,7 @@ let standingsMap = {}; // group letter → sorted rows
 let activeFilter = 'all';
 let groupsOpen = false;   // group filter grid collapsed by default
 let scheduleSections = { past: false, future: false }; // collapsed by default
+let koPastOpen = {}; // knockout: per-round "earlier days" expanded? (collapsed by default)
 let refreshTimer = null;
 let currentView  = 'schedule';
 let lang         = localStorage.getItem('wc_lang') || 'en';   // 'en' | 'es'
@@ -2468,6 +2469,7 @@ function toggleSection(which) {
   scheduleSections[which] = !scheduleSections[which];
   renderSchedule();
 }
+function toggleKoPast(key) { koPastOpen[key] = !koPastOpen[key]; renderKnockout(); }
 
 function jumpToToday() {
   const el = document.getElementById('today-divider');
@@ -3034,26 +3036,45 @@ function renderKnockout() {
     {key:'FINAL',       label:'🏆 Final'},
   ];
 
+  const now = Date.now();
+  const todayKey = datekeyPST(new Date().toISOString());
   let html = '';
   stages.forEach(({key, label}) => {
     const slots = (KO_SCHEDULE[key] || []).slice()
       .sort((a,b)=> new Date(etToUtcISO(a.date,a.et)) - new Date(etToUtcISO(b.date,b.et)));
     if (!slots.length) return;
 
-    // Render every slot: a confirmed fixture (both real teams) becomes a full match
-    // card; everything else stays a placeholder with its clinched/possible match-ups.
-    let confirmed = 0;
-    let body = '';
-    slots.forEach(slot => {
+    const slotCard = (slot) => {
       const m = koMatchForSlot(key, slot);
       if (m && groupOfTeam(m.homeTeam?.name) && groupOfTeam(m.awayTeam?.name)) {
-        m._koNum = slot.n; m._koVenueCode = slot.v;   // so the card keeps MATCH #, venue & weather
-        body += renderMatchCard(m, matchStatus(m));
-        confirmed++;
-      } else {
-        body += renderPlaceholderKO(slot);
+        m._koNum = slot.n; m._koVenueCode = slot.v;   // keep MATCH #, venue & weather
+        return renderMatchCard(m, matchStatus(m));
       }
+      return renderPlaceholderKO(slot);
+    };
+    const isReal = (slot) => { const m = koMatchForSlot(key, slot);
+      return !!(m && groupOfTeam(m.homeTeam?.name) && groupOfTeam(m.awayTeam?.name)); };
+
+    // Split into prior-day games (played, before today → collapsed) and the rest
+    // (today + upcoming → shown), so the current day sits at the top.
+    const prior = [], current = [];
+    slots.forEach(slot => {
+      const iso = etToUtcISO(slot.date, slot.et);
+      const isPrior = new Date(iso).getTime() < now && datekeyPST(iso) !== todayKey;
+      (isPrior ? prior : current).push(slot);
     });
+
+    const confirmed = slots.filter(isReal).length;
+    let body = '';
+    if (prior.length) {
+      const open = koPastOpen[key];
+      const days = new Set(prior.map(s => datekeyPST(etToUtcISO(s.date, s.et)))).size;
+      body += `<div class="collapse-header" onclick="toggleKoPast('${key}')">`
+        + `<span>◂ ${t('Earlier Results')}</span>`
+        + `<span class="collapse-meta">${prior.length} ${prior.length!==1?t('matches'):t('match')} · ${days} ${days!==1?t('days'):t('day')} ${open?'▲':'▼'}</span></div>`;
+      if (open) prior.forEach(s => { body += slotCard(s); });
+    }
+    current.forEach(s => { body += slotCard(s); });
 
     const note = confirmed >= slots.length ? '' :
       confirmed > 0 ? ` · ${confirmed} confirmed` : ' · teams TBD';
@@ -3626,7 +3647,7 @@ const I18N_ES = {
   "matches":"partidos", "match":"partido", "your":"tu", "champion":"campeón",
   "Still open:":"Aún abierto:", "Picks lock as games kick off":"Los pronósticos se bloquean al comenzar los partidos",
   "next at":"el próximo", "in":"en",
-  "pts":"pts", "still alive":"aún vivos", "max possible":"máx. posible",
+  "pts":"pts", "still alive":"aún vivos", "max possible":"máx. posible", "day":"día", "days":"días",
   "🔍 Who picked what":"🔍 Quién eligió qué", "unlocked":"desbloqueados", "unlocks at kickoff":"se abre al inicio",
 };
 function t(s){ return lang === 'es' ? (I18N_ES[s] || s) : s; }
