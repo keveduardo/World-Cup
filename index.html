@@ -2935,16 +2935,22 @@ function koTeamHTML(team, title){
     + `<span class="team-name" data-team="${dt}">${team} <span class="ko-clinch" title="${title}">✓</span></span>`;
 }
 function koSideHTML(desc, slot){
-  // Best-eight third-placed slot (e.g. "3rd A/B/C/D/F") — resolve via Annex C once
-  // all groups are done. The winner it faces is the "1X" side of this same slot.
-  if(slot && /^3rd/i.test(desc||'')){
-    const other=(slot.home===desc)?slot.away:slot.home;
-    const w=/^1([A-L])$/.exec((other||'').trim());
-    const team=w?resolveThirdForWinner(w[1]):null;
-    if(team) return koTeamHTML(team, '3rd place · Group '+(groupOfTeam(team)||'?')+' (best eight)');
+  // Resolve the exact team as soon as it's known — the SAME resolver the bracket
+  // tree uses. This covers group clinch (1A/2B), best-eight third place (3rd …),
+  // AND winner/loser refs (W 79, W SF1, L SF1) — so next-round match-ups fill in
+  // the moment their feeder match finishes, without waiting on the data provider
+  // to assign the fixture.
+  const team = koResolveSide(desc, slot);
+  if(team){
+    const d = (desc||'').trim();
+    let title;
+    if(/^3rd/i.test(d))      title = '3rd place · Group '+(groupOfTeam(team)||'?')+' (best eight)';
+    else if(/^W SF/.test(d)) title = 'Winner of Semifinal '+d.slice(4);
+    else if(/^L SF/.test(d)) title = 'Loser of Semifinal '+d.slice(4);
+    else if(/^W /.test(d))   title = 'Winner of Match '+d.slice(2);
+    else                     title = 'Clinched '+d;
+    return koTeamHTML(team, title);
   }
-  const info = resolveKOSlot(desc);
-  if(info && info.clinched) return koTeamHTML(info.clinched, 'Clinched '+desc);
   return `<span class="team-flag">⚪</span><span class="team-name" style="color:var(--muted)">${desc}</span>`;
 }
 function koPossibleStrip(slot){
