@@ -2665,7 +2665,7 @@ function renderGroups() {
   }
 
   if (Object.keys(source).length === 0) {
-    container.innerHTML = '<div class="loading-spinner">Loading standings…</div>';
+    container.innerHTML = `<div class="loading-spinner">${t('Loading standings…')}</div>`;
     return;
   }
 
@@ -2684,12 +2684,12 @@ function renderGroups() {
       <div class="group-card third-place-card">
         <div class="group-header">
           <span class="group-letter">3rd</span>
-          <span class="group-teams-preview">Best Third-Place Race — Top 8 advance to Round of 32</span>
+          <span class="group-teams-preview">${t('Best Third-Place Race — Top 8 advance to Round of 32')}</span>
         </div>
         <table class="standings-table">
           <thead><tr>
-            <th colspan="2">Team</th>
-            <th>Grp</th><th>MP</th><th>GD</th><th>Pts</th><th></th>
+            <th colspan="2">${t('Team')}</th>
+            <th>${t('Grp')}</th><th>${t('MP')}</th><th>${t('GD')}</th><th>Pts</th><th></th>
           </tr></thead>
           <tbody>
             ${thirds.map((r,i) => `
@@ -2708,7 +2708,7 @@ function renderGroups() {
           </tbody>
         </table>
         <div class="qualify-note">
-          <span>✅ Currently advancing · ❌ Currently out · Sorted by Pts → GD → GF</span>
+          <span>${t('✅ Currently advancing · ❌ Currently out · Sorted by Pts → GD → GF')}</span>
         </div>
       </div>`;
   }
@@ -2755,13 +2755,13 @@ function renderGroups() {
         <div class="group-header">
           <span class="group-letter">${letter}</span>
           <span class="group-teams-preview">${preview}…</span>
-          ${avgRank ? `<span class="group-strength" title="Average FIFA rank">avg #${avgRank}</span>` : ''}
+          ${avgRank ? `<span class="group-strength" title="${t('Average FIFA rank')}">${t('avg')} #${avgRank}</span>` : ''}
         </div>
         <table class="standings-table">
           <thead><tr>
-            <th colspan="2">Team</th>
-            <th>MP</th><th>W</th><th>D</th><th>L</th>
-            <th>GD</th><th>Pts</th>
+            <th colspan="2">${t('Team')}</th>
+            <th>${t('MP')}</th><th>${t('W')}</th><th>${t('D')}</th><th>${t('L')}</th>
+            <th>${t('GD')}</th><th>Pts</th>
           </tr></thead>
           <tbody>
             ${rows.map((r,i) => `
@@ -2771,8 +2771,8 @@ function renderGroups() {
                   <span class="team-row-flag">${flag(r.team)}</span>
                   <span class="team-row-name" data-team="${r.team.replace(/"/g,'&quot;')}">${r.team}${favMark(r.team)}</span>
                   ${fifaRank(r.team) ? `<span class="rank-chip">#${fifaRank(r.team)}</span>` : ''}
-                  ${clinched[i].clinchedFirst ? '<span class="clinch-icon" title="Won the group">🥇</span>'
-                    : clinched[i].clinchedTop2 ? '<span class="clinch-icon" title="Clinched a spot in the next round">✅</span>' : ''}
+                  ${clinched[i].clinchedFirst ? `<span class="clinch-icon" title="${t('Won the group')}">🥇</span>`
+                    : clinched[i].clinchedTop2 ? `<span class="clinch-icon" title="${t('Clinched a spot in the next round')}">✅</span>` : ''}
                 </div></td>
                 <td>${r.mp}</td><td>${r.w}</td><td>${r.d}</td><td>${r.l}</td>
                 <td>${r.gd >= 0 ? '+'+r.gd : r.gd}</td>
@@ -2781,7 +2781,7 @@ function renderGroups() {
           </tbody>
         </table>
         <div class="qualify-note">
-          <span>🟢 Top 2 advance automatically · Best 3rd-place teams may also advance · 🥇 = won the group · ✅ = clinched a spot · 🌍 = FIFA world rank</span>
+          <span>${t('🟢 Top 2 advance automatically · Best 3rd-place teams may also advance · 🥇 = won the group · ✅ = clinched a spot · 🌍 = FIFA world rank')}</span>
         </div>
       </div>`;
   });
@@ -3338,7 +3338,7 @@ function showTeam(name) {
         ${grp ? `<div class="team-modal-group" style="cursor:pointer;text-decoration:underline" onclick="goToGroup('${grp}')">Group ${grp} →</div>` : ''}
         ${fifaRank(name) ? `<div class="team-modal-rank">🌍 FIFA Rank #${fifaRank(name)}</div>` : ''}
       </div>
-      <button class="fav-btn" onclick="toggleFav('${name.replace(/'/g,"\\'")}');showTeam('${name.replace(/'/g,"\\'")}')" title="Favorite">${isFav(name) ? '★' : '☆'}</button>
+      <button class="fav-btn" onclick="toggleFav('${name.replace(/'/g,"\\'")}');showTeam('${name.replace(/'/g,"\\'")}')" title="${t('Favorite')}">${isFav(name) ? '★' : '☆'}</button>
       <a class="fav-btn" href="${rosterURL(name)}" target="_blank" rel="noopener" title="Roster &amp; player bios" style="font-size:16px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none">👥</a>
       <button class="fav-btn" onclick="shareTeam('${name.replace(/'/g,"\\'")}')" title="Share" style="font-size:16px">⤴</button>
       <button class="modal-close" onclick="closeTeamModal()">✕</button>
@@ -3394,16 +3394,16 @@ function renderTeams() {
     <div class="team-tile" data-team="${name.replace(/"/g,'&quot;')}">
       ${flag(name)}
       <span class="team-tile-name">${name}</span>
-      <span class="team-tile-grp">GRP ${groupOfTeam(name) || '?'}${fifaRank(name) ? ' · #' + fifaRank(name) : ''}</span>
-      <button class="tile-star ${isFav(name)?'on':''}" data-fav="${name.replace(/"/g,'&quot;')}" title="Favorite">${isFav(name)?'★':'☆'}</button>
+      <span class="team-tile-grp">${t('GRP')} ${groupOfTeam(name) || '?'}${fifaRank(name) ? ' · #' + fifaRank(name) : ''}</span>
+      <button class="tile-star ${isFav(name)?'on':''}" data-fav="${name.replace(/"/g,'&quot;')}" title="${t('Favorite')}">${isFav(name)?'★':'☆'}</button>
     </div>`).join('');
 
   container.innerHTML = `
-    <input class="teams-search" type="search" placeholder="🔍 Search teams…"
+    <input class="teams-search" type="search" placeholder="🔍 ${t('Search teams…')}"
       value="${teamSearch.replace(/"/g,'&quot;')}"
       oninput="teamSearch=this.value;renderTeams();this.focus();this.setSelectionRange(this.value.length,this.value.length)">
     <div class="teams-grid">${tiles}</div>
-    ${teams.length === 0 ? '<div class="loading-spinner">No teams match your search.</div>' : ''}`;
+    ${teams.length === 0 ? `<div class="loading-spinner">${t('No teams match your search.')}</div>` : ''}`;
 }
 
 // ─── FEATURE GUIDE ───────────────────────────────────────────────────────────
@@ -3612,6 +3612,17 @@ const I18N_ES = {
   "awaiting score from API":"esperando marcador de la API",
   "Live Match Details":"Detalles en Vivo", "Match Details":"Detalles del Partido",
   "GRP":"GPO", "MATCH":"PARTIDO", "fans":"hinchas",
+  // standings tab (Latin-American abbreviations)
+  "Team":"Equipo", "Grp":"Gpo", "MP":"PJ", "W":"G", "D":"E", "L":"P", "GD":"DG",
+  "avg":"prom", "Loading standings…":"Cargando posiciones…",
+  "Best Third-Place Race — Top 8 advance to Round of 32":"Mejores Terceros — Los 8 mejores avanzan a Dieciseisavos",
+  "✅ Currently advancing · ❌ Currently out · Sorted by Pts → GD → GF":"✅ Avanzando · ❌ Eliminado · Ordenado por Pts → DG → GF",
+  "🟢 Top 2 advance automatically · Best 3rd-place teams may also advance · 🥇 = won the group · ✅ = clinched a spot · 🌍 = FIFA world rank":"🟢 Los 2 primeros avanzan automáticamente · Los mejores terceros también pueden avanzar · 🥇 = ganó el grupo · ✅ = clasificado · 🌍 = ranking FIFA",
+  "Average FIFA rank":"Ranking FIFA promedio", "Won the group":"Ganó el grupo",
+  "Clinched a spot in the next round":"Clasificado a la siguiente ronda",
+  // teams tab
+  "Search teams…":"Buscar equipos…", "No teams match your search.":"Ningún equipo coincide con tu búsqueda.",
+  "Favorite":"Favorito",
 };
 function t(s){ return lang === 'es' ? (I18N_ES[s] || s) : s; }
 function applyI18n(){
