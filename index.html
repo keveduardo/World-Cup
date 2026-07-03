@@ -5161,14 +5161,18 @@ function poolBracketHTML(){
   html+=poolNudgeHTML();
   html+=poolChampionHTML();
   html+=poolTiebreakHTML();
+  const now = Date.now();
+  const todayKey = datekeyPST(new Date().toISOString());
+  const isPriorDay = (s) => { const iso = etToUtcISO(s.date, s.et);
+    return new Date(iso).getTime() < now && datekeyPST(iso) !== todayKey; };
   poolActiveRounds().forEach(({key,label})=>{
     const slots=(KO_SCHEDULE[key]||[]).slice().sort((a,b)=>poolKickMs(a.n)-poolKickMs(b.n));
     const wt=POOL_WEIGHTS[key];
     html+=`<div class="pool-round-head"><h2>${t(label)}</h2><span class="wt">${wt} pt${wt>1?'s':''} ${t('each')}</span></div>`;
-    // Already-kicked-off matches (pick frozen) collapse by default so the next
-    // still-open pick sits at the top; the rest show directly.
-    const played = slots.filter(s=>matchLocked(s.n));
-    const open   = slots.filter(s=>!matchLocked(s.n));
+    // Prior-day matches collapse by default (today + upcoming stay visible) so the
+    // next open pick sits near the top instead of below every played game.
+    const played = slots.filter(isPriorDay);
+    const open   = slots.filter(s=>!isPriorDay(s));
     if(played.length){
       const isOpen = poolPastOpen[key];
       html+=`<div class="collapse-header" onclick="togglePoolPast('${key}')">`
