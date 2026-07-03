@@ -92,8 +92,18 @@ Goal: give yourself the ability to deploy the Worker and inspect KV. **I (Kevin)
 
 **Site change (`index.html`):**
 1. Edit the file.
-2. Verify (see Conventions below).
-3. `git add -A && git commit -m "..." && git push` → GitHub Pages redeploys automatically.
+2. **Bump `APP_VERSION`** (a const near the top, e.g. `'2026-07-02.3'`) — this powers the
+   auto-refresh: open tabs poll the live file, compare `APP_VERSION`, and reload (silently
+   when backgrounded, or via a "Refresh/Actualizar" banner when foregrounded). If you don't
+   bump it, users on old builds won't auto-update. Do this on **every** index.html deploy.
+3. Verify (see Conventions below).
+4. `git add -A && git commit -m "..." && git push` → GitHub Pages redeploys automatically.
+
+**What's live now (as of 2026-07):** broadcast theme is the default look (day = bright pitch,
+night = dark; 🌙/☀️ toggle; `?broadcast=0` for classic). Full **English⇆Spanish (Colombian)**
+app-chrome toggle (🌐 ES/EN) via a `t('English')` dictionary (`I18N_ES`) + `data-i18n` for static
+markup + `teamName()` for country names; °C when Spanish; **burns stay English** by design. A
+third pool code **`familia`** starts at the Round of 16. See memory notes for details.
 
 **Worker change (`worker.js`):**
 1. Edit the file.
