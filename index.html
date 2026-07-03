@@ -1508,7 +1508,7 @@
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const PROXY = 'https://worldcup-proxy.kevinamaya.workers.dev';
-const APP_VERSION = '2026-07-02.3';   // bump on every deploy — drives the auto-refresh below
+const APP_VERSION = '2026-07-02.5';   // bump on every deploy — drives the auto-refresh below
 
 // Refresh intervals
 const REFRESH_LIVE    = 30_000;   // 30s when live game active (ESPN cache is 30s)
@@ -2827,7 +2827,7 @@ const KO_SCHEDULE = {
     {n:75,date:'2026-06-29',et:'21:00',v:'MTY', home:'1F',away:'2C'},
     {n:78,date:'2026-06-30',et:'13:00',v:'DAL', home:'2E',away:'2I'},
     {n:77,date:'2026-06-30',et:'17:00',v:'NYNJ',home:'1I',away:'3rd C/D/F/G/H'},
-    {n:79,date:'2026-06-30',et:'21:00',v:'MEX', home:'1A',away:'3rd C/E/F/H/I'},
+    {n:79,date:'2026-06-30',et:'22:00',v:'MEX', home:'1A',away:'3rd C/E/F/H/I'},  // 02:00Z — provider moved it +1h from the original 21:00 ET; keep in sync or W79 won't resolve
     {n:80,date:'2026-07-01',et:'12:00',v:'ATL', home:'1L',away:'3rd E/H/I/J/K'},
     {n:82,date:'2026-07-01',et:'16:00',v:'SEA', home:'1G',away:'3rd A/E/H/I/J'},
     {n:81,date:'2026-07-01',et:'20:00',v:'SF',  home:'1D',away:'3rd B/E/F/I/J'},
@@ -5468,10 +5468,10 @@ function doUpdateReload() {
   try { sessionStorage.setItem('wc_reload_ts', String(Date.now())); } catch (e) {}
   location.reload();
 }
-async function checkForUpdate() {
+async function checkForUpdate(force) {
   if (_updatePending) return;
   const nowT = Date.now();
-  if (nowT - _lastVerCheck < 120000) return;   // at most once every 2 min
+  if (!force && nowT - _lastVerCheck < 120000) return;   // at most once every 2 min (force bypasses, e.g. the midnight sweep)
   _lastVerCheck = nowT;
   try {
     const res = await fetch(location.pathname + '?v=' + nowT, { cache: 'no-store' });
@@ -5500,6 +5500,24 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') { poolSaveBeacon(); if (_updatePending) doUpdateReload(); }
   else checkForUpdate();
 });
+
+// ─── DAILY MIDNIGHT SWEEP ─────────────────────────────────────────────────────
+// Catch-all for a tab left open on a stale build whose owner never clicked the
+// "Refresh" banner. At the user's LOCAL midnight, force a version check and reload
+// ONLY if a newer APP_VERSION is actually live — never a needless reload. Routes
+// through doUpdateReload() so the 30s stale-edge-cache loop guard still applies,
+// then re-arms for the next midnight.
+function scheduleMidnightReload() {
+  const now = new Date();
+  const next = new Date(now);
+  next.setHours(24, 0, 30, 0);                 // 00:00:30 local (small buffer past midnight)
+  setTimeout(async () => {
+    await checkForUpdate(true);                 // force: bypass the 2-min throttle
+    if (_updatePending) doUpdateReload();       // reload only when genuinely stale
+    scheduleMidnightReload();                   // re-arm for tomorrow
+  }, next - now);
+}
+scheduleMidnightReload();
 
 // Restore the last tab the user was on (defaults to schedule)
 (function restoreLastTab() {
