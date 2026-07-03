@@ -1508,7 +1508,7 @@
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const PROXY = 'https://worldcup-proxy.kevinamaya.workers.dev';
-const APP_VERSION = '2026-07-02.5';   // bump on every deploy — drives the auto-refresh below
+const APP_VERSION = '2026-07-02.6';   // bump on every deploy — drives the auto-refresh below
 
 // Refresh intervals
 const REFRESH_LIVE    = 30_000;   // 30s when live game active (ESPN cache is 30s)
@@ -2827,7 +2827,7 @@ const KO_SCHEDULE = {
     {n:75,date:'2026-06-29',et:'21:00',v:'MTY', home:'1F',away:'2C'},
     {n:78,date:'2026-06-30',et:'13:00',v:'DAL', home:'2E',away:'2I'},
     {n:77,date:'2026-06-30',et:'17:00',v:'NYNJ',home:'1I',away:'3rd C/D/F/G/H'},
-    {n:79,date:'2026-06-30',et:'22:00',v:'MEX', home:'1A',away:'3rd C/E/F/H/I'},  // 02:00Z — provider moved it +1h from the original 21:00 ET; keep in sync or W79 won't resolve
+    {n:79,date:'2026-06-30',et:'22:00',v:'MEX', home:'1A',away:'3rd C/E/F/H/I'},  // 02:00Z actual (provider moved it +1h from 21:00); join is by team identity now, so this need only be roughly right
     {n:80,date:'2026-07-01',et:'12:00',v:'ATL', home:'1L',away:'3rd E/H/I/J/K'},
     {n:82,date:'2026-07-01',et:'16:00',v:'SEA', home:'1G',away:'3rd A/E/H/I/J'},
     {n:81,date:'2026-07-01',et:'20:00',v:'SF',  home:'1D',away:'3rd B/E/F/I/J'},
@@ -3028,14 +3028,61 @@ function renderPlaceholderKO(slot) {
     </div>`;
 }
 
-// Find the API fixture for a KO slot. Kickoff time uniquely identifies a slot
-// across the whole bracket, and the API carries no venue — so we key on time and
-// pull venue/number from KO_SCHEDULE instead.
-function koMatchForSlot(stage, slot){
-  const want = new Date(etToUtcISO(slot.date, slot.et)).getTime();
-  return allMatches.find(m => m.stage === stage &&
-    new Date(m.utcDate).getTime() === want) || null;
+// Find the API fixture for a KO slot. API knockout fixtures carry no match
+// number, so we join them to KO_SCHEDULE ourselves. Provider kickoff times can
+// DRIFT (match 79 once moved +1h and "W 79" silently never resolved), but a
+// fixture's TEAMS are its identity — a team plays at most once per KO stage, and
+// the ESPN overlay already merges by the same team-pair key. So we join per stage
+// in two passes over a shared, consumed fixture pool (nothing ever double-binds):
+//   1) TEAM pass — bind each slot whose BOTH sides already resolve (group refs via
+//      the clinch engine, 3rd-place bands via Annex C, W/L refs via earlier rounds)
+//      to the fixture holding exactly those two teams. Immune to time drift; can
+//      only bind correctly or not at all — never wrongly.
+//   2) TIME pass — any leftover slot binds by its exact hardcoded kickoff. This is
+//      the pre-draw / TBD-teams window, i.e. the original behavior, unchanged.
+// Stages run in KO_SCHEDULE insertion order, so a W/L ref always points at a match
+// already joined in an earlier stage — the join never recurses into itself.
+let _koJoinSig = null, _koJoinMap = null;
+function koJoinAll(){
+  const ko = allMatches.filter(m => KO_SCHEDULE[m.stage]);
+  const koSig = ko.map(m => `${new Date(m.utcDate).getTime()}|${m.status}|${canonName(m.homeTeam?.name||'')}|${canonName(m.awayTeam?.name||'')}|${(m._espn&&m._espn.advanceName)||''}`).join(';');
+  // Slot-side resolution reads final group tables / Annex C, which arrive on a
+  // SEPARATE standings fetch — so a cold load (matches before standings) can change
+  // the join with no fixture change. Fold a compact standings fingerprint in too.
+  const stSig = Object.keys(standingsMap||{}).sort().map(L=>{ const rows=standingsMap[L]||[]; return L+':'+rows.map(r=>canonName(r.team||'')+(r.mp||0)).join(','); }).join('|');
+  const sig = koSig + '#' + stSig;
+  if(sig === _koJoinSig) return _koJoinMap;
+  const map = {};
+  const winOf  = n => { const m = map[n]; return (m && m.status==='FINISHED') ? poolWinnerOf(m) : null; };
+  const loseOf = n => { const m = map[n], w = winOf(n); if(!m || !w) return null;
+    return canonName(m.homeTeam?.name)===canonName(w) ? (m.awayTeam?.name||null) : (m.homeTeam?.name||null); };
+  for(const stage in KO_SCHEDULE){
+    const pool = ko.filter(m => m.stage === stage);
+    const side = (desc, slot) => { let x;
+      if((x=/^W (\d+)$/.exec(desc)))  return winOf(+x[1]);
+      if((x=/^W SF(\d)$/.exec(desc))) return winOf(x[1]==='1'?101:102);
+      if((x=/^L SF(\d)$/.exec(desc))) return loseOf(x[1]==='1'?101:102);
+      return koSideTeam(desc, slot);       // 1A/2B via clinch, 3rd bands via Annex C
+    };
+    const later = [];
+    KO_SCHEDULE[stage].forEach(slot => {
+      const h = side(slot.home, slot), a = side(slot.away, slot);
+      let m = null;
+      if(h && a){ const hc = canonName(h), ac = canonName(a);
+        m = pool.find(f => { const fh = canonName(f.homeTeam?.name||''), fa = canonName(f.awayTeam?.name||'');
+          return (fh===hc && fa===ac) || (fh===ac && fa===hc); }); }
+      if(m){ map[slot.n] = m; pool.splice(pool.indexOf(m), 1); } else later.push(slot);
+    });
+    later.forEach(slot => {
+      const want = new Date(etToUtcISO(slot.date, slot.et)).getTime();
+      const m = pool.find(f => new Date(f.utcDate).getTime() === want);
+      if(m){ map[slot.n] = m; pool.splice(pool.indexOf(m), 1); }
+    });
+  }
+  _koJoinSig = sig; _koJoinMap = map;
+  return map;
 }
+function koMatchForSlot(stage, slot){ return koJoinAll()[slot.n] || null; }
 
 let koView = localStorage.getItem('wc_ko_view') || 'list';   // 'list' | 'tree'
 function setKoView(v){ koView=v; localStorage.setItem('wc_ko_view', v); renderKnockout(); }
