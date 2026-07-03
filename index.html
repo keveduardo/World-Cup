@@ -1426,6 +1426,20 @@
   body.broadcast:not(.dark) .flag-img { height: 1.35em; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.28); }
   body.broadcast:not(.dark) .group-tag { background: linear-gradient(180deg, #0f8145, #0a5c36); color: var(--gold); }
   body.broadcast:not(.dark) .live-badge { box-shadow: 0 0 10px rgba(230,57,70,.4); }
+
+  /* "new version available" refresh banner */
+  #updateBanner {
+    position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+    z-index: 100000; display: flex; align-items: center; gap: 12px; max-width: 92vw;
+    background: var(--pitch); color: var(--white);
+    border: 1px solid var(--gold); border-radius: 999px;
+    padding: 9px 10px 9px 18px; font-size: 14px; font-weight: 600;
+    box-shadow: 0 6px 24px rgba(0,0,0,.45);
+  }
+  #updateBanner button {
+    background: var(--gold); color: #073d24; border: none; border-radius: 999px;
+    padding: 8px 15px; font-weight: 800; cursor: pointer; font-family: inherit; white-space: nowrap;
+  }
 </style>
 </head>
 <body>
@@ -1494,6 +1508,7 @@
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const PROXY = 'https://worldcup-proxy.kevinamaya.workers.dev';
+const APP_VERSION = '2026-07-02.1';   // bump on every deploy — drives the auto-refresh below
 
 // Refresh intervals
 const REFRESH_LIVE    = 30_000;   // 30s when live game active (ESPN cache is 30s)
@@ -3677,6 +3692,7 @@ const I18N_ES = {
   "How the pool works":"Cómo funciona la Polla", "each":"c/u", "code:":"código:", "copy":"copiar",
   "Edit your name":"Edita tu nombre",
   "R32":"16avos", "R16":"8vos", "QF":"4tos", "SF":"Semis", "3rd place":"Tercer puesto",
+  "A new version is available.":"Hay una nueva versión disponible.", "Refresh":"Actualizar",
   "Champion":"Campeón", "— pick a champion —":"— elige un campeón —", "Match":"Partido",
   "👥 Pool picks":"👥 Pronósticos del grupo", "possible":"posibles",
   "Teams set when the group stage clinches":"Los equipos se definen al cerrarse la fase de grupos",
@@ -5439,8 +5455,50 @@ setInterval(() => {
 // Don't lose a pick made moments before the tab is closed/backgrounded: the
 // debounced save may not have fired yet, so flush it with a beacon on the way out.
 window.addEventListener('pagehide', poolSaveBeacon);
+// ─── AUTO-REFRESH ON NEW DEPLOY ──────────────────────────────────────────────
+// A tab left open for days keeps running the old JS forever. Periodically re-fetch
+// index.html (cache-busted), read its APP_VERSION, and if it changed: reload
+// silently while the tab is in the background, or show a "Refresh" banner while
+// it's in the foreground. A 30s guard prevents any reload loop if an edge cache is
+// briefly serving stale HTML.
+let _updatePending = false, _lastVerCheck = 0;
+function doUpdateReload() {
+  const last = +sessionStorage.getItem('wc_reload_ts') || 0;
+  if (Date.now() - last < 30000) { showUpdateBanner(); return; }  // don't loop
+  try { sessionStorage.setItem('wc_reload_ts', String(Date.now())); } catch (e) {}
+  location.reload();
+}
+async function checkForUpdate() {
+  if (_updatePending) return;
+  const nowT = Date.now();
+  if (nowT - _lastVerCheck < 120000) return;   // at most once every 2 min
+  _lastVerCheck = nowT;
+  try {
+    const res = await fetch(location.pathname + '?v=' + nowT, { cache: 'no-store' });
+    if (!res.ok) return;
+    const txt = await res.text();
+    const m = txt.match(/APP_VERSION\s*=\s*'([^']+)'/);
+    if (m && m[1] && m[1] !== APP_VERSION) {
+      _updatePending = true;
+      if (document.hidden) doUpdateReload(); else showUpdateBanner();
+    }
+  } catch (e) {}
+}
+function showUpdateBanner() {
+  if (document.getElementById('updateBanner')) return;
+  const b = document.createElement('div');
+  b.id = 'updateBanner';
+  b.innerHTML = `<span>🔄 ${t('A new version is available.')}</span>`
+    + `<button onclick="location.reload()">${t('Refresh')}</button>`;
+  document.body.appendChild(b);
+}
+setInterval(checkForUpdate, 10 * 60 * 1000);       // every 10 min while the tab lives
+setTimeout(checkForUpdate, 25000);                 // and shortly after load (catches stale-cached loads)
+
+// debounced pool save + version check on tab hide/show
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') poolSaveBeacon();
+  if (document.visibilityState === 'hidden') { poolSaveBeacon(); if (_updatePending) doUpdateReload(); }
+  else checkForUpdate();
 });
 
 // Restore the last tab the user was on (defaults to schedule)
