@@ -1508,7 +1508,7 @@
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const PROXY = 'https://worldcup-proxy.kevinamaya.workers.dev';
-const APP_VERSION = '2026-07-02.6';   // bump on every deploy — drives the auto-refresh below
+const APP_VERSION = '2026-07-02.7';   // bump on every deploy — drives the auto-refresh below
 
 // Refresh intervals
 const REFRESH_LIVE    = 30_000;   // 30s when live game active (ESPN cache is 30s)
@@ -3880,9 +3880,15 @@ function roundOfMatch(n){ n=+n;
   return null;
 }
 function koSlot(n){ for(const k in KO_SCHEDULE){ const s=KO_SCHEDULE[k].find(x=>x.n===+n); if(s) return s; } return null; }
-function poolKickMs(n){ const s=koSlot(n); return s ? new Date(etToUtcISO(s.date,s.et)).getTime() : Infinity; }
+// Kickoff time used for pick locks and ordering. Prefer the bound fixture's REAL
+// utcDate (self-heals provider drift — and if a match moves EARLIER, the hardcoded
+// slot time would otherwise leave picks editable past the real start). Fall back to
+// the schedule time pre-draw / whenever the slot isn't joined to a fixture yet.
+function poolKickMs(n){ const s=koSlot(n); if(!s) return Infinity;
+  const m=koJoinAll()[n]; const t=(m&&m.utcDate)?new Date(m.utcDate).getTime():NaN;
+  return Number.isFinite(t) ? t : new Date(etToUtcISO(s.date,s.et)).getTime(); }
 function matchLocked(n){ return Date.now() >= poolKickMs(n); }
-function poolChampLockMs(){ let min=Infinity; (KO_SCHEDULE[poolStartRound()]||KO_SCHEDULE.LAST_32).forEach(s=>{ min=Math.min(min, new Date(etToUtcISO(s.date,s.et)).getTime()); }); return min; }
+function poolChampLockMs(){ let min=Infinity; (KO_SCHEDULE[poolStartRound()]||KO_SCHEDULE.LAST_32).forEach(s=>{ min=Math.min(min, poolKickMs(s.n)); }); return min; }
 function championLocked(){ return Date.now() >= poolChampLockMs(); }
 // Tiebreaker (predicted total goals in the Final) is editable right up to the Final kickoff.
 function tiebreakLocked(){ return Date.now() >= poolKickMs(104); }
