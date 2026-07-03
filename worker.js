@@ -93,6 +93,13 @@ function r16LockMs() {
 function champLockFor(pool) {
   return String(pool || '').toLowerCase() === 'familia' ? r16LockMs() : championLockMs();
 }
+// The 'familia' pool joins late and only scores from the Round of 16 (match 89) on.
+// Every other pool (bubblers, family, legacy) plays the full bracket from the
+// Round of 32 (match 73). This is the authoritative gate: picks below a pool's
+// minimum slot are never saved, never revealed, and therefore never scored.
+function minMatchFor(pool) {
+  return String(pool || '').toLowerCase() === 'familia' ? 89 : 73;
+}
 function parsePicks(str) {
   const out = {};
   (str || '').split('|').filter(Boolean).forEach(p => {
@@ -226,6 +233,14 @@ export default {
             cur.pool = existed ? poolOf(cur) : normPool(pool);
             cur.picks = cur.picks || {};
             if (!cur.id) cur.id = newPlayerId();   // stable id, minted once
+            const minMatch = minMatchFor(cur.pool);
+            // Self-heal: strip any stored picks below this pool's start round. A
+            // stale client (before the R16 gate shipped) let 'familia' members pick
+            // R32 matches (73-88); those must never score. Removing them here means
+            // any save cleans the entry.
+            for (const n of Object.keys(cur.picks)) {
+              if (+n < minMatch) delete cur.picks[n];
+            }
             const rejected = [];   // picks the client tried to change after kickoff
 
             // Explicit per-match clears ONLY. The client sends `&clear=89,92` when a
@@ -242,6 +257,7 @@ export default {
             // Locked matches keep whatever was stored before kickoff — and we report
             // any attempted change back so the client doesn't flash a false "Saved ✓".
             for (const n of Object.keys(incoming)) {
+              if (+n < minMatch) continue;   // out-of-range for this pool's start round
               if (now < koKickoffMs(+n)) cur.picks[n] = incoming[n];
               else if (cur.picks[n] !== incoming[n]) rejected.push(n);
             }
@@ -288,6 +304,7 @@ export default {
         } else {
           const now       = Date.now();
           const champLock = champLockFor(boardPool);
+          const minMatch  = minMatchFor(boardPool);
           const keys      = await listAllKeys(env.WC_KV, 'pool_player_');
           // Read every entry in parallel — this board is polled every ~30s by every
           // viewer during live games, so serial round-trips added real latency.
@@ -304,6 +321,7 @@ export default {
             const revealed = {};
             const picks = e.picks || {};
             for (const n of Object.keys(picks)) {
+              if (+n < minMatch) continue;   // before this pool's start round → never scored
               if (now >= koKickoffMs(+n)) revealed[n] = picks[n];
             }
             const row = {

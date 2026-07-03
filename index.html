@@ -1508,7 +1508,7 @@
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const PROXY = 'https://worldcup-proxy.kevinamaya.workers.dev';
-const APP_VERSION = '2026-07-02.9';   // bump on every deploy — drives the auto-refresh below
+const APP_VERSION = '2026-07-03.1';   // bump on every deploy — drives the auto-refresh below
 
 // Refresh intervals
 const REFRESH_LIVE    = 30_000;   // 30s when live game active (ESPN cache is 30s)
@@ -3910,6 +3910,10 @@ const POOL_ROUNDS = [
 const POOL_ORDER = { LAST_32:0, LAST_16:1, QUARTER_FINALS:2, SEMI_FINALS:3, THIRD_PLACE:4, FINAL:5 };
 const POOL_START = { familia:'LAST_16' };
 function poolStartRound(){ return POOL_START[(poolPool||'').toLowerCase()] || 'LAST_32'; }
+// Lowest bracket round that counts for a given pool ('familia' → R16, else R32).
+// Mirrors the Worker's minMatchFor: defense in depth so a pick from before a
+// pool's start round is never scored, even if one slipped past the server.
+function poolMinOrder(pool){ return POOL_ORDER[POOL_START[(pool||'').toLowerCase()]||'LAST_32']||0; }
 function poolActiveRounds(){ const s=POOL_ORDER[poolStartRound()]||0; return POOL_ROUNDS.filter(r=>POOL_ORDER[r.key]>=s); }
 function poolStartLabel(){ const r=poolStartRound();
   if(lang==='es') return r==='LAST_16' ? 'Octavos' : 'Dieciseisavos';
@@ -4105,7 +4109,9 @@ function poolPickResult(n){
 }
 function poolScore(p, adv, actualChamp){
   let pts=0, correct=0;
+  const startOrd=poolMinOrder(poolBoard&&poolBoard.pool);
   for(const n in (p.picks||{})){ const r=roundOfMatch(n); if(!r) continue;
+    if((POOL_ORDER[r]||0) < startOrd) continue;   // before this board's pool start round
     if(adv[r] && adv[r].has(canonName(p.picks[n]))){ pts+=POOL_WEIGHTS[r]; correct++; } }
   if(actualChamp && p.champion && canonName(p.champion)===canonName(actualChamp)){ pts+=POOL_CHAMP_BONUS; correct++; }
   return { pts, correct };
@@ -4930,7 +4936,8 @@ function poolMyStats(){
   const grade=(team,r,wt)=>{ const pc=canonName(team);
     if(POOL_ADV[r] && POOL_ADV[r].has(pc)) banked+=wt;
     else if(!POOL_DEAD.has(pc)) potential+=wt; };
-  for(const n in poolPicks){ const t=poolPicks[n]; if(!t) continue; const r=roundOfMatch(n); if(!r) continue; grade(t,r,POOL_WEIGHTS[r]); }
+  const startOrd=poolMinOrder(poolPool);
+  for(const n in poolPicks){ const t=poolPicks[n]; if(!t) continue; const r=roundOfMatch(n); if(!r) continue; if((POOL_ORDER[r]||0)<startOrd) continue; grade(t,r,POOL_WEIGHTS[r]); }
   if(poolChampion) grade(poolChampion,'FINAL',POOL_CHAMP_BONUS);
   const teams=new Set(Object.values(poolPicks).filter(Boolean).map(canonName));
   if(poolChampion) teams.add(canonName(poolChampion));
@@ -5518,7 +5525,11 @@ function poolLeaderboardHTML(){
       + `<div class="lb-score"><span class="lb-pts">${r.pts}</span><small>pts · ${r.correct}✓${tb}</small></div>${rm}</div>`;
   });
   const tbHint = finalTotal!=null ? ' Ties broken by closest Final-goals guess (⚖️).' : '';
-  html += `</div><div class="pool-hint">R32 1 · R16 2 · QF 4 · SF 8 · Final 16 · 3rd 4 · Champion +${POOL_CHAMP_BONUS}. Other players' picks reveal after each kickoff.${tbHint}</div>`;
+  const hintStart = poolMinOrder(pid);   // familia board omits the R32 it never plays
+  const hintLbl = {LAST_32:'R32',LAST_16:'R16',QUARTER_FINALS:'QF',SEMI_FINALS:'SF',FINAL:'Final'};
+  const wHint = ['LAST_32','LAST_16','QUARTER_FINALS','SEMI_FINALS','FINAL']
+    .filter(k=>POOL_ORDER[k]>=hintStart).map(k=>hintLbl[k]+' '+POOL_WEIGHTS[k]).join(' · ');
+  html += `</div><div class="pool-hint">${wHint} · 3rd ${POOL_WEIGHTS.THIRD_PLACE} · Champion +${POOL_CHAMP_BONUS}. Other players' picks reveal after each kickoff.${tbHint}</div>`;
   return html + poolContrarianHTML() + poolCinderellaHTML() + poolChampDistHTML() + poolPicksSectionHTML() + `</div>`;
 }
 // Champion pick distribution — who the pool backed for the title. Champions are
