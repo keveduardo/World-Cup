@@ -116,6 +116,7 @@ third pool code **`familia`** starts at the Round of 16. See memory notes for de
 ## Conventions (please follow)
 
 - **Always sanity-check JS before deploying.** Extract the inline script from `index.html` and run `node --check` on it. For real logic (clinch math, pool scoring, bracket propagation), write a small throwaway Node harness and run it — this project has been built that way and it catches bugs before they ship.
+- **Run the KO parity check before any deploy that touches kickoffs.** `node tools/ko-parity-check.mjs` asserts `KO_TIMES` (worker.js) and `KO_SCHEDULE` (index.html) agree on every match's date/ET. If they drift, the client can show a pick as editable while the server silently rejects it. If you change one, change both, then run this.
 - **Don't disturb the big renderers.** When editing `renderKnockout`, `renderGroups`, or `renderPlaceholderKO`, keep changes surgical and additive; diff against the previous version to confirm only the intended lines changed.
 - **Supervised deploys for the Worker.** Never auto-deploy `worker.js` or run destructive KV operations (delete/bulk-write) without explicit OK — real pool brackets and favorites are in `WC_KV`.
 - **No secrets in the repo.** `FOOTBALL_API_KEY` is a Wrangler secret only.

@@ -1508,7 +1508,7 @@
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const PROXY = 'https://worldcup-proxy.kevinamaya.workers.dev';
-const APP_VERSION = '2026-07-02.7';   // bump on every deploy — drives the auto-refresh below
+const APP_VERSION = '2026-07-02.9';   // bump on every deploy — drives the auto-refresh below
 
 // Refresh intervals
 const REFRESH_LIVE    = 30_000;   // 30s when live game active (ESPN cache is 30s)
@@ -1532,12 +1532,23 @@ const FLAG_CODES = {
   'England':'gb-eng','Croatia':'hr','Ghana':'gh','Panama':'pa'
 };
 
+// Escape a string for safe interpolation into HTML text/attributes. Defined up here
+// (hoisted anyway) so the early renderers can use it too; mirrors poolEsc.
+function htmlEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+// Escape a string that goes inside a single-quoted JS string literal within a
+// double-quoted HTML on* attribute (e.g. onclick="f('HERE')"). Handles both the JS
+// layer (\, ') and the HTML-attribute layer (", <, >, &) so a team name with a quote
+// can't break out of the handler.
+function jsAttr(s){ return String(s==null?'':s)
+  .replace(/&/g,'&amp;').replace(/\\/g,'\\\\').replace(/'/g,"\\'")
+  .replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
 function flag(name) {
   const code = FLAG_CODES[name];
   if (!code) return '⚽';
   // Self-hosted (same-origin) flags — no third-party request. Falls back to ⚽ if
   // an image is ever missing/unreachable, instead of a broken-image box.
-  return `<img class="flag-img" src="flags/${code}.png" alt="${name}" loading="lazy" onerror="this.replaceWith('⚽')">`;
+  return `<img class="flag-img" src="flags/${code}.png" alt="${htmlEsc(name)}" loading="lazy" onerror="this.replaceWith('⚽')">`;
 }
 
 // ─── TEAM → GROUP MAPPING (authoritative, from official draw) ────────────────
@@ -1677,14 +1688,19 @@ function lookupVenueCode(m) {
 }
 // Stadium code for any match: knockout slot venue (by kickoff time) or the group-
 // stage team-pair lookup. Used for both the match cards and the Next-Up weather.
-function venueCodeFor(m) {
+// Knockout stadium code for a match (from the bound _koVenueCode, or the KO_SCHEDULE
+// slot matched by kickoff time), or null for a non-KO / unbound match.
+function koVenueCodeOf(m) {
   if (m._koVenueCode) return m._koVenueCode;
   if (KO_SCHEDULE[m.stage]) {
     const want = new Date(m.utcDate).getTime();
     const slot = (KO_SCHEDULE[m.stage] || []).find(s => new Date(etToUtcISO(s.date, s.et)).getTime() === want);
     if (slot) return slot.v;
   }
-  return lookupVenueCode(m);
+  return null;
+}
+function venueCodeFor(m) {
+  return koVenueCodeOf(m) || lookupVenueCode(m);
 }
 
 
@@ -1789,12 +1805,16 @@ function wxTemp(f) {
 // Fill weather into every slot the renderers emitted. data-wx-mode picks the
 // reading: "now" for live/game-day cards, "forecast" for everything further out.
 async function loadMatchWeather() {
-  const els = document.querySelectorAll('[data-wx-code][data-wx-when]');
+  const els = [...document.querySelectorAll('[data-wx-code][data-wx-when]')];
+  // Warm every distinct venue's forecast in parallel first (fetchVenueWx dedupes into
+  // weatherCache), instead of resolving one stadium at a time before the next starts.
+  const codes = [...new Set(els.map(el => el.getAttribute('data-wx-code')))];
+  await Promise.all(codes.map(c => fetchVenueWx(c)));
   for (const el of els) {
     const code = el.getAttribute('data-wx-code');
     const whenISO = el.getAttribute('data-wx-when');
     const mode = el.getAttribute('data-wx-mode') || 'forecast';
-    const b = await fetchVenueWx(code);
+    const b = weatherCache[code] || await fetchVenueWx(code);
     const wx = mode === 'now' ? wxNow(b) : wxAtKickoff(b, whenISO);
     if (!wx) continue;
     const tag = mode === 'now' ? ` · ${t('now')}` : '';
@@ -1880,7 +1900,11 @@ function setTZ(id) {
 }
 
 // ─── FAVORITES ───────────────────────────────────────────────────────────────
-let favorites = new Set(JSON.parse(localStorage.getItem('wc_favs') || '[]'));
+// Guard the parse: this runs at top level, so one corrupt value would otherwise
+// throw and abort the entire script (blank page). Fall back to an empty set.
+let favorites;
+try { const _f = JSON.parse(localStorage.getItem('wc_favs') || '[]'); favorites = new Set(Array.isArray(_f) ? _f : []); }
+catch (e) { favorites = new Set(); }
 let syncCode  = localStorage.getItem('wc_sync_code') || '';
 
 function saveFavsLocal() {
@@ -1975,11 +1999,15 @@ async function proxyFetch(type) {
 
 async function loadMatches() {
   const data = await proxyFetch('matches');
-  allMatches = data.matches || [];
+  // Only replace the schedule when the payload is actually valid. A transient Worker/
+  // upstream error (now a 502, but guard the shape too) must NOT blank the cached list.
+  if (!Array.isArray(data.matches)) throw new Error('matches payload invalid');
+  allMatches = data.matches;
 }
 
 async function loadStandings() {
   const data = await proxyFetch('standings');
+  if (!Array.isArray(data.standings)) throw new Error('standings payload invalid');
   standingsMap = {};
   let fallbackIdx = 0;
   const fallbackLetters = ['A','B','C','D','E','F','G','H','I','J','K','L'];
@@ -2077,6 +2105,7 @@ async function loadEspnLive() {
 
     // Merge into allMatches
     allMatches.forEach(m => {
+      m._espnScore = false;   // reset each refresh; set true only if ESPN overwrites the score below
       const key = [canonName(m.homeTeam?.name || ''), canonName(m.awayTeam?.name || '')].sort().join('|');
       const e = espnMap[key];
       if (!e) return;
@@ -2092,6 +2121,7 @@ async function loadEspnLive() {
       if (!isNaN(e.homeScore) && !isNaN(e.awayScore) && e.state !== 'pre') {
         m.score = m.score || {};
         m.score.fullTime = { home: e.homeScore, away: e.awayScore };
+        m._espnScore = true;   // this score is ESPN's (regulation, excl. shootout) — see matchDisplayScore
       }
       m._espn = e;        // clock + ids + form + broadcast
       m._espnId = e.id;   // shortcut for summary fetch
@@ -2190,7 +2220,12 @@ function matchDisplayScore(m) {
   const ft = sc.fullTime || {}, ht = sc.halfTime || {};
   let h = ft.home ?? ht.home, a = ft.away ?? ht.away;
   const p = sc.penalties;
-  if (p && typeof p.home === 'number' && typeof h === 'number' && typeof a === 'number') {
+  // football-data's fullTime for a shootout INCLUDES the pens, so we back them out.
+  // But when the ESPN overlay has replaced fullTime (m._espnScore), that score already
+  // EXCLUDES the shootout (ESPN carries it as shootoutScore) — subtracting the stale
+  // football-data penalties would then show negative goals. Only subtract for the
+  // football-data score.
+  if (!m._espnScore && p && typeof p.home === 'number' && typeof h === 'number' && typeof a === 'number') {
     h -= p.home; a -= p.away;
   }
   return { home: h, away: a };
@@ -2205,15 +2240,15 @@ function matchClock(m) {
     // Penalty shootout — never call this "extra time".
     if (period >= 5 || /penalt|shootout/.test(txt)) {
       const so = (typeof e.shHome === 'number' && typeof e.shAway === 'number') ? `${e.shHome}–${e.shAway}` : '';
-      return { label: 'Penalties', detail: so };
+      return { label: t('Penalties'), detail: so };
     }
     const inET = period >= 3 || /extra/.test(txt);
     const isBreak = m.status === 'PAUSED' || /half\s*time|halftime|end of|break|interval/.test(txt);
-    if (isBreak) return inET ? { label: 'Extra Time', detail: 'break' } : { label: 'Half Time', detail: '' };
-    if (inET) return { label: 'Extra Time', detail: e.clock || '' };
-    if (period === 2) return { label: '2nd Half', detail: e.clock || '' };
-    if (period === 1) return { label: '1st Half', detail: e.clock || '' };
-    return { label: 'Live', detail: e.clock || '' };
+    if (isBreak) return inET ? { label: t('Extra Time'), detail: 'break' } : { label: t('Half Time'), detail: '' };
+    if (inET) return { label: t('Extra Time'), detail: e.clock || '' };
+    if (period === 2) return { label: t('2nd Half'), detail: e.clock || '' };
+    if (period === 1) return { label: t('1st Half'), detail: e.clock || '' };
+    return { label: t('Live'), detail: e.clock || '' };
   }
 
   // Prefer the API's own minute if present
@@ -2305,8 +2340,8 @@ function renderSchedule() {
   if (live.length > 0) {
     const m = live[0];
     const hn = m.homeTeam?.name || 'TBD', an = m.awayTeam?.name || 'TBD';
-    const hs = m.score?.fullTime?.home ?? m.score?.halfTime?.home ?? 0;
-    const as_ = m.score?.fullTime?.away ?? m.score?.halfTime?.away ?? 0;
+    const _ds = matchDisplayScore(m);   // corrected score (backs out shootout / respects ESPN)
+    const hs = _ds.home ?? 0, as_ = _ds.away ?? 0;
     nextKickoff = null;
     const liveVenueTxt = matchVenueText(m);
     const clk = matchClock(m);
@@ -2314,8 +2349,8 @@ function renderSchedule() {
     bannerHtml = `
       <div class="next-up-banner" style="background:var(--live-red)">
         <span class="next-up-label" style="color:white">🔴 ${clk.detail || t('LIVE')}</span>
-        <span class="next-up-game">${flag(hn)} ${teamName(hn)} ${hs} – ${as_} ${teamName(an)} ${flag(an)}</span>
-        <div class="next-up-countdown">${clk.label}${!apiLive ? ' · '+t('awaiting score from API') : ''}${liveVenueTxt ? ' · 🏟 ' + liveVenueTxt : ''}</div>
+        <span class="next-up-game">${flag(hn)} ${htmlEsc(teamName(hn))} ${hs} – ${as_} ${htmlEsc(teamName(an))} ${flag(an)}</span>
+        <div class="next-up-countdown">${clk.label}${!apiLive ? ' · '+t('awaiting score from API') : ''}${liveVenueTxt ? ' · 🏟 ' + htmlEsc(liveVenueTxt) : ''}</div>
       </div>`;
   } else if (upcoming.length > 0) {
     const m = upcoming[0];
@@ -2332,10 +2367,10 @@ function renderSchedule() {
     bannerHtml = `
       <div class="next-up-banner">
         <span class="next-up-label">${t('Next Up')}</span>
-        <span class="next-up-game">${flag(hn)} ${teamName(hn)} vs ${teamName(an)} ${flag(an)}</span>
+        <span class="next-up-game">${flag(hn)} ${htmlEsc(teamName(hn))} vs ${htmlEsc(teamName(an))} ${flag(an)}</span>
         <span class="next-up-time">${formatPST(m.utcDate)} ${tzShort()}</span>
         ${wxChip}
-        ${venueTxt ? `<div class="next-up-countdown">🏟 ${venueTxt}</div>` : ''}
+        ${venueTxt ? `<div class="next-up-countdown">🏟 ${htmlEsc(venueTxt)}</div>` : ''}
         <div class="next-up-countdown" id="nextCountdown"></div>
       </div>`;
   } else {
@@ -2367,22 +2402,23 @@ function renderSchedule() {
         .sort((a,b) => new Date(a.utcDate)-new Date(b.utcDate))[0];
       let info = '', time = '';
       if (liveM) {
-        const hs = liveM.score?.fullTime?.home ?? 0, as_ = liveM.score?.fullTime?.away ?? 0;
+        const _ds = matchDisplayScore(liveM);
+        const hs = _ds.home ?? 0, as_ = _ds.away ?? 0;
         const opp = liveM.homeTeam?.name === name ? liveM.awayTeam?.name : liveM.homeTeam?.name;
         const v = matchVenueText(liveM);
-        info = `🔴 LIVE vs ${opp}${v ? ' · 🏟 ' + v : ''}`;
+        info = `🔴 LIVE vs ${htmlEsc(opp)}${v ? ' · 🏟 ' + htmlEsc(v) : ''}`;
         time = `${hs} – ${as_}`;
       } else if (nextM) {
         const opp = nextM.homeTeam?.name === name ? nextM.awayTeam?.name : nextM.homeTeam?.name;
         const v = matchVenueText(nextM);
-        info = `vs ${opp}${v ? ' · 🏟 ' + v : ''}`;
+        info = `vs ${htmlEsc(opp)}${v ? ' · 🏟 ' + htmlEsc(v) : ''}`;
         time = `${formatDatePST(nextM.utcDate)} · ${formatPST(nextM.utcDate)}`;
       } else {
         info = 'No upcoming matches';
       }
-      return `<div class="my-team-row" data-team="${name.replace(/"/g,'&quot;')}">
+      return `<div class="my-team-row" data-team="${htmlEsc(name)}">
         <span>${flag(name)}</span>
-        <span class="my-team-name">${name}</span>
+        <span class="my-team-name">${htmlEsc(name)}</span>
         <span class="my-team-next">${info}</span>
         <span class="my-team-time">${time}</span>
       </div>`;
@@ -2563,12 +2599,7 @@ function renderMatchCard(m, status) {
   // kickoff time here so location + weather work on ANY tab — the Knockout tab set
   // this via _koVenueCode, but the Schedule tab didn't, so KO games lost both once
   // the group stage (whose venues come from a team-pair table) ended.
-  let koVenueCode = m._koVenueCode;
-  if (!koVenueCode && KO_SCHEDULE[m.stage]) {
-    const want = new Date(m.utcDate).getTime();
-    const slot = (KO_SCHEDULE[m.stage] || []).find(s => new Date(etToUtcISO(s.date, s.et)).getTime() === want);
-    if (slot) koVenueCode = slot.v;
-  }
+  let koVenueCode = koVenueCodeOf(m);
   if (!venue && koVenueCode && STADIUMS[koVenueCode]) {
     [venue, city] = STADIUMS[koVenueCode];
   } else if (!venue) {
@@ -2613,15 +2644,15 @@ function renderMatchCard(m, status) {
   const eid = m._espnId || '';
   const detailBtn = (eid && (status === 'live' || status === 'completed'))
     ? `<button class="detail-btn ${status==='completed'?'done':''}"
-        onclick="showMatchDetail('${eid}','${hn.replace(/'/g,"\\'")}','${an.replace(/'/g,"\\'")}')">
+        onclick="showMatchDetail('${jsAttr(eid)}','${jsAttr(hn)}','${jsAttr(an)}')">
         ${status === 'live' ? '⚽ '+t('Live Match Details') : '📊 '+t('Match Details')}</button>`
     : '';
 
   return `
     <div class="match-card ${status}">
-      <div class="team-block" data-team="${hn.replace(/"/g,'&quot;')}">
+      <div class="team-block" data-team="${htmlEsc(hn)}">
         <span class="team-flag">${flag(hn)}</span>
-        <span class="team-name">${teamName(hn)}${favMark(hn)}</span>
+        <span class="team-name">${htmlEsc(teamName(hn))}${favMark(hn)}</span>
         ${fifaRank(hn) ? `<span class="card-rank">🌍 #${fifaRank(hn)}</span>` : ''}
         ${formHtml(homeForm)}
       </div>
@@ -2633,9 +2664,9 @@ function renderMatchCard(m, status) {
         ${attHtml}
         ${detailBtn}
       </div>
-      <div class="team-block right" data-team="${an.replace(/"/g,'&quot;')}">
+      <div class="team-block right" data-team="${htmlEsc(an)}">
         <span class="team-flag">${flag(an)}</span>
-        <span class="team-name">${teamName(an)}${favMark(an)}</span>
+        <span class="team-name">${htmlEsc(teamName(an))}${favMark(an)}</span>
         ${fifaRank(an) ? `<span class="card-rank">🌍 #${fifaRank(an)}</span>` : ''}
         ${formHtml(awayForm)}
       </div>
@@ -2907,8 +2938,13 @@ function groupClinch(L){
 }
 function clinchAll(){
   const groups = standingsMap || {};
+  // Fold points+GD into the signature: a standings correction that fixes pts/GD
+  // without flipping a match's FINISHED bit must still recompute the clinch bands
+  // (koJoinAll folds a standings fingerprint for the same reason).
+  const stSig = Object.keys(groups).sort().map(L=>{ const rows=groups[L]||[];
+    return L+':'+rows.map(r=>canonName(r.team||'')+(r.pts||0)+'.'+(r.gd||0)).join(','); }).join('|');
   const sig = (allMatches||[]).filter(m=>m.stage==='GROUP_STAGE')
-                .map(m=>(m.status==='FINISHED'?'1':'0')).join('') + '|' + Object.keys(groups).join('');
+                .map(m=>(m.status==='FINISHED'?'1':'0')).join('') + '|' + stSig;
   if(sig !== _clinchSig){ _clinchData={}; Object.keys(groups).forEach(L=>{ _clinchData[L]=groupClinch(L); }); _clinchSig=sig; }
   return _clinchData;
 }
@@ -3301,9 +3337,9 @@ function renderMatchDetailBody(data, hn, an) {
     html += `<div class="section-head"><h2>${t('Key Events')}</h2></div>`;
     events.forEach(ev => {
       html += `<div class="event-row">
-        <span class="event-clock">${ev.clock}</span>
+        <span class="event-clock">${htmlEsc(ev.clock)}</span>
         <span class="event-icon">${ev.icon}</span>
-        <span class="event-detail"><b>${ev.team}</b> ${ev.detail}</span>
+        <span class="event-detail"><b>${htmlEsc(ev.team)}</b> ${htmlEsc(ev.detail)}</span>
       </div>`;
     });
   }
@@ -3327,12 +3363,12 @@ function renderMatchDetailBody(data, hn, an) {
       const t0 = teams[0].team?.displayName || hn;
       const t1 = teams[1].team?.displayName || an;
       html += `<div class="section-head"><h2>${t('Match Stats')}</h2></div>`;
-      html += `<div class="stat-head"><span>${t0}</span><span></span><span>${t1}</span></div>`;
+      html += `<div class="stat-head"><span>${htmlEsc(t0)}</span><span></span><span>${htmlEsc(t1)}</span></div>`;
       rows.forEach(([k,label]) => {
         html += `<div class="stat-row">
-          <span class="stat-h">${homeStats[k] ?? '–'}</span>
+          <span class="stat-h">${htmlEsc(homeStats[k] ?? '–')}</span>
           <span class="stat-label">${t(label)}</span>
-          <span class="stat-a">${awayStats[k] ?? '–'}</span>
+          <span class="stat-a">${htmlEsc(awayStats[k] ?? '–')}</span>
         </div>`;
       });
     }
@@ -3344,14 +3380,14 @@ function renderMatchDetailBody(data, hn, an) {
     rosters.forEach(r => {
       const starters = (r.roster || []).filter(p => p.starter);
       if (!starters.length) return;
-      const teamName = r.team?.displayName || '';
+      const teamNm = r.team?.displayName || '';
       const formation = r.formation || '';
-      html += `<div class="section-head"><h2>${teamName} XI</h2>${formation ? `<span class="count">${formation}</span>` : ''}</div>`;
+      html += `<div class="section-head"><h2>${htmlEsc(teamNm)} XI</h2>${formation ? `<span class="count">${htmlEsc(formation)}</span>` : ''}</div>`;
       html += '<div class="lineup">';
       starters.forEach(p => {
         const nm = p.athlete?.displayName || '';
         const pos = p.position?.abbreviation || '';
-        html += `<div class="lineup-player"><span class="lp-pos">${pos}</span> ${nm}</div>`;
+        html += `<div class="lineup-player"><span class="lp-pos">${htmlEsc(pos)}</span> ${htmlEsc(nm)}</div>`;
       });
       html += '</div>';
     });
@@ -3427,13 +3463,13 @@ function showTeam(name) {
     <div class="team-modal-header">
       <span class="team-modal-flag">${flag(name)}</span>
       <div style="flex:1">
-        <div class="team-modal-title">${name}</div>
-        ${grp ? `<div class="team-modal-group" style="cursor:pointer;text-decoration:underline" onclick="goToGroup('${grp}')">Group ${grp} →</div>` : ''}
+        <div class="team-modal-title">${htmlEsc(name)}</div>
+        ${grp ? `<div class="team-modal-group" style="cursor:pointer;text-decoration:underline" onclick="goToGroup('${jsAttr(grp)}')">Group ${htmlEsc(grp)} →</div>` : ''}
         ${fifaRank(name) ? `<div class="team-modal-rank">🌍 FIFA Rank #${fifaRank(name)}</div>` : ''}
       </div>
-      <button class="fav-btn" onclick="toggleFav('${name.replace(/'/g,"\\'")}');showTeam('${name.replace(/'/g,"\\'")}')" title="${t('Favorite')}">${isFav(name) ? '★' : '☆'}</button>
+      <button class="fav-btn" onclick="toggleFav('${jsAttr(name)}');showTeam('${jsAttr(name)}')" title="${t('Favorite')}">${isFav(name) ? '★' : '☆'}</button>
       <a class="fav-btn" href="${rosterURL(name)}" target="_blank" rel="noopener" title="Roster &amp; player bios" style="font-size:16px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none">👥</a>
-      <button class="fav-btn" onclick="shareTeam('${name.replace(/'/g,"\\'")}')" title="Share" style="font-size:16px">⤴</button>
+      <button class="fav-btn" onclick="shareTeam('${jsAttr(name)}')" title="Share" style="font-size:16px">⤴</button>
       <button class="modal-close" onclick="closeTeamModal()">✕</button>
     </div>
     <div class="team-modal-body">${body}</div>`;
@@ -3456,6 +3492,32 @@ document.addEventListener('click', (e) => {
   if (t) { showTeam(t.dataset.team); return; }
   if (e.target.id === 'teamModalOverlay') closeTeamModal();
 });
+
+// Keyboard access for the click-delegated chips/rows: they're <span>/<div>, so make
+// them focusable + operable with Enter/Space. A MutationObserver stamps role/tabindex
+// on every render path (no need to touch each renderer), and this handler fires the
+// same action as a click.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+  const el = e.target.closest && e.target.closest('[data-fav],[data-team]');
+  if (!el) return;
+  e.preventDefault();
+  if (el.hasAttribute('data-fav')) toggleFav(el.dataset.fav);
+  else showTeam(el.dataset.team);
+});
+(function a11yClickable(){
+  const stamp = el => { if (el.nodeType===1 && !el.hasAttribute('tabindex')) { el.setAttribute('tabindex','0'); el.setAttribute('role','button'); } };
+  const decorate = root => {
+    if (root.nodeType!==1) return;
+    if (root.matches && root.matches('[data-team],[data-fav]')) stamp(root);
+    if (root.querySelectorAll) root.querySelectorAll('[data-team]:not([tabindex]),[data-fav]:not([tabindex])').forEach(stamp);
+  };
+  try {
+    new MutationObserver(muts => { for (const mu of muts) for (const n of mu.addedNodes) decorate(n); })
+      .observe(document.body, { childList:true, subtree:true });
+    decorate(document.body);   // existing content at load
+  } catch(e) {}
+})();
 
 // ─── RENDER TEAMS ────────────────────────────────────────────────────────────
 let teamSearch = '';
@@ -3666,11 +3728,20 @@ const I18N_ES = {
   "No matches found.":"No se encontraron partidos.", "Loading matches…":"Cargando partidos…",
   "today":"hoy", "live":"en vivo", "final":"final", "My Teams":"Mis Equipos",
   "No matches today · next on":"No hay partidos hoy · próximo el",
+  // live match clock labels
+  "1st Half":"Primer Tiempo", "2nd Half":"Segundo Tiempo", "Half Time":"Medio Tiempo",
+  "Extra Time":"Tiempo Extra", "Penalties":"Penales", "Live":"En Vivo",
   // match-details modal + stats
   "Key Events":"Eventos Clave", "Match Stats":"Estadísticas del Partido",
   "Possession":"Posesión", "Shots":"Tiros", "On Target":"A Puerta", "Corners":"Córners",
   "Fouls":"Faltas", "Yellow Cards":"Tarjetas Amarillas", "Third place":"Tercer puesto",
   "Admin code not accepted.":"Código de administrador no aceptado.", "Try again":"Intentar de nuevo",
+  "Match already started — pick locked":"El partido ya comenzó — pronóstico bloqueado",
+  "⚠ Not saved — check connection":"⚠ No se guardó — revisa tu conexión",
+  "Couldn't load your saved picks":"No pudimos cargar tus pronósticos guardados",
+  "Your bracket is safe on the server. Reconnect to edit it.":"Tu cuadro está a salvo en el servidor. Reconéctate para editarlo.",
+  "Retry":"Reintentar",
+  "Your personal code should be at least 5 characters — it protects your bracket.":"Tu código personal debe tener al menos 5 caracteres — protege tu cuadro.",
   // timezone labels
   "Pacific":"Pacífico", "Mountain":"Montaña", "Arizona":"Arizona", "Central":"Central",
   "Eastern":"Este", "My device":"Mi dispositivo",
@@ -3847,6 +3918,7 @@ function poolStartLabel(){ const r=poolStartRound();
 let poolPool     = localStorage.getItem('wc_pool_pool') || '';
 let poolMe       = localStorage.getItem('wc_pool_me')   || '';
 let poolName     = localStorage.getItem('wc_pool_name') || '';
+let poolId       = localStorage.getItem('wc_pool_id')   || '';  // stable, non-secret self-id (leaderboard "me" match)
 let poolPicks    = {};      // { matchNumber: teamName }
 let poolChampion = '';
 let poolTiebreak = '';      // predicted TOTAL goals in the Final (string of an int) — tiebreaker
@@ -3863,6 +3935,14 @@ let poolReveal   = {};      // { matchNumber: true } — bracket slots whose "Po
 let poolPicksOpen= false;   // leaderboard "Who picked what" section expanded
 let _poolSaveT   = null;
 let _poolDirty   = false;   // unsaved local change pending (drives the exit-time beacon)
+let poolLoaded   = false;   // TRUE only once picks are hydrated from the server. NO save
+                            // may transmit before this — a pre-hydration save would send an
+                            // empty/partial pick set (data-loss guard; see savePool/beacon).
+let poolLoadErr  = false;   // last hydration attempt failed → show a retry state, not an
+                            // empty editable bracket (empty bracket invites a destructive re-pick)
+let _poolCleared = new Set();// matches the client explicitly cleared (downstream pick became
+                            // impossible) — sent as &clear=; the ONLY delete signal the Worker honors
+let _poolSaveChain = Promise.resolve(); // serialize saves so they can't land out of order
 let _poolMyRank  = -1;      // my leaderboard index this render (for confetti)
 let _poolTotalPlayers = 0;  // player count this render (for the "dead last" sad confetti)
 let _poolChampWon= false;   // my champion won it all (for confetti)
@@ -3893,7 +3973,9 @@ function championLocked(){ return Date.now() >= poolChampLockMs(); }
 // Tiebreaker (predicted total goals in the Final) is editable right up to the Final kickoff.
 function tiebreakLocked(){ return Date.now() >= poolKickMs(104); }
 function poolSetTiebreak(v){ if(tiebreakLocked()) { renderPool(); return; }
-  v=String(v).replace(/[^0-9]/g,'').slice(0,2); poolTiebreak=v; savePoolSoon(); }
+  // Clamp to the same 0–20 range the input max and the Worker enforce, so a typed
+  // "45" can't flash "Saved ✓" locally then get silently dropped server-side.
+  v=String(v).replace(/[^0-9]/g,'').slice(0,2); if(v!=='' && +v>20) v='20'; poolTiebreak=v; savePoolSoon(); }
 // Actual total goals scored in the Final (regulation + extra time), once it's played.
 function poolFinalActualTotal(){
   const m=allMatches.find(x=>x.stage==='FINAL' && x.status==='FINISHED');
@@ -3970,7 +4052,9 @@ function validateBracket(){
   for(let n=73;n<=104;n++){
     const p=poolPicks[n]; if(!p) continue;
     const c=slotCandidates(n);
-    if(c && c[0] && c[1] && canonName(c[0])!==canonName(p) && canonName(c[1])!==canonName(p)) delete poolPicks[n];
+    // A real cascade: record it in _poolCleared so the next save sends an EXPLICIT
+    // clear for this slot (the Worker no longer infers deletion from absence).
+    if(c && c[0] && c[1] && canonName(c[0])!==canonName(p) && canonName(c[1])!==canonName(p)){ delete poolPicks[n]; _poolCleared.add(String(n)); }
   }
 }
 
@@ -4028,8 +4112,10 @@ function poolScore(p, adv, actualChamp){
 }
 
 // ── actions ──
-function poolPick(n, team){ if(matchLocked(n)){ renderPool(); return; } poolPicks[n]=team; validateBracket(); renderPool(); savePoolSoon(); }
-function poolSetChampion(v){ if(championLocked()){ renderPool(); return; } poolChampion=v; renderPool(); savePoolSoon(); }
+// Picking a winner saves IMMEDIATELY (not debounced) so a tap can't be lost. A fresh
+// pick for a slot also cancels any pending "clear" for it (re-pick beats the clear).
+function poolPick(n, team){ if(matchLocked(n)){ renderPool(); return; } poolPicks[n]=team; _poolCleared.delete(String(n)); validateBracket(); renderPool(); savePoolNow(); }
+function poolSetChampion(v){ if(championLocked()){ renderPool(); return; } poolChampion=v; renderPool(); savePoolNow(); }
 function poolSetSub(s){ if(poolSub==='avatar' && s!=='avatar') flushPoolSave(); poolSub=s; renderPool(); if(s==='leaderboard') poolLoadBoard(); }
 function poolCopyCode(){ try{ navigator.clipboard.writeText(poolMe); }catch(e){} }
 function poolCopy(s){ try{ navigator.clipboard.writeText(s); }catch(e){} }
@@ -4040,7 +4126,7 @@ function poolEditName(){
   if(!name){ alert(t("Your name can't be empty.")); return; }
   if(name===poolName) return;
   poolName=name; localStorage.setItem('wc_pool_name', poolName);
-  savePool();        // immediate upsert; worker updates the stored name
+  savePoolNow();     // immediate upsert; worker updates the stored name
   renderPool();      // refresh header
   poolLoadBoard();   // refresh leaderboard so the new name shows there too
 }
@@ -4048,34 +4134,89 @@ function poolLeave(){
   // Sign out on THIS browser only — server data is untouched, so logging back in
   // with the personal code restores everything. Lets a household share a device.
   if(!confirm(t('Sign out of the pool on this browser?\n\nYour picks are saved — log back in anytime with your personal code.'))) return;
-  flushPoolSave();   // flush any pending save for the current person first
-  ['wc_pool_pool','wc_pool_me','wc_pool_name'].forEach(k=>localStorage.removeItem(k));
-  poolPool=''; poolMe=''; poolName=''; poolPicks={}; poolChampion=''; poolBoard=null; poolAvatar=null; poolSub='bracket'; poolJoinMode='login';
+  poolSaveBeacon();  // flush any pending change NOW (fires immediately with the current
+                     // identity, before we clear it below — the async save chain would
+                     // otherwise run after poolMe is gone and skip)
+  ['wc_pool_pool','wc_pool_me','wc_pool_name','wc_pool_id'].forEach(k=>localStorage.removeItem(k));
+  poolPool=''; poolMe=''; poolName=''; poolId=''; poolPicks={}; poolChampion=''; poolBoard=null; poolAvatar=null; poolSub='bracket'; poolJoinMode='login';
+  poolLoaded=false; poolLoadErr=false; _poolCleared.clear();
   renderPool();
 }
-function savePoolSoon(ms){ _poolDirty=true; clearTimeout(_poolSaveT); _poolSaveT=setTimeout(savePool, ms||700); }
-function flushPoolSave(){ if(_poolSaveT){ clearTimeout(_poolSaveT); _poolSaveT=null; savePool(); } }
+// Debounced save for rapid-fire inputs (tiebreak typing, avatar sliders). Winner
+// clicks do NOT use this — they call savePoolNow() for immediate persistence.
+function savePoolSoon(ms){ _poolDirty=true; clearTimeout(_poolSaveT); _poolSaveT=setTimeout(savePoolNow, ms||700); }
+function flushPoolSave(){ if(_poolSaveT){ clearTimeout(_poolSaveT); _poolSaveT=null; } savePoolNow(); }
 function poolPicksStr(){ return Object.keys(poolPicks).filter(n=>poolPicks[n]).map(n=>n+':'+poolPicks[n]).join('|'); }
 function poolSaveURL(){
-  return `${PROXY}?type=poolsave&pool=${encodeURIComponent(poolPool)}&me=${encodeURIComponent(poolMe)}`
+  let u = `${PROXY}?type=poolsave&pool=${encodeURIComponent(poolPool)}&me=${encodeURIComponent(poolMe)}`
     +`&name=${encodeURIComponent(poolName)}&picks=${encodeURIComponent(poolPicksStr())}&champion=${encodeURIComponent(poolChampion)}`
-    +`&tiebreak=${encodeURIComponent(poolTiebreak)}&avatar=${encodeURIComponent(JSON.stringify(poolAvatar||{}))}`;
+    +`&tiebreak=${encodeURIComponent(poolTiebreak)}`;
+  // Only send the avatar when we actually have one — never overwrite a saved avatar
+  // with an empty {} from a session that hasn't built/loaded one.
+  if(poolAvatar) u += `&avatar=${encodeURIComponent(JSON.stringify(poolAvatar))}`;
+  // Explicit deletes — the only signal the Worker treats as removal.
+  if(_poolCleared.size) u += `&clear=${encodeURIComponent([..._poolCleared].join(','))}`;
+  return u;
 }
-function poolFlashSaved(){
+function poolFlashSaved(msg){
   const el=document.getElementById('poolSaveFlash'); if(!el) return;
-  el.textContent='Saved ✓'; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  el.textContent=msg||'Saved ✓'; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
 }
-async function savePool(){
-  if(!poolMe) return;
-  // Clear the dirty flag only once the save is confirmed, so a tab closed mid-flight
-  // still triggers the exit beacon rather than silently dropping the change.
-  try{ await fetch(poolSaveURL()); _poolDirty=false; poolFlashSaved(); }catch(e){}
+// Pull the authoritative entry back from the server and adopt it locally. Used after
+// the server rejects a pick (match already kicked off) so the UI stops showing an
+// edit that didn't stick, instead of a false "Saved ✓".
+async function poolResyncFromServer(){
+  try{
+    const r=await fetch(`${PROXY}?type=poolload&me=${encodeURIComponent(poolMe)}`);
+    const d=await r.json();
+    if(d && d.entry){
+      poolPicks=d.entry.picks||{}; poolChampion=d.entry.champion||'';
+      poolTiebreak=d.entry.tiebreak!=null?String(d.entry.tiebreak):'';
+      if(d.id){ poolId=d.id; try{ localStorage.setItem('wc_pool_id', poolId); }catch(e){} }
+      renderPool();
+    }
+  }catch(e){}
 }
-// Last-ditch save when the page is being hidden/closed: the debounced fetch may
-// never run, so beacon the current state. The Worker merges and ignores any pick
-// whose match has already kicked off, so this can't overwrite a locked pick.
+// Immediate, reliable save. Serialized (saves can't land out of order), retried up to
+// 3× (so a flaky network doesn't silently drop a pick), and hydration-gated (never
+// transmit before poolLoaded — a pre-hydration save would send an empty pick set).
+function savePoolNow(){
+  _poolDirty=true; clearTimeout(_poolSaveT); _poolSaveT=null;
+  _poolSaveChain = _poolSaveChain.then(savePoolAttempts).catch(()=>{});
+  return _poolSaveChain;
+}
+async function savePoolAttempts(){
+  if(!poolMe || !poolLoaded) return;   // ← the guard that stops the data loss
+  for(let a=0; a<3; a++){
+    try{
+      const r=await fetch(poolSaveURL(), {keepalive:true});   // keepalive: survives a quick tab close
+      let d=null; try{ d=await r.json(); }catch(e){}
+      if(r.ok && d && d.ok){
+        _poolDirty=false; _poolCleared.clear();   // clears confirmed applied
+        if(d.id && d.id!==poolId){ poolId=d.id; try{ localStorage.setItem('wc_pool_id', poolId); }catch(e){} }
+        if(Array.isArray(d.rejected) && d.rejected.length){
+          // Changed after kickoff — server kept the locked value. Tell the truth, resync.
+          poolFlashSaved(t('Match already started — pick locked'));
+          await poolResyncFromServer();
+        } else {
+          poolFlashSaved();
+        }
+        return;
+      }
+    }catch(e){}
+    await new Promise(res=>setTimeout(res, 600*(a+1)));   // backoff between attempts
+  }
+  // All attempts failed — keep _poolDirty true so the pagehide beacon retries later.
+  poolFlashSaved(t('⚠ Not saved — check connection'));
+}
+// Back-compat alias (older call sites / avatar batch).
+function savePool(){ return savePoolNow(); }
+// Last-ditch save when the page is being hidden/closed: the debounced fetch may never
+// run, so beacon the current state. Gated on poolLoaded (never beacon an unhydrated,
+// empty pick set) and _poolDirty. The Worker ignores any locked pick, so this can't
+// overwrite one.
 function poolSaveBeacon(){
-  if(!poolMe || !_poolDirty) return;
+  if(!poolMe || !poolLoaded || !_poolDirty) return;
   clearTimeout(_poolSaveT); _poolSaveT=null;
   const url=poolSaveURL();
   try{ if(navigator.sendBeacon && navigator.sendBeacon(url)){ _poolDirty=false; return; } }catch(e){}
@@ -4083,7 +4224,11 @@ function poolSaveBeacon(){
 }
 async function poolLoadBoard(){
   if(!poolMe) return;
-  try{ const r=await fetch(`${PROXY}?type=poolboard&me=${encodeURIComponent(poolMe)}&pool=${encodeURIComponent(poolPool)}&admin=${encodeURIComponent(poolAdmin)}`);
+  // Only ride the admin code on the request when it's actually set — no need to send
+  // an empty (or a rejected) secret on every 30s poll.
+  let url=`${PROXY}?type=poolboard&me=${encodeURIComponent(poolMe)}&pool=${encodeURIComponent(poolPool)}`;
+  if(poolAdmin) url+=`&admin=${encodeURIComponent(poolAdmin)}`;
+  try{ const r=await fetch(url);
     const d=await r.json(); if(d && d.players) poolBoard=d; }catch(e){}
   // Refresh whenever the board feeds the current view — the leaderboard's "who
   // picked what" and the bracket's per-match "Pool picks" both read poolBoard.
@@ -4115,10 +4260,13 @@ async function poolLoginSubmit(){
   poolMe=me; poolPool=(d.entry.pool||'');   // the Worker returns the member's pool (needed for the per-pool start round)
   poolPicks=d.entry.picks||{}; poolChampion=d.entry.champion||''; poolName=d.entry.name||'';
   poolTiebreak=d.entry.tiebreak!=null?String(d.entry.tiebreak):'';
+  poolId=d.id||d.entry.id||'';
   poolAvatar=CAV.norm(d.entry.avatar);
   localStorage.setItem('wc_pool_me', poolMe);
   localStorage.setItem('wc_pool_name', poolName);
   localStorage.setItem('wc_pool_pool', poolPool);
+  localStorage.setItem('wc_pool_id', poolId);
+  poolLoaded=true; poolLoadErr=false; _poolCleared.clear();   // hydrated → saves allowed
   poolSub='bracket'; renderPool(); poolLoadBoard();
 }
 async function poolSignupSubmit(){
@@ -4126,6 +4274,9 @@ async function poolSignupSubmit(){
   const name=document.getElementById('poolNameInput').value.trim();
   const me=document.getElementById('poolMeInput').value.trim();
   if(!pool || !name || !me){ alert(t('Please fill in the pool code, your name, and a personal code.')); return; }
+  // The personal code is effectively a password: enforce a floor so it isn't trivially
+  // guessable/enumerable (e.g. a first name). Existing short codes still log in fine.
+  if(me.length<5){ alert(t('Your personal code should be at least 5 characters — it protects your bracket.')); return; }
   // make sure the personal code isn't already taken
   let chk;
   try{ const r=await fetch(`${PROXY}?type=poolload&me=${encodeURIComponent(me)}`); chk=await r.json(); }
@@ -4138,10 +4289,12 @@ async function poolSignupSubmit(){
     res=await (await fetch(u)).json();
   }catch(e){ alert(t('Could not reach the pool. Try again.')); return; }
   if(!res || res.error){ alert(t('That pool code did not work. Double-check it with whoever set up the pool.')); return; }
-  poolPool=pool; poolMe=me; poolName=name; poolPicks={}; poolChampion='';
+  poolPool=pool; poolMe=me; poolName=name; poolPicks={}; poolChampion=''; poolId=res.id||'';
   localStorage.setItem('wc_pool_me', poolMe);
   localStorage.setItem('wc_pool_name', poolName);
   localStorage.setItem('wc_pool_pool', poolPool);
+  localStorage.setItem('wc_pool_id', poolId);
+  poolLoaded=true; poolLoadErr=false; _poolCleared.clear();   // brand-new entry starts legitimately empty → saves allowed
   poolSub='bracket'; renderPool(); poolLoadBoard();
 }
 
@@ -4624,8 +4777,9 @@ function poolMatchLine(n){
 }
 function poolSlotHTML(slot){
   const n=slot.n, cands=slotCandidates(n), pick=poolPicks[n], locked=matchLocked(n), res=poolPickResult(n);
-  const ko=new Date(etToUtcISO(slot.date, slot.et));
-  const when=ko.toLocaleString('en-US',{ timeZone: tz(), month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+  // Show the REAL kickoff the lock uses (poolKickMs self-heals provider drift), and
+  // format in the app's locale — matches when the "🔒" actually flips.
+  const when=new Date(poolKickMs(n)).toLocaleString(localeTag(),{ timeZone: tz(), month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
   let body;
   if(!cands || (!cands[0] && !cands[1])){
     let msg = (n>=73&&n<=88) ? t('Teams set when the group stage clinches') : t('Pick the earlier matches first');
@@ -5042,7 +5196,7 @@ function poolStandingsMeta(rows, baseline){
   const anyResults = allMatches.some(m=>POOL_ROUND_COUNT[m.stage] && m.status==='FINISHED');
   const maxCorrect = rows.reduce((a,r)=>Math.max(a,r.correct),0);
   let bestGain=0, worstDrop=0;
-  if(baseline){ rows.forEach((r,i)=>{ const b=baseline[r.name]; if(b){ const g=b.rank-i; if(g>bestGain)bestGain=g; if(g<worstDrop)worstDrop=g; } }); }
+  if(baseline){ rows.forEach((r,i)=>{ const b=baseline[poolRowKey(r)]; if(b){ const g=b.rank-i; if(g>bestGain)bestGain=g; if(g<worstDrop)worstDrop=g; } }); }
   const perfectRounds = poolActiveRounds().map(x=>x.key).filter(r=> POOL_ROUND_COUNT[r]>=2 && poolFinishedCount(r)>=POOL_ROUND_COUNT[r]);
   const bustedCount=r=>{ const s=new Set(); for(const n in (r.picks||{})){ const t=r.picks[n]; if(t&&POOL_DEAD.has(canonName(t))) s.add(canonName(t)); } return s.size; };
   const aliveCount=r=>{ const s=new Set(Object.values(r.picks||{}).filter(Boolean).map(canonName)); if(r.champion)s.add(canonName(r.champion)); let c=0; s.forEach(t=>{ if(!POOL_DEAD.has(t))c++; }); return c; };
@@ -5053,10 +5207,10 @@ function poolStandingsMeta(rows, baseline){
     const isLeader=anyResults && i===0 && (rows.length<2 || r.pts>rows[1].pts || r.correct>0);
     const isLast=anyResults && rows.length>1 && i===rows.length-1;
     const champDead=r.champion && POOL_DEAD.has(canonName(r.champion));
-    const isHeater=baseline && bestGain>0 && baseline[r.name] && (baseline[r.name].rank-i)===bestGain;
-    const isCold=baseline && worstDrop<0 && baseline[r.name] && (baseline[r.name].rank-i)===worstDrop;
+    const isHeater=baseline && bestGain>0 && baseline[poolRowKey(r)] && (baseline[poolRowKey(r)].rank-i)===bestGain;
+    const isCold=baseline && worstDrop<0 && baseline[poolRowKey(r)] && (baseline[poolRowKey(r)].rank-i)===worstDrop;
     // Any movement (not just the biggest mover) earns a "moved up/down" burn.
-    const gain=(baseline && baseline[r.name]) ? (baseline[r.name].rank - i) : 0;
+    const gain=(baseline && baseline[poolRowKey(r)]) ? (baseline[poolRowKey(r)].rank - i) : 0;
     const movedUp=gain>0, movedDown=gain<0;
     const isOracle=maxCorrect>0 && r.correct===maxCorrect;
     const bc=bustedCount(r);
@@ -5290,12 +5444,15 @@ function poolMyBracketHTML(){
 // state (count of finished knockout matches) in localStorage: while the state is
 // unchanged the baseline stays put (so the arrows persist across views), and it
 // advances only when new results actually land.
+// Momentum/self-identification key: the stable server id when present (so two players
+// who share a display name don't collide), falling back to name for legacy entries.
+function poolRowKey(r){ return r.id||r.name; }
 function poolMomentumBaseline(rows){
   const sig=allMatches.filter(m=>POOL_ROUND_COUNT[m.stage] && m.status==='FINISHED').length;
   const pid=(poolBoard && poolBoard.pool) || poolPool || '';
   const k='wc_pool_mv_'+pid;
   let stored=null; try{ stored=JSON.parse(localStorage.getItem(k)||'null'); }catch(e){}
-  const cur={}; rows.forEach((r,i)=>{ cur[r.name]={pts:r.pts, rank:i}; });
+  const cur={}; rows.forEach((r,i)=>{ cur[poolRowKey(r)]={pts:r.pts, rank:i}; });
   let baseline=null;
   if(stored && stored.sig===sig){ baseline=stored.prev; }
   else { baseline = stored ? stored.cur : null; }   // results advanced → last state becomes baseline
@@ -5310,14 +5467,16 @@ function poolLeaderboardHTML(){
   const finalTotal=poolFinalActualTotal();
   const tbDelta=r=>(finalTotal==null || r.tiebreak==null || r.tiebreak==='') ? Infinity : Math.abs(+r.tiebreak - finalTotal);
   if(poolBoard && poolBoard.players){
-    rows=poolBoard.players.map(p=>{ const s=poolScore(p,adv,actualChamp); return { name:p.name, champion:p.champion, tiebreak:p.tiebreak, picks:p.picks, avatar:p.avatar, code:p.code, ...s }; });
+    rows=poolBoard.players.map(p=>{ const s=poolScore(p,adv,actualChamp); return { name:p.name, id:p.id, champion:p.champion, tiebreak:p.tiebreak, picks:p.picks, avatar:p.avatar, code:p.code, ...s }; });
     // points → correct → closest Final-goals tiebreaker → name (alphabetical only as a last resort)
     rows.sort((a,b)=> b.pts-a.pts || b.correct-a.correct || (tbDelta(a)-tbDelta(b) || 0) || a.name.localeCompare(b.name));
   }
   const mvBaseline = rows.length ? poolMomentumBaseline(rows) : null;
   const meta = poolStandingsMeta(rows, mvBaseline);
-  // remember my standing this render so confetti can fire on a win / 1st / last place
-  const myI = rows.findIndex(r=>r.name===poolName);
+  // remember my standing this render so confetti can fire on a win / 1st / last place.
+  // Match on the stable id when we have one (two players can share a name); else name.
+  const isMeRow = r => (poolId && r.id) ? r.id===poolId : (r.name===poolName);
+  const myI = rows.findIndex(isMeRow);
   _poolMyRank = myI; _poolTotalPlayers = rows.length;
   _poolChampWon = !!(actualChamp && poolChampion && canonName(poolChampion)===canonName(actualChamp));
   const adminBtn = isAdmin
@@ -5335,7 +5494,7 @@ function poolLeaderboardHTML(){
   if(!rows.length){ return html+`<div class="pool-empty">No entries yet — be the first to lock in picks.</div></div>`; }
   html+=`<div class="lb-list">`;
   rows.forEach((r,i)=>{
-    const me = r.name===poolName ? ' me' : '';
+    const me = isMeRow(r) ? ' me' : '';
     const pos = i===0?'🥇':i===1?'🥈':i===2?'🥉':`<span class="lb-rank">${i+1}</span>`;
     const ch = r.champion ? `<span class="lb-champ">🏆 ${flag(r.champion)}</span>` : '';
     const rm = (isAdmin && r.code) ? `<button class="lb-remove" title="Remove ${poolEsc(r.name)}" data-code="${poolEsc(r.code)}" data-name="${poolEsc(r.name)}" onclick="poolRemove(this)">🗑</button>` : '';
@@ -5428,6 +5587,16 @@ function renderPool(){
   const c=document.getElementById('view-pool');
   if(!c) return;
   if(!poolMe){ c.innerHTML=poolJoinHTML(); return; }
+  // Couldn't load this member's saved picks. Show a retry state — NOT an empty
+  // editable bracket, which would tempt a re-pick that overwrites good server data.
+  if(poolLoadErr && !poolLoaded){
+    c.innerHTML = `<div class="pool-load-err" style="text-align:center;padding:40px 20px">`
+      + `<div style="font-size:32px">📡</div>`
+      + `<div style="margin:12px 0;font-weight:700">${t("Couldn't load your saved picks")}</div>`
+      + `<div style="color:var(--muted);margin-bottom:16px">${t('Your bracket is safe on the server. Reconnect to edit it.')}</div>`
+      + `<button class="pool-mini-btn" onclick="poolRetryLoad()">↻ ${t('Retry')}</button></div>`;
+    return;
+  }
   POOL_ADV=advancedSets();
   const _kr=koResultSets(); POOL_ELIM=_kr.elim; POOL_DEAD=_kr.dead;
   POOL_R32FX=r32Fixtures();
@@ -5442,16 +5611,34 @@ function renderPool(){
 }
 async function poolInit(){
   if(poolMe){
-    try{ const r=await fetch(`${PROXY}?type=poolload&me=${encodeURIComponent(poolMe)}`);
-      const d=await r.json();
-      if(d && d.entry){ poolPicks=d.entry.picks||{}; poolChampion=d.entry.champion||''; poolTiebreak=d.entry.tiebreak!=null?String(d.entry.tiebreak):''; if(d.entry.name) poolName=d.entry.name; poolAvatar=CAV.norm(d.entry.avatar);
-        // Self-heal the pool from the server (authoritative) so the per-pool start
-        // round / champion lock is always right — even if an older client blanked it.
-        if(d.entry.pool){ poolPool=d.entry.pool; localStorage.setItem('wc_pool_pool', poolPool); } }
-    }catch(e){}
+    // Hydrate picks from the server BEFORE any save can fire (poolLoaded stays false
+    // until this succeeds). Retry a few times — a failed load that left the bracket
+    // empty-but-editable is exactly what used to invite a destructive re-pick.
+    let ok=false;
+    for(let a=0; a<4 && !ok; a++){
+      try{
+        const r=await fetch(`${PROXY}?type=poolload&me=${encodeURIComponent(poolMe)}`);
+        const d=await r.json();
+        if(d && d.ok){
+          const e=d.entry;
+          if(e){ poolPicks=e.picks||{}; poolChampion=e.champion||''; poolTiebreak=e.tiebreak!=null?String(e.tiebreak):''; if(e.name) poolName=e.name; poolAvatar=CAV.norm(e.avatar);
+            if(d.id||e.id){ poolId=d.id||e.id; try{ localStorage.setItem('wc_pool_id', poolId); }catch(err){} }
+            // Self-heal the pool from the server (authoritative) so the per-pool start
+            // round / champion lock is always right — even if an older client blanked it.
+            if(e.pool){ poolPool=e.pool; localStorage.setItem('wc_pool_pool', poolPool); } }
+          // A valid response with entry===null means this code has no bracket yet
+          // (fresh signup path handles its own state); either way we've hydrated.
+          poolLoaded=true; poolLoadErr=false; _poolCleared.clear(); ok=true; break;
+        }
+      }catch(e){}
+      await new Promise(res=>setTimeout(res, 800*(a+1)));
+    }
+    if(!ok){ poolLoadErr=true; }   // renderPool shows a retry banner instead of an empty bracket
   }
   if(typeof currentView!=='undefined' && currentView==='pool') renderPool();
 }
+// Manual retry from the load-error banner.
+function poolRetryLoad(){ poolLoadErr=false; renderPool(); poolInit(); }
 poolInit();
 
 
@@ -5477,6 +5664,13 @@ if (syncCode) syncLoad(); // pull cloud favorites if sync is on
 // Live minute ticker: while a match is live and the schedule tab is showing,
 // re-render every 20s so the clock label (1st Half 23', etc.) advances between
 // the full data refreshes.
+// True while the champion <select> or tiebreak <input> in the pool is focused, so
+// periodic re-renders don't rebuild innerHTML and close the dropdown / steal focus
+// mid-type.
+function poolInputFocused(){
+  const el = document.activeElement, v = document.getElementById('view-pool');
+  return !!(el && v && v.contains(el) && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName));
+}
 setInterval(() => {
   const anyLive = allMatches.some(m => matchStatus(m) === 'live');
   if (!anyLive) return;
@@ -5484,7 +5678,7 @@ setInterval(() => {
   else if (currentView === 'knockout') renderKnockout();
   // Live scores stream into the pool too — refresh the pick/bracket views (not the
   // avatar builder or leaderboard, which shouldn't redraw while in use).
-  else if (currentView === 'pool' && (poolSub === 'bracket' || poolSub === 'mybracket') && poolMe) renderPool();
+  else if (currentView === 'pool' && (poolSub === 'bracket' || poolSub === 'mybracket') && poolMe && !poolInputFocused()) renderPool();
 }, 20000);
 
 // Keep the pool bracket honest about locks even if the user just sits on it: every
@@ -5494,7 +5688,7 @@ setInterval(() => {
 let _lbWasLive = false;
 setInterval(() => {
   if (currentView !== 'pool' || !poolMe) return;
-  if (poolSub === 'bracket' || poolSub === 'mybracket') { renderPool(); return; }
+  if (poolSub === 'bracket' || poolSub === 'mybracket') { if (!poolInputFocused()) renderPool(); return; }
   // Leaderboard: re-fetch the board (standings/picks/burns come from the Worker) while
   // games are live, plus one final pull the tick after the last live game ends so the
   // closing standings + burns land without a manual refresh.

@@ -30,12 +30,29 @@ const BASE_URL = 'https://api.football-data.org/v4';
 const ESPN_SB  = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
 const ESPN_SUM = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=';
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Content-Type': 'application/json',
-};
+// Same-origin isn't enough here: the site (copa.brisaloca.com) calls this Worker on
+// a different host, so it needs CORS. Reflect an allow-listed Origin instead of a
+// blanket '*', so other websites can't read a victim's pool data from their browser.
+// (CORS doesn't stop server-side curl — the code-as-login is the real guard — but it
+// removes the cross-site browser vector.) Unknown/absent origins fall back to the
+// production site; localhost + the worker's own *.workers.dev stay allowed for dev.
+const ALLOWED_ORIGINS = ['https://copa.brisaloca.com'];
+function corsHeaders(request) {
+  const origin = (request && request.headers.get('Origin')) || '';
+  let allow = ALLOWED_ORIGINS[0];
+  if (ALLOWED_ORIGINS.includes(origin) ||
+      /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
+      /^https:\/\/[a-z0-9-]+\.workers\.dev$/.test(origin)) {
+    allow = origin;
+  }
+  return {
+    'Access-Control-Allow-Origin': allow,
+    'Vary': 'Origin',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Content-Type': 'application/json',
+  };
+}
 
 // ─── KNOCKOUT KICKOFF SCHEDULE (match number → [date, ET]) ───────────────────
 // Mirrors KO_SCHEDULE in index.html. Summer ET = EDT = UTC-4, so kickoff in UTC
@@ -43,7 +60,7 @@ const CORS = {
 const KO_TIMES = {
   73:['2026-06-28','15:00'], 76:['2026-06-29','13:00'], 74:['2026-06-29','16:30'],
   75:['2026-06-29','21:00'], 78:['2026-06-30','13:00'], 77:['2026-06-30','17:00'],
-  79:['2026-06-30','21:00'], 80:['2026-07-01','12:00'], 82:['2026-07-01','16:00'],
+  79:['2026-06-30','22:00'], 80:['2026-07-01','12:00'], 82:['2026-07-01','16:00'],  // 79 moved +1h from 21:00 (mirror KO_SCHEDULE)
   81:['2026-07-01','20:00'], 84:['2026-07-02','15:00'], 83:['2026-07-02','19:00'],
   85:['2026-07-02','23:00'], 88:['2026-07-03','14:00'], 86:['2026-07-03','18:00'],
   87:['2026-07-03','21:30'], 90:['2026-07-04','13:00'], 89:['2026-07-04','17:00'],
@@ -88,15 +105,35 @@ function parsePicks(str) {
   });
   return out;
 }
+// KV.list() returns at most 1000 keys per call; page through the cursor so a pool
+// that ever exceeds 1000 members still enumerates fully.
+async function listAllKeys(kv, prefix) {
+  let keys = [], cursor;
+  do {
+    const r = await kv.list({ prefix, cursor });
+    keys = keys.concat(r.keys);
+    cursor = r.list_complete ? null : r.cursor;
+  } while (cursor);
+  return keys;
+}
+// Stable, non-secret per-player id used by the client to recognize ITS OWN row and
+// key momentum. NOT derived from the personal code (that would be a brute-forceable
+// oracle) — it's random, minted once and stored on the entry.
+function newPlayerId() {
+  try { return crypto.randomUUID().replace(/-/g, '').slice(0, 12); }
+  catch { return Math.random().toString(36).slice(2, 14); }
+}
 
 export default {
   async fetch(request, env) {
+    const CORS = corsHeaders(request);
     // CORS preflight
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: CORS });
     }
 
     const url = new URL(request.url);
+    let status = 200;   // upstream/data failures return 502 so the client can tell
     const type = url.searchParams.get('type') || 'matches';
     const POOL_CODE = (env.POOL_CODE || 'bubblers');
     // Each join code is its own separate pool with its own leaderboard. A player
@@ -122,9 +159,10 @@ export default {
         const teams = (url.searchParams.get('teams') || '');
         const tz    = (url.searchParams.get('tz')    || '');
         if (code) {
+          // Cap the stored shape so a malformed/oversized request can't bloat KV.
           await env.WC_KV.put('fav_' + code, JSON.stringify({
-            teams: teams.split('|').filter(Boolean),
-            tz: tz,
+            teams: teams.split('|').filter(Boolean).slice(0, 64).map(s => s.slice(0, 40)),
+            tz: (typeof tz === 'string' && tz.length <= 64) ? tz : '',
           }));
           payload = { ok: true };
         } else {
@@ -151,7 +189,10 @@ export default {
           if (raw) { try { entry = JSON.parse(raw); } catch {} }
         }
         if (entry) entry.pool = poolOf(entry);   // normalize (legacy → bubblers)
-        payload = { ok: true, now: Date.now(), championLock: champLockFor(entry ? entry.pool : ''), entry };
+        // Expose the player's own stable id so the client can recognize its own
+        // leaderboard row even if two members share a display name.
+        payload = { ok: true, now: Date.now(), championLock: champLockFor(entry ? entry.pool : ''),
+                    id: (entry && entry.id) || null, entry };
 
       } else if (type === 'poolsave') {
         const pool = (url.searchParams.get('pool') || '').trim();
@@ -165,6 +206,10 @@ export default {
           const champIn  = (url.searchParams.get('champion') || '').trim();
           const avatarRaw = url.searchParams.get('avatar');
 
+          // Read-modify-write: two devices saving the same code near-simultaneously
+          // are last-write-wins, and KV reads can be briefly stale across colos. We
+          // accept this (a personal code is effectively one user); locked picks are
+          // merged defensively below so the one value that must never regress can't.
           let cur = { name: '', picks: {}, champion: '' };
           let existed = false;
           const raw = await env.WC_KV.get('pool_player_' + me);
@@ -180,36 +225,51 @@ export default {
             // entries without a pool default to POOL_CODE ('bubblers').
             cur.pool = existed ? poolOf(cur) : normPool(pool);
             cur.picks = cur.picks || {};
+            if (!cur.id) cur.id = newPlayerId();   // stable id, minted once
+            const rejected = [];   // picks the client tried to change after kickoff
 
+            // Explicit per-match clears ONLY. The client sends `&clear=89,92` when a
+            // downstream pick became impossible (upstream changed / real result in).
+            // ABSENCE OF A PICK IS NEVER A DELETE — a partial/empty payload (a save
+            // fired before the client hydrated its picks from the server) can no
+            // longer destroy stored picks. This is the data-loss fix. Locked picks
+            // stay immune. Process clears BEFORE incoming so a re-pick in the same
+            // request wins over its own clear.
+            for (const n of (url.searchParams.get('clear') || '').split(',')) {
+              if (KO_TIMES[n] && now < koKickoffMs(+n)) delete cur.picks[n];
+            }
             // Apply incoming picks ONLY for matches that haven't kicked off yet.
-            // Locked matches keep whatever was stored before kickoff.
+            // Locked matches keep whatever was stored before kickoff — and we report
+            // any attempted change back so the client doesn't flash a false "Saved ✓".
             for (const n of Object.keys(incoming)) {
               if (now < koKickoffMs(+n)) cur.picks[n] = incoming[n];
-            }
-            // Let the client clear downstream picks: drop any unlocked stored pick
-            // the client no longer sends. Locked picks are never removed.
-            for (const n of Object.keys(cur.picks)) {
-              if (now < koKickoffMs(+n) && !(n in incoming)) delete cur.picks[n];
+              else if (cur.picks[n] !== incoming[n]) rejected.push(n);
             }
             // Champion is editable until this pool's champion lock (R32 kickoff, or
-            // R16 kickoff for the late-starting 'familia' pool).
-            if (champIn && now < champLockFor(cur.pool)) cur.champion = champIn.slice(0, 40);
+            // R16 kickoff for the late-starting 'familia' pool). Sending an EMPTY
+            // champion clears it (mirrors the tiebreak pattern) — but only pre-lock.
+            if (url.searchParams.has('champion') && now < champLockFor(cur.pool)) {
+              cur.champion = champIn.slice(0, 40);
+            }
             // Tiebreaker (predicted total goals in the Final) — editable until the
             // Final kicks off. Empty string clears it.
             if (url.searchParams.has('tiebreak') && now < koKickoffMs(104)) {
               const tbIn = (url.searchParams.get('tiebreak') || '').trim();
               if (tbIn === '') { delete cur.tiebreak; }
-              else { const v = parseInt(tbIn, 10); if (Number.isFinite(v) && v >= 0 && v <= 30) cur.tiebreak = v; }
+              else { const v = parseInt(tbIn, 10); if (Number.isFinite(v) && v >= 0 && v <= 20) cur.tiebreak = v; }
             }
             if (name) cur.name = name;
-            // Avatar cosmetics (not secret; small JSON of option indices).
+            // Avatar cosmetics (not secret; small JSON of option indices). Require a
+            // NON-EMPTY object: a pre-hydration client sends avatar={} (poolAvatar
+            // null), which must not overwrite a real saved avatar with a blank one.
             if (avatarRaw && avatarRaw.length < 800) {
-              try { const av = JSON.parse(avatarRaw); if (av && typeof av === 'object' && !Array.isArray(av)) cur.avatar = av; } catch (e) {}
+              try { const av = JSON.parse(avatarRaw); if (av && typeof av === 'object' && !Array.isArray(av) && Object.keys(av).length) cur.avatar = av; } catch (e) {}
             }
             cur.updatedAt = now;
 
             await env.WC_KV.put('pool_player_' + me, JSON.stringify(cur));
-            payload = { ok: true };
+            payload = { ok: true, id: cur.id };
+            if (rejected.length) payload.rejected = rejected;
           }
         }
 
@@ -228,10 +288,13 @@ export default {
         } else {
           const now       = Date.now();
           const champLock = champLockFor(boardPool);
-          const list      = await env.WC_KV.list({ prefix: 'pool_player_' });
+          const keys      = await listAllKeys(env.WC_KV, 'pool_player_');
+          // Read every entry in parallel — this board is polled every ~30s by every
+          // viewer during live games, so serial round-trips added real latency.
+          const raws      = await Promise.all(keys.map(k => env.WC_KV.get(k.name)));
           const players   = [];
-          for (const k of list.keys) {
-            const raw = await env.WC_KV.get(k.name);
+          for (let ki = 0; ki < keys.length; ki++) {
+            const k = keys[ki], raw = raws[ki];
             if (!raw) continue;
             let e;
             try { e = JSON.parse(raw); } catch { continue; }
@@ -245,6 +308,7 @@ export default {
             }
             const row = {
               name: e.name || 'Anon',
+              id: e.id || null,          // stable, non-secret self-identification
               picks: revealed,
               champion: (now >= champLock) ? (e.champion || '') : '',
               // Tiebreaker stays hidden (like picks) until the Final kicks off.
@@ -295,13 +359,14 @@ export default {
           } else {
             // Find the unique member with this name in the given pool (default: primary).
             const boardPool = validPool(pool) ? normPool(pool) : POOL_CODE;
-            const list = await env.WC_KV.list({ prefix: 'pool_player_' });
+            const keys = await listAllKeys(env.WC_KV, 'pool_player_');
+            const raws = await Promise.all(keys.map(k => env.WC_KV.get(k.name)));
             const hits = [];
-            for (const k of list.keys) {
-              const raw = await env.WC_KV.get(k.name); if (!raw) continue;
+            for (let ki = 0; ki < keys.length; ki++) {
+              const raw = raws[ki]; if (!raw) continue;
               let e; try { e = JSON.parse(raw); } catch { continue; }
               if (poolOf(e) !== boardPool) continue;
-              if ((e.name || '').trim().toLowerCase() === name.toLowerCase()) hits.push({ k: k.name, e });
+              if ((e.name || '').trim().toLowerCase() === name.toLowerCase()) hits.push({ k: keys[ki].name, e });
             }
             if (hits.length === 1) { key = hits[0].k; entry = hits[0].e; }
             else if (hits.length > 1) payload = { error: `multiple members named "${name}" — target by code instead` };
@@ -360,12 +425,14 @@ export default {
       }
     } catch (err) {
       // Log server-side (visible via `wrangler tail`) but never echo internals to
-      // the client — raw errors leaked KV limits / implementation details.
+      // the client — raw errors leaked KV limits / implementation details. Return a
+      // real 5xx so the client can tell a fetch failed (and not blank its cached data).
       console.error('worker error:', err);
       payload = { error: 'request failed' };
+      status = 502;
     }
 
-    return new Response(JSON.stringify(payload), { headers: CORS });
+    return new Response(JSON.stringify(payload), { status, headers: CORS });
   },
 };
 
@@ -381,6 +448,10 @@ async function edgeCachedFetch(cacheKey, url, ttl, headers) {
   if (hit) return hit.json();
 
   const resp = await fetch(url, headers ? { headers } : {});
+  // Never cache an upstream failure: a football-data 429/5xx body would otherwise be
+  // served for the full TTL (and each colo caches independently). Throw so the caller
+  // returns a 502 instead of poisoning the cache with an error payload.
+  if (!resp.ok) throw new Error('upstream ' + resp.status + ' for ' + cacheKey);
   const data = await resp.json();
 
   const toCache = new Response(JSON.stringify(data), {
