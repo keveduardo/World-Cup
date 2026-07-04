@@ -1509,7 +1509,7 @@
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const PROXY = 'https://worldcup-proxy.kevinamaya.workers.dev';
-const APP_VERSION = '2026-07-03.3';   // bump on every deploy — drives the auto-refresh below
+const APP_VERSION = '2026-07-03.4';   // bump on every deploy — drives the auto-refresh below
 
 // Refresh intervals
 const REFRESH_LIVE    = 30_000;   // 30s when live game active (ESPN cache is 30s)
@@ -5292,14 +5292,23 @@ function poolSelfRoastHTML(){
   const burn=poolComposeRoast(rowLike, poolStatusKeyFor(poolName), [rowLike], 0);
   return `<div class="pool-selfroast">🪞 <b>Today's word about you:</b> “${poolEsc(burn)}”</div>`;
 }
-// 🚨 Biggest FIFA-rank upset among finished knockout games — goofy klaxon banner.
+// 🚨 Biggest FIFA-rank upset — but only from the most recent match day, so the
+// klaxon refreshes each round instead of pinning the tournament's all-time biggest
+// upset forever (which left "just bounced" reading as stale days later).
 function poolUpsetHTML(){
-  let best=null;
+  const ups=[];
   for(const key in KO_SCHEDULE){ for(const slot of KO_SCHEDULE[key]){ const m=koMatchForSlot(key,slot);
     if(!m||m.status!=='FINISHED') continue; const w=poolWinnerOf(m); if(!w) continue; const wc=canonName(w);
     const loser=canonName(m.homeTeam?.name)===wc ? m.awayTeam?.name : m.homeTeam?.name;
     const rw=fifaRank(w), rl=fifaRank(loser); if(rw==null||rl==null) continue;
-    const gap=rw-rl; if(gap>=12 && (!best||gap>best.gap)) best={gap,w,loser,rw,rl}; }}
+    const gap=rw-rl; if(gap<12) continue;
+    ups.push({gap,w,loser,rw,rl,t:new Date(m.utcDate).getTime()}); }}
+  if(!ups.length) return '';
+  // "Recent" = within 48h of the latest finished KO game, i.e. the current match day.
+  const latest=Math.max(...ups.map(u=>u.t));
+  const recent=ups.filter(u=>u.t>=latest-48*3600*1000);
+  let best=null;
+  for(const u of recent){ if(!best||u.gap>best.gap) best=u; }
   if(!best) return '';
   return `<div class="pool-upset">🚨 <b>UPSET ALERT</b> 🚨 #${best.rw} ${flag(best.w)} <b>${poolEsc(best.w)}</b> just bounced #${best.rl} ${flag(best.loser)} ${poolEsc(best.loser)}</div>`;
 }
