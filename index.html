@@ -1508,7 +1508,7 @@
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const PROXY = 'https://worldcup-proxy.kevinamaya.workers.dev';
-const APP_VERSION = '2026-07-03.1';   // bump on every deploy — drives the auto-refresh below
+const APP_VERSION = '2026-07-03.2';   // bump on every deploy — drives the auto-refresh below
 
 // Refresh intervals
 const REFRESH_LIVE    = 30_000;   // 30s when live game active (ESPN cache is 30s)
@@ -1693,8 +1693,15 @@ function lookupVenueCode(m) {
 function koVenueCodeOf(m) {
   if (m._koVenueCode) return m._koVenueCode;
   if (KO_SCHEDULE[m.stage]) {
+    // Bind slot→fixture the same drift-proof way the bracket does (by team identity
+    // via koJoinAll), so a provider kickoff shift can't strip a knockout game's
+    // venue — and with it the location line + weather — on the Schedule tab.
+    const join = koJoinAll();
+    let slot = (KO_SCHEDULE[m.stage] || []).find(s => join[s.n] === m);
+    if (slot) return slot.v;
+    // Fallback: exact kickoff-time match (covers a fixture the identity join skipped).
     const want = new Date(m.utcDate).getTime();
-    const slot = (KO_SCHEDULE[m.stage] || []).find(s => new Date(etToUtcISO(s.date, s.et)).getTime() === want);
+    slot = (KO_SCHEDULE[m.stage] || []).find(s => new Date(etToUtcISO(s.date, s.et)).getTime() === want);
     if (slot) return slot.v;
   }
   return null;
@@ -5525,7 +5532,8 @@ function poolLeaderboardHTML(){
       + `<div class="lb-score"><span class="lb-pts">${r.pts}</span><small>pts · ${r.correct}✓${tb}</small></div>${rm}</div>`;
   });
   const tbHint = finalTotal!=null ? ' Ties broken by closest Final-goals guess (⚖️).' : '';
-  const hintStart = poolMinOrder(pid);   // familia board omits the R32 it never plays
+  const boardPool = (poolBoard && poolBoard.pool) || poolPool || '';
+  const hintStart = poolMinOrder(boardPool);   // familia board omits the R32 it never plays
   const hintLbl = {LAST_32:'R32',LAST_16:'R16',QUARTER_FINALS:'QF',SEMI_FINALS:'SF',FINAL:'Final'};
   const wHint = ['LAST_32','LAST_16','QUARTER_FINALS','SEMI_FINALS','FINAL']
     .filter(k=>POOL_ORDER[k]>=hintStart).map(k=>hintLbl[k]+' '+POOL_WEIGHTS[k]).join(' · ');
