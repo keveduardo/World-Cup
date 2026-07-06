@@ -99,7 +99,11 @@ function champLockFor(pool) {
 // locks from provider kickoff drift and keeps a delayed game (weather, etc.)
 // editable until it truly kicks off. A far time backstop covers a feed outage so a
 // finished game can't stay editable if we're blind to its status.
-const KO_STARTED = new Set(['IN_PLAY', 'PAUSED', 'FINISHED', 'SUSPENDED', 'AWARDED']);
+// Whitelist the NOT-started statuses (a short, stable set) and treat everything
+// else — IN_PLAY, PAUSED, EXTRA_TIME, PENALTY_SHOOTOUT, FINISHED, SUSPENDED,
+// AWARDED, or any status the provider adds later — as started. Fails safe: an
+// unrecognized status locks rather than leaving a live/finished game editable.
+const KO_NOT_STARTED = new Set(['SCHEDULED', 'TIMED', 'POSTPONED', 'CANCELLED']);
 const LOCK_BACKSTOP_MS = 2 * 3600 * 1000;   // feed-outage safety only (2h past sched)
 function koStageOf(n) {
   n = +n;
@@ -128,7 +132,7 @@ function slotStarted(n, matches) {
     if (d < bestDiff) { bestDiff = d; best = m; }
   }
   if (!best || bestDiff > 3 * 3600 * 1000) return null;   // no confident binding
-  return KO_STARTED.has(best.status);
+  return !KO_NOT_STARTED.has(best.status);
 }
 // Authoritative per-slot lock. Live/finished per the feed → locked; feed says
 // pre-kickoff → editable (delays stay open); feed blind → 2h backstop past sched.
@@ -370,6 +374,9 @@ export default {
           const matches   = await loadMatchesSafe(env);   // live status for reveal
           const champLock = champLockFor(boardPool);
           const minMatch  = minMatchFor(boardPool);
+          // Loop-invariant reveal gates (same for every player this render).
+          const champRevealed = champLockedLive(boardPool, matches, now);
+          const tbRevealed    = lockedFor(104, matches, now);
           const keys      = await listAllKeys(env.WC_KV, 'pool_player_');
           // Read every entry in parallel — this board is polled every ~30s by every
           // viewer during live games, so serial round-trips added real latency.
@@ -393,9 +400,9 @@ export default {
               name: e.name || 'Anon',
               id: e.id || null,          // stable, non-secret self-identification
               picks: revealed,
-              champion: champLockedLive(boardPool, matches, now) ? (e.champion || '') : '',
+              champion: champRevealed ? (e.champion || '') : '',
               // Tiebreaker stays hidden (like picks) until the Final is live.
-              tiebreak: lockedFor(104, matches, now) ? (e.tiebreak ?? null) : null,
+              tiebreak: tbRevealed ? (e.tiebreak ?? null) : null,
               avatar: e.avatar || null,
               updatedAt: e.updatedAt || 0,
             };
