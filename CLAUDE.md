@@ -107,7 +107,7 @@ third pool code **`familia`** starts at the Round of 16. See memory notes for de
 
 **Worker change (`worker.js`):**
 1. Edit the file.
-2. `wrangler deploy` (ask me first — this is production).
+2. `wrangler deploy` — deploy when needed **without asking first** (Kevin standing-authorized this 2026-07; it's allowlisted in `.claude/settings.local.json`). Still production: verify immediately (step 3), and roll back via the Cloudflare dashboard if a URL fails.
 3. Re-check the two verify URLs above.
 4. Commit `worker.js` to the repo too, so the repo stays the source of truth.
 
@@ -118,7 +118,7 @@ third pool code **`familia`** starts at the Round of 16. See memory notes for de
 - **Always sanity-check JS before deploying.** Extract the inline script from `index.html` and run `node --check` on it. For real logic (clinch math, pool scoring, bracket propagation), write a small throwaway Node harness and run it — this project has been built that way and it catches bugs before they ship.
 - **Run the KO parity check before any deploy that touches kickoffs.** `node tools/ko-parity-check.mjs` asserts `KO_TIMES` (worker.js) and `KO_SCHEDULE` (index.html) agree on every match's date/ET. If they drift, the client can show a pick as editable while the server silently rejects it. If you change one, change both, then run this.
 - **Don't disturb the big renderers.** When editing `renderKnockout`, `renderGroups`, or `renderPlaceholderKO`, keep changes surgical and additive; diff against the previous version to confirm only the intended lines changed.
-- **Supervised deploys for the Worker.** Never auto-deploy `worker.js` or run destructive KV operations (delete/bulk-write) without explicit OK — real pool brackets and favorites are in `WC_KV`.
+- **Worker deploys are pre-authorized — deploy when needed without asking** (Kevin's standing instruction, 2026-07). Keep the discipline: sanity-check JS + run the KO parity check first, and re-verify the two URLs right after deploying. **Destructive KV operations (delete/bulk-write) still require explicit OK** — real pool brackets and favorites are in `WC_KV`.
 - **No secrets in the repo.** `FOOTBALL_API_KEY` is a Wrangler secret only.
 - **Match existing style.** Vanilla JS, the project's CSS variables (`--pitch`, `--gold`, etc.), and the `canonName`/`standingsMap`/`KO_SCHEDULE` patterns already in the file.
 
