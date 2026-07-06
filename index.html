@@ -1509,7 +1509,7 @@
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const PROXY = 'https://worldcup-proxy.kevinamaya.workers.dev';
-const APP_VERSION = '2026-07-05.1';   // bump on every deploy — drives the auto-refresh below
+const APP_VERSION = '2026-07-05.2';   // bump on every deploy — drives the auto-refresh below
 
 // Refresh intervals
 const REFRESH_LIVE    = 30_000;   // 30s when live game active (ESPN cache is 30s)
@@ -3979,11 +3979,30 @@ function koSlot(n){ for(const k in KO_SCHEDULE){ const s=KO_SCHEDULE[k].find(x=>
 function poolKickMs(n){ const s=koSlot(n); if(!s) return Infinity;
   const m=koJoinAll()[n]; const t=(m&&m.utcDate)?new Date(m.utcDate).getTime():NaN;
   return Number.isFinite(t) ? t : new Date(etToUtcISO(s.date,s.et)).getTime(); }
-function matchLocked(n){ return Date.now() >= poolKickMs(n); }
+// A knockout fixture is "started" (clock running) once the live feed says it's in
+// play or done — NOT merely past its scheduled kickoff. Picks lock on this, so a
+// delayed game stays editable until it actually kicks off. Returns true/false when
+// the feed knows, or null when it can't tell (slot not bound to a fixture yet).
+function koStarted(m){
+  if(!m) return null;
+  const s=m.status;
+  if(s==='IN_PLAY'||s==='PAUSED'||s==='FINISHED'||s==='SUSPENDED'||s==='AWARDED') return true;
+  if(m._espn && (m._espn.state==='in'||m._espn.state==='post')) return true;
+  if(s==='TIMED'||s==='SCHEDULED'||s==='POSTPONED'||s==='CANCELLED'||!s) return false;
+  return false;
+}
+function matchLocked(n){
+  const st=koStarted(koJoinAll()[n]);
+  if(st===true) return true;
+  if(st===false) return false;              // feed says pre-kickoff → editable (delays stay open)
+  const s=koSlot(n); if(!s) return false;   // unbindable → open
+  return Date.now() >= new Date(etToUtcISO(s.date,s.et)).getTime() + 2*3600*1000;  // feed-blind backstop (2h)
+}
 function poolChampLockMs(){ let min=Infinity; (KO_SCHEDULE[poolStartRound()]||KO_SCHEDULE.LAST_32).forEach(s=>{ min=Math.min(min, poolKickMs(s.n)); }); return min; }
-function championLocked(){ return Date.now() >= poolChampLockMs(); }
-// Tiebreaker (predicted total goals in the Final) is editable right up to the Final kickoff.
-function tiebreakLocked(){ return Date.now() >= poolKickMs(104); }
+// Champion locks once the first game of the pool's start round is actually live.
+function championLocked(){ return (KO_SCHEDULE[poolStartRound()]||KO_SCHEDULE.LAST_32).some(s=>matchLocked(s.n)); }
+// Tiebreaker (predicted total goals in the Final) is editable until the Final is live.
+function tiebreakLocked(){ return matchLocked(104); }
 function poolSetTiebreak(v){ if(tiebreakLocked()) { renderPool(); return; }
   // Clamp to the same 0–20 range the input max and the Worker enforce, so a typed
   // "45" can't flash "Saved ✓" locally then get silently dropped server-side.

@@ -93,6 +93,67 @@ function r16LockMs() {
 function champLockFor(pool) {
   return String(pool || '').toLowerCase() === 'familia' ? r16LockMs() : championLockMs();
 }
+// ─── LIVE-STATUS PICK LOCK ────────────────────────────────────────────────────
+// Picks lock when the game is ACTUALLY live (clock started) or done — not merely
+// when a hardcoded schedule says it should have started. This kills premature
+// locks from provider kickoff drift and keeps a delayed game (weather, etc.)
+// editable until it truly kicks off. A far time backstop covers a feed outage so a
+// finished game can't stay editable if we're blind to its status.
+const KO_STARTED = new Set(['IN_PLAY', 'PAUSED', 'FINISHED', 'SUSPENDED', 'AWARDED']);
+const LOCK_BACKSTOP_MS = 2 * 3600 * 1000;   // feed-outage safety only (2h past sched)
+function koStageOf(n) {
+  n = +n;
+  if (n >= 73 && n <= 88) return 'LAST_32';
+  if (n >= 89 && n <= 96) return 'LAST_16';
+  if (n >= 97 && n <= 100) return 'QUARTER_FINALS';
+  if (n >= 101 && n <= 102) return 'SEMI_FINALS';
+  if (n === 103) return 'THIRD_PLACE';
+  if (n === 104) return 'FINAL';
+  return '';
+}
+// Has slot n's game started per the live feed? Binds slot→fixture by nearest
+// scheduled kickoff within a 3h window (KO games are spaced hours apart, so this is
+// unambiguous even if a provider shifts a kickoff by an hour). Returns true/false
+// when the feed has the fixture, or null when we can't tell (no feed / unbindable).
+function slotStarted(n, matches) {
+  if (!Array.isArray(matches)) return null;
+  const stage = koStageOf(n), target = koKickoffMs(n);
+  if (!stage || !isFinite(target)) return null;
+  let best = null, bestDiff = Infinity;
+  for (const m of matches) {
+    if (m.stage !== stage) continue;
+    const t = m.utcDate ? Date.parse(m.utcDate) : NaN;
+    if (!isFinite(t)) continue;
+    const d = Math.abs(t - target);
+    if (d < bestDiff) { bestDiff = d; best = m; }
+  }
+  if (!best || bestDiff > 3 * 3600 * 1000) return null;   // no confident binding
+  return KO_STARTED.has(best.status);
+}
+// Authoritative per-slot lock. Live/finished per the feed → locked; feed says
+// pre-kickoff → editable (delays stay open); feed blind → 2h backstop past sched.
+function lockedFor(n, matches, now) {
+  const s = slotStarted(n, matches);
+  if (s === true) return true;
+  if (s === false) return false;
+  return now >= koKickoffMs(n) + LOCK_BACKSTOP_MS;
+}
+// Champion/tiebreak lock: champion locks once the first game of the pool's start
+// round has actually started (R32 for most, R16 for familia).
+function champLockedLive(pool, matches, now) {
+  const familia = String(pool || '').toLowerCase() === 'familia';
+  const lo = familia ? 89 : 73, hi = familia ? 96 : 88;
+  for (let n = lo; n <= hi; n++) if (KO_TIMES[n] && lockedFor(n, matches, now)) return true;
+  return false;
+}
+async function loadMatchesSafe(env) {
+  try {
+    const d = await edgeCachedFetch('wc2026_matches',
+      BASE_URL + '/competitions/WC/matches?season=2026', 600,
+      { 'X-Auth-Token': env.FOOTBALL_API_KEY });
+    return (d && Array.isArray(d.matches)) ? d.matches : null;
+  } catch (e) { return null; }
+}
 // The 'familia' pool joins late and only scores from the Round of 16 (match 89) on.
 // Every other pool (bubblers, family, legacy) plays the full bracket from the
 // Round of 32 (match 73). This is the authoritative gate: picks below a pool's
@@ -209,6 +270,7 @@ export default {
           payload = { error: 'missing personal code' };
         } else {
           const now      = Date.now();
+          const matches  = await loadMatchesSafe(env);   // live status for the lock
           const incoming = parsePicks(url.searchParams.get('picks') || '');
           const champIn  = (url.searchParams.get('champion') || '').trim();
           const avatarRaw = url.searchParams.get('avatar');
@@ -251,25 +313,27 @@ export default {
             // stay immune. Process clears BEFORE incoming so a re-pick in the same
             // request wins over its own clear.
             for (const n of (url.searchParams.get('clear') || '').split(',')) {
-              if (KO_TIMES[n] && now < koKickoffMs(+n)) delete cur.picks[n];
+              if (KO_TIMES[n] && !lockedFor(+n, matches, now)) delete cur.picks[n];
             }
-            // Apply incoming picks ONLY for matches that haven't kicked off yet.
-            // Locked matches keep whatever was stored before kickoff — and we report
-            // any attempted change back so the client doesn't flash a false "Saved ✓".
+            // Apply incoming picks ONLY for matches that aren't live yet. A match
+            // locks when its game actually kicks off (feed says live/finished), not
+            // at a scheduled time — so a delayed game stays editable. Locked matches
+            // keep what was stored; we report any attempted change so the client
+            // doesn't flash a false "Saved ✓".
             for (const n of Object.keys(incoming)) {
               if (+n < minMatch) continue;   // out-of-range for this pool's start round
-              if (now < koKickoffMs(+n)) cur.picks[n] = incoming[n];
+              if (!lockedFor(+n, matches, now)) cur.picks[n] = incoming[n];
               else if (cur.picks[n] !== incoming[n]) rejected.push(n);
             }
             // Champion is editable until this pool's champion lock (R32 kickoff, or
             // R16 kickoff for the late-starting 'familia' pool). Sending an EMPTY
             // champion clears it (mirrors the tiebreak pattern) — but only pre-lock.
-            if (url.searchParams.has('champion') && now < champLockFor(cur.pool)) {
+            if (url.searchParams.has('champion') && !champLockedLive(cur.pool, matches, now)) {
               cur.champion = champIn.slice(0, 40);
             }
             // Tiebreaker (predicted total goals in the Final) — editable until the
             // Final kicks off. Empty string clears it.
-            if (url.searchParams.has('tiebreak') && now < koKickoffMs(104)) {
+            if (url.searchParams.has('tiebreak') && !lockedFor(104, matches, now)) {
               const tbIn = (url.searchParams.get('tiebreak') || '').trim();
               if (tbIn === '') { delete cur.tiebreak; }
               else { const v = parseInt(tbIn, 10); if (Number.isFinite(v) && v >= 0 && v <= 20) cur.tiebreak = v; }
@@ -303,6 +367,7 @@ export default {
           payload = { error: 'not authorized' };
         } else {
           const now       = Date.now();
+          const matches   = await loadMatchesSafe(env);   // live status for reveal
           const champLock = champLockFor(boardPool);
           const minMatch  = minMatchFor(boardPool);
           const keys      = await listAllKeys(env.WC_KV, 'pool_player_');
@@ -316,21 +381,21 @@ export default {
             let e;
             try { e = JSON.parse(raw); } catch { continue; }
             if (poolOf(e) !== boardPool) continue;   // only this pool's members
-            // Redact: only reveal a pick once that match has kicked off, so
-            // nobody can copy picks before lock.
+            // Redact: only reveal a pick once that match is actually live (locked),
+            // so nobody can copy a still-editable pick.
             const revealed = {};
             const picks = e.picks || {};
             for (const n of Object.keys(picks)) {
               if (+n < minMatch) continue;   // before this pool's start round → never scored
-              if (now >= koKickoffMs(+n)) revealed[n] = picks[n];
+              if (lockedFor(+n, matches, now)) revealed[n] = picks[n];
             }
             const row = {
               name: e.name || 'Anon',
               id: e.id || null,          // stable, non-secret self-identification
               picks: revealed,
-              champion: (now >= champLock) ? (e.champion || '') : '',
-              // Tiebreaker stays hidden (like picks) until the Final kicks off.
-              tiebreak: (now >= koKickoffMs(104)) ? (e.tiebreak ?? null) : null,
+              champion: champLockedLive(boardPool, matches, now) ? (e.champion || '') : '',
+              // Tiebreaker stays hidden (like picks) until the Final is live.
+              tiebreak: lockedFor(104, matches, now) ? (e.tiebreak ?? null) : null,
               avatar: e.avatar || null,
               updatedAt: e.updatedAt || 0,
             };
