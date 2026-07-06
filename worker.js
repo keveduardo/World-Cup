@@ -77,22 +77,6 @@ function koKickoffMs(n) {
   const [h, mi]    = t[1].split(':').map(Number);
   return Date.UTC(y, mo - 1, d, h + 4, mi); // EDT (UTC-4) → add 4 for UTC
 }
-// Champion pick locks at the first Round-of-32 kickoff.
-function championLockMs() {
-  let min = Infinity;
-  for (let n = 73; n <= 88; n++) if (KO_TIMES[n]) min = Math.min(min, koKickoffMs(n));
-  return min;
-}
-// The 'familia' pool starts at the Round of 16, so its champion locks at the first
-// R16 kickoff (matches 89-96) instead. Per-pool so each board redacts correctly.
-function r16LockMs() {
-  let min = Infinity;
-  for (let n = 89; n <= 96; n++) if (KO_TIMES[n]) min = Math.min(min, koKickoffMs(n));
-  return min;
-}
-function champLockFor(pool) {
-  return String(pool || '').toLowerCase() === 'familia' ? r16LockMs() : championLockMs();
-}
 // ─── LIVE-STATUS PICK LOCK ────────────────────────────────────────────────────
 // Picks lock when the game is ACTUALLY live (clock started) or done — not merely
 // when a hardcoded schedule says it should have started. This kills premature
@@ -263,7 +247,7 @@ export default {
         if (entry) entry.pool = poolOf(entry);   // normalize (legacy → bubblers)
         // Expose the player's own stable id so the client can recognize its own
         // leaderboard row even if two members share a display name.
-        payload = { ok: true, now: Date.now(), championLock: champLockFor(entry ? entry.pool : ''),
+        payload = { ok: true, now: Date.now(),
                     id: (entry && entry.id) || null, entry };
 
       } else if (type === 'poolsave') {
@@ -372,7 +356,6 @@ export default {
         } else {
           const now       = Date.now();
           const matches   = await loadMatchesSafe(env);   // live status for reveal
-          const champLock = champLockFor(boardPool);
           const minMatch  = minMatchFor(boardPool);
           // Loop-invariant reveal gates (same for every player this render).
           const champRevealed = champLockedLive(boardPool, matches, now);
@@ -411,7 +394,7 @@ export default {
             if (isAdmin) row.code = k.name.replace('pool_player_', '');
             players.push(row);
           }
-          payload = { ok: true, now, championLock: champLock, players, admin: isAdmin, pool: boardPool };
+          payload = { ok: true, now, players, admin: isAdmin, pool: boardPool };
         }
 
       } else if (type === 'pooldelete') {
