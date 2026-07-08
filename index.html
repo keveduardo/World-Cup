@@ -1509,7 +1509,7 @@
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const PROXY = 'https://worldcup-proxy.kevinamaya.workers.dev';
-const APP_VERSION = '2026-07-05.3';   // bump on every deploy — drives the auto-refresh below
+const APP_VERSION = '2026-07-08.1';   // bump on every deploy — drives the auto-refresh below
 
 // Refresh intervals
 const REFRESH_LIVE    = 30_000;   // 30s when live game active (ESPN cache is 30s)
@@ -5798,6 +5798,12 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') { poolSaveBeacon(); if (_updatePending) doUpdateReload(); }
   else checkForUpdate();
 });
+// A page restored from the browser's back-forward cache resumes with FROZEN JS —
+// it never re-runs the load path and doesn't reliably fire visibilitychange, so a
+// tab reopened via back/forward (common on mobile) can keep running an arbitrarily
+// old build indefinitely. pageshow(persisted) is the one reliable bfcache signal;
+// force a version check the moment such a page comes back into view.
+window.addEventListener('pageshow', (e) => { if (e.persisted) checkForUpdate(true); });
 
 // ─── DAILY MIDNIGHT SWEEP ─────────────────────────────────────────────────────
 // Catch-all for a tab left open on a stale build whose owner never clicked the
