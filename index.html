@@ -1509,7 +1509,7 @@
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const PROXY = 'https://worldcup-proxy.kevinamaya.workers.dev';
-const APP_VERSION = '2026-07-08.1';   // bump on every deploy — drives the auto-refresh below
+const APP_VERSION = '2026-07-11.1';   // bump on every deploy — drives the auto-refresh below
 
 // Refresh intervals
 const REFRESH_LIVE    = 30_000;   // 30s when live game active (ESPN cache is 30s)
@@ -2005,11 +2005,29 @@ async function proxyFetch(type) {
   return res.json();
 }
 
+// football-data status values we recognize. Anything outside this set is treated as
+// corrupt (the provider has shipped a date string in place of the enum — seen on the
+// R16 Mexico–England fixture, whose status came through as "2026-07-06 01:00:00Z").
+const KNOWN_MATCH_STATUS = new Set(['SCHEDULED','TIMED','IN_PLAY','PAUSED',
+  'FINISHED','SUSPENDED','POSTPONED','CANCELLED','AWARDED']);
+// A match with a decided result (winner set + numeric full-time score) IS finished,
+// whatever the status field says. Coerce it so winner propagation, the clinch engine
+// and pool scoring don't stall on one bad upstream record — which silently poisons
+// the whole downstream bracket (an unresolved W-ref leaves later slots showing TBD /
+// stale possible-opponents). Conservative: never coerces a match that lacks a result.
+function normalizeMatchStatus(m){
+  if(!m || KNOWN_MATCH_STATUS.has(m.status)) return;
+  const w = m.score && m.score.winner, ft = m.score && m.score.fullTime;
+  if(w && ft && typeof ft.home === 'number' && typeof ft.away === 'number'){
+    m.status = 'FINISHED';
+  }
+}
 async function loadMatches() {
   const data = await proxyFetch('matches');
   // Only replace the schedule when the payload is actually valid. A transient Worker/
   // upstream error (now a 502, but guard the shape too) must NOT blank the cached list.
   if (!Array.isArray(data.matches)) throw new Error('matches payload invalid');
+  data.matches.forEach(normalizeMatchStatus);
   allMatches = data.matches;
 }
 
