@@ -51,6 +51,12 @@ function corsHeaders(request) {
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Content-Type': 'application/json',
+    // Defense-in-depth on the API responses. (The copa.brisaloca.com *page* is
+    // served by GitHub Pages, so its headers are set by a Cloudflare Transform
+    // Rule at the zone level, not here.)
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
   };
 }
 
