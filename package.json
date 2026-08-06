@@ -1,0 +1,8 @@
+{
+  "name": "worldcup-proxy",
+  "private": true,
+  "scripts": {
+    "predeploy": "bash ../_shared-assets/predeploy-guard.sh",
+    "deploy": "bash ../_shared-assets/wrangler-deploy.sh"
+  }
+}
