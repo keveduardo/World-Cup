@@ -9,7 +9,7 @@ Read this whole file before doing anything. When in doubt, ask before deploying.
 
 - A **single-page app** in one file: `index.html` (~3,000 lines, vanilla JS, **no build step**). You edit the HTML/CSS/JS directly in that file.
 - Served by **GitHub Pages** from this repo. A `CNAME` file maps it to `copa.brisaloca.com`. Pushing to the default branch auto-deploys.
-- Backed by a **Cloudflare Worker** named `worldcup-proxy` (live at `worldcup-proxy.kevinamaya.workers.dev`). Its source of truth is **`worker.js`** in this repo. The Worker proxies/caches the data APIs and stores user data in a **KV namespace bound as `WC_KV`**.
+- Backed by a **Cloudflare Worker** named `worldcup-proxy` (reached at `https://copa.brisaloca.com/api` via a zone route; its `*.workers.dev` hostname was switched off when the project was archived on 2026-09-11). Its source of truth is **`worker.js`** in this repo. The Worker proxies/caches the data APIs and stores user data in a **KV namespace bound as `WC_KV`**.
 
 ### Worker endpoints (`worker.js`)
 `?type=` → `matches` (football-data fixtures), `standings`, `espn` (live scores), `espnsummary&event=ID`, `favsave`/`favload` (team favorites), and the prediction pool: `poolload`, `poolsave`, `poolboard`.
@@ -59,7 +59,7 @@ Goal: give yourself the ability to deploy the Worker and inspect KV. **I (Kevin)
    name = "worldcup-proxy"
    main = "worker.js"
    compatibility_date = "2025-06-01"
-   workers_dev = true
+   workers_dev = false   # off since the 2026-09-11 archive; API is on the copa.brisaloca.com/api* route
 
    [[kv_namespaces]]
    binding = "WC_KV"
@@ -80,8 +80,8 @@ Goal: give yourself the ability to deploy the Worker and inspect KV. **I (Kevin)
    wrangler deploy
    ```
    Then immediately verify nothing broke by opening these:
-   - `https://worldcup-proxy.kevinamaya.workers.dev/?type=matches` → normal match JSON (proves `FOOTBALL_API_KEY` survived).
-   - `https://worldcup-proxy.kevinamaya.workers.dev/?type=poolboard&pool=bubblers` → `{"ok":true,...,"players":[...]}` (proves `WC_KV` is bound).
+   - `https://copa.brisaloca.com/api?type=matches` → normal match JSON (proves `FOOTBALL_API_KEY` survived).
+   - `https://copa.brisaloca.com/api?type=poolboard&pool=bubblers` → `{"ok":true,...,"players":[...]}` (proves `WC_KV` is bound).
    If either fails, **stop** and tell me. Rollback is available in the Cloudflare dashboard under the Worker → Deployments.
 
 7. **Secrets are already git-ignored.** The included `.gitignore` excludes `.dev.vars` and `.wrangler/`. Never commit the API key — it lives only as a Wrangler secret (`wrangler.toml` itself is safe to commit; the KV id isn't a secret).

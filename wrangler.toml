@@ -1,8 +1,19 @@
 name = "worldcup-proxy"
 main = "worker.js"
 compatibility_date = "2026-06-15"
-workers_dev = true
+# 2026-09-11 (archive): the *.workers.dev origin is switched off. The API is
+# reachable only through the zone route below, on the same origin as the
+# site, so there is no ungated public hostname left for the Worker.
+workers_dev = false
 preview_urls = false
+
+# Zone route (added 2026-09-11). copa.brisaloca.com is GitHub Pages behind the
+# Cloudflare proxy (CNAME), so /api* is intercepted here before it reaches
+# GitHub. worker.js reads only ?type=... and ignores the path, so nothing in
+# the Worker had to change. index.html's PROXY points here.
+[[routes]]
+pattern = "copa.brisaloca.com/api*"
+zone_name = "brisaloca.com"
 
 # If wrangler ever says it can't pick an account, uncomment and set this:
 # account_id = "your-cloudflare-account-id"
